@@ -1,0 +1,10 @@
+[package]
+name = "necron-prism"
+version = "0.0.0"
+edition = "2024"
+authors = [ "Me0wo", "Necron-Dev" ]
+
+[dependencies]
+libc = "0.2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

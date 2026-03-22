@@ -1,5 +1,7 @@
-use crate::proxy::players::PlayerRegistry;
-use crate::proxy::stats::TrafficStats;
+mod counters;
+mod reporter;
+mod stats_logger;
 
-#[allow(dead_code)]
-pub fn handle_traffic(_stats: &TrafficStats, _players: &PlayerRegistry) {}
+pub use counters::ConnectionCounters;
+pub use reporter::TrafficReporter;
+pub use stats_logger::spawn_stats_logger;

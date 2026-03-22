@@ -8,10 +8,12 @@ authors = [ "Me0wo", "Necron-Dev" ]
 libc = "0.2"
 md5 = "0.8.0"
 regex = "1.11"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rustix = { version = "1.1", features = ["pipe"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 socket2 = { version = "0.6", features = ["all"] }
+tokio = { version = "1.48", features = ["rt-multi-thread", "time"] }
 toml = "1.0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

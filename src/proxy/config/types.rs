@@ -6,10 +6,9 @@ use regex::Regex;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub inbound: InboundConfig,
-    pub outbounds: Vec<OutboundRoute>,
     pub transport: TransportConfig,
     pub relay: RelayConfig,
-    pub api: Option<ApiConfig>,
+    pub api: ApiConfig,
     pub stats_log_interval: Option<Duration>,
     pub source_path: PathBuf,
 }
@@ -22,23 +21,8 @@ pub struct InboundConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct OutboundConfig {
-    pub name: String,
-    pub target_addr: String,
-    pub rewrite_addr: String,
-    pub socket_options: SocketOptions,
-}
-
-#[derive(Clone, Debug)]
-pub struct OutboundRoute {
-    pub match_host: Option<String>,
-    pub outbound: OutboundConfig,
-}
-
-#[derive(Clone, Debug)]
 pub struct TransportConfig {
     pub motd: MotdConfig,
-    pub kick_json: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -48,10 +32,25 @@ pub struct RelayConfig {
 
 #[derive(Clone, Debug)]
 pub struct ApiConfig {
-    pub base_url: String,
+    pub mode: ApiMode,
+    pub base_url: Option<String>,
     pub bearer_token: Option<String>,
     pub timeout: Duration,
     pub traffic_interval: Duration,
+    pub mock: MockApiConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct MockApiConfig {
+    pub target_addr: String,
+    pub kick_reason: Option<String>,
+    pub connection_id_prefix: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApiMode {
+    Http,
+    Mock,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +63,7 @@ pub enum RelayMode {
 pub struct MotdConfig {
     pub mode: MotdMode,
     pub local_json: Option<String>,
+    pub upstream_addr: Option<String>,
     pub protocol_mode: MotdProtocolMode,
     pub ping_mode: StatusPingMode,
     pub upstream_ping_timeout: Duration,
@@ -106,13 +106,6 @@ pub enum MotdFaviconMode {
     Passthrough,
     Override(String),
     Remove,
-}
-
-impl MotdFaviconMode {
-    #[allow(dead_code)]
-    pub fn is_passthrough(&self) -> bool {
-        matches!(self, Self::Passthrough)
-    }
 }
 
 #[derive(Clone, Debug)]

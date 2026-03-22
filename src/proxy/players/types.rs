@@ -13,13 +13,10 @@ pub(super) struct PlayerSession {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerState {
-    Accepted,
-    Handshaking,
-    Status,
+    Connected,
+    Routing,
     Login,
     StatusServedLocally,
     LoginRejectedLocally,
-    StatusProxying,
-    LoginProxying,
     Proxying,
 }

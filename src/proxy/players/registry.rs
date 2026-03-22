@@ -24,7 +24,7 @@ impl PlayerRegistry {
                 username: None,
                 uuid: None,
                 outbound_name: None,
-                state: PlayerState::Accepted,
+                state: PlayerState::Connected,
             },
         );
         sessions.len()
@@ -35,9 +35,9 @@ impl PlayerRegistry {
             session.protocol_version = Some(handshake.protocol_version);
             session.next_state = Some(handshake.next_state);
             session.state = match handshake.next_state {
-                INTENT_STATUS => PlayerState::Status,
+                INTENT_STATUS => PlayerState::Routing,
                 INTENT_LOGIN => PlayerState::Login,
-                _ => PlayerState::Handshaking,
+                _ => PlayerState::Routing,
             };
         });
     }
@@ -70,11 +70,7 @@ impl PlayerRegistry {
     pub fn update_outbound(&self, connection_id: u64, outbound_name: String) {
         self.update(connection_id, |session| {
             session.outbound_name = Some(outbound_name);
-            session.state = match session.next_state {
-                Some(INTENT_STATUS) => PlayerState::StatusProxying,
-                Some(INTENT_LOGIN) => PlayerState::LoginProxying,
-                _ => PlayerState::Proxying,
-            };
+            session.state = PlayerState::Proxying;
         });
     }
 
@@ -88,14 +84,7 @@ impl PlayerRegistry {
         let sessions = self.sessions.read().expect("player registry poisoned");
         sessions
             .values()
-            .filter(|session| {
-                matches!(
-                    session.state,
-                    PlayerState::StatusProxying
-                        | PlayerState::LoginProxying
-                        | PlayerState::Proxying
-                )
-            })
+            .filter(|session| matches!(session.state, PlayerState::Proxying))
             .count() as i32
     }
 

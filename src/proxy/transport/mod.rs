@@ -8,26 +8,25 @@ use std::time::Instant;
 use tracing::info;
 
 use super::api::ApiService;
-use crate::minecraft::{
-    INTENT_LOGIN, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, PacketIo,
-    ProtocolError, decode_handshake, encode_handshake,
-};
-
-use super::config::Config;
-use super::motd::{MotdService, serve_legacy_ping};
-use super::outbound::{connect_addr as connect_outbound_addr, fallback_outbound, select_outbound};
+use super::config::{Config, SocketOptions};
+use super::motd::{serve_legacy_ping, MotdService};
+use super::outbound::connect_addr as connect_outbound_addr;
 use super::players::PlayerRegistry;
 use super::relay::relay_bidirectional;
 use super::stats::ConnectionTraffic;
 use super::traffic::{ConnectionCounters, TrafficReporter};
+use crate::minecraft::{
+    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN, INTENT_STATUS,
+    MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+};
 
-pub use types::{ConnectionContext, ConnectionReport};
+pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};
 
 pub fn handle_client(
     mut client: std::net::TcpStream,
     config: &Config,
-    api: Option<&ApiService>,
-    traffic_reporter: Option<&TrafficReporter>,
+    api: &ApiService,
+    traffic_reporter: &TrafficReporter,
     players: &PlayerRegistry,
     context: ConnectionContext,
     started_at: Instant,
@@ -38,20 +37,12 @@ pub fn handle_client(
     let mut first_byte = [0_u8; 1];
     client.read_exact(&mut first_byte)?;
     if first_byte[0] == 0xFE {
-        let outbound = fallback_outbound(config);
-        let traffic = serve_legacy_ping(
-            &mut client,
-            &config.transport,
-            outbound,
-            players,
-            context.id,
-        )?;
-
+        let traffic = serve_legacy_ping(&mut client, &config.transport, players, context.id)?;
         return Ok(ConnectionReport::new(
             traffic,
             None,
-            Some(outbound.name.clone()),
-            None,
+            String::new(),
+            String::new(),
         ));
     }
 
@@ -59,31 +50,25 @@ pub fn handle_client(
     let handshake_packet = packet_io
         .read_frame(&mut client, MAX_HANDSHAKE_PACKET_SIZE)
         .map_err(protocol_error)?;
-    let mut handshake = decode_handshake(&handshake_packet).map_err(protocol_error)?;
+    let handshake = decode_handshake(&handshake_packet).map_err(protocol_error)?;
     players.update_handshake(context.id, &handshake);
-
-    let outbound = select_outbound(config, &handshake);
-    let mut api_target_override = None;
-    let motd = MotdService::default();
 
     info!(
         protocol_version = handshake.protocol_version,
         next_state = handshake.next_state,
         original_host = %handshake.server_address,
         original_port = handshake.server_port,
-        selected_outbound = %outbound.name,
         handshake_wire_bytes = handshake_packet.wire_len,
         elapsed_ms = started_at.elapsed().as_millis() as u64,
         "parsed client handshake"
     );
 
     if handshake.next_state == INTENT_STATUS {
-        let traffic = motd
+        let traffic = MotdService::default()
             .serve(
                 &mut packet_io,
                 &mut client,
                 &config.transport,
-                outbound,
                 &handshake,
                 handshake_packet.wire_len,
                 players,
@@ -94,71 +79,115 @@ pub fn handle_client(
         return Ok(ConnectionReport::new(
             traffic,
             None,
-            Some(outbound.name.clone()),
-            None,
+            String::new(),
+            String::new(),
         ));
     }
 
-    let login_start_packet = if handshake.next_state == INTENT_LOGIN {
-        Some(
-            packet_io
-                .read_frame(&mut client, MAX_LOGIN_PACKET_SIZE)
-                .map_err(protocol_error)?,
-        )
+    let login_start_packet = read_login_start_packet(&mut packet_io, &mut client, &handshake)?;
+    let route = resolve_connection_route(
+        &mut client,
+        api,
+        players,
+        context,
+        &handshake_packet,
+        login_start_packet.as_ref(),
+        config,
+    )?;
+
+    proxy_connection(
+        client,
+        config,
+        traffic_reporter,
+        players,
+        context,
+        handshake,
+        handshake_packet,
+        login_start_packet,
+        route,
+    )
+}
+
+fn read_login_start_packet(
+    packet_io: &mut PacketIo,
+    client: &mut std::net::TcpStream,
+    handshake: &crate::minecraft::HandshakeInfo,
+) -> io::Result<Option<crate::minecraft::FramedPacket>> {
+    if handshake.next_state == INTENT_LOGIN {
+        packet_io
+            .read_frame(client, MAX_LOGIN_PACKET_SIZE)
+            .map(Some)
+            .map_err(protocol_error)
     } else {
-        None
+        Ok(None)
+    }
+}
+
+fn resolve_connection_route(
+    client: &mut std::net::TcpStream,
+    api: &ApiService,
+    players: &PlayerRegistry,
+    context: ConnectionContext,
+    handshake_packet: &crate::minecraft::FramedPacket,
+    login_start_packet: Option<&crate::minecraft::FramedPacket>,
+    config: &Config,
+) -> io::Result<ConnectionRoute> {
+    let Some(login_start_packet) = login_start_packet else {
+        return Ok(ConnectionRoute {
+            target_addr: config.api.mock.target_addr.clone(),
+            rewrite_addr: config.api.mock.target_addr.clone(),
+        });
     };
 
-    if let Some(login_start_packet) = login_start_packet.as_ref() {
-        if let Some(report) = login::handle_login_start(
-            &mut client,
-            config,
-            api,
-            players,
-            context.id,
-            &handshake_packet,
-            login_start_packet,
-            outbound,
-            &mut api_target_override,
-            context.peer_addr,
-        )? {
-            return Ok(report);
-        }
+    match login::resolve_login_route(
+        client,
+        api,
+        players,
+        context.id,
+        handshake_packet,
+        login_start_packet,
+        context.peer_addr,
+    )? {
+        Ok(route) => Ok(route),
+        Err(report) => Err(io::Error::other(HandledConnection(report))),
     }
+}
 
-    let target_addr = api_target_override
-        .as_deref()
-        .unwrap_or(&outbound.target_addr);
-    let rewrite_addr = api_target_override
-        .as_deref()
-        .unwrap_or(&outbound.rewrite_addr);
-
+fn proxy_connection(
+    client: std::net::TcpStream,
+    config: &Config,
+    traffic_reporter: &TrafficReporter,
+    players: &PlayerRegistry,
+    context: ConnectionContext,
+    mut handshake: crate::minecraft::HandshakeInfo,
+    handshake_packet: crate::minecraft::FramedPacket,
+    login_start_packet: Option<crate::minecraft::FramedPacket>,
+    route: ConnectionRoute,
+) -> io::Result<ConnectionReport> {
     handshake
-        .rewrite_addr(rewrite_addr)
+        .rewrite_addr(&route.rewrite_addr)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    players.update_outbound(context.id, outbound.name.clone());
+    players.update_outbound(context.id, route.target_addr.clone());
 
     let rewritten_packet = encode_handshake(&handshake).map_err(protocol_error)?;
 
     info!(
-        selected_outbound = %outbound.name,
-        rewrite_addr = %rewrite_addr,
+        rewrite_addr = %route.rewrite_addr,
         rewritten_handshake_bytes = rewritten_packet.len(),
-        target_addr = %target_addr,
+        target_addr = %route.target_addr,
         "rewrote handshake and connecting outbound"
     );
 
-    client.set_read_timeout(None)?;
-
-    let mut upstream = connect_outbound_addr(outbound, target_addr)?;
+    let socket_options: &SocketOptions = &config.inbound.socket_options;
+    let mut upstream = connect_outbound_addr(&route.target_addr, socket_options)?;
     let counters = ConnectionCounters::default();
-    if let (Some(reporter), Some(cid), Ok(closer)) = (
-        traffic_reporter,
+    if let (Some(cid), Ok(closer)) = (
         players.external_connection_id(context.id),
         upstream.try_clone(),
     ) {
-        reporter.register(context.id, cid, counters.clone(), closer);
+        traffic_reporter.register(context.id, cid, counters.clone(), closer);
     }
+
     upstream.write_all(&rewritten_packet)?;
     forward::forward_login_start(&mut upstream, login_start_packet.as_ref())?;
 
@@ -179,11 +208,22 @@ pub fn handle_client(
     Ok(ConnectionReport::new(
         traffic,
         relay_stats.mode,
-        Some(outbound.name.clone()),
-        players.external_connection_id(context.id),
+        route.target_addr,
+        route.rewrite_addr,
     ))
 }
 
 fn protocol_error(error: ProtocolError) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error)
 }
+
+#[derive(Debug)]
+pub(crate) struct HandledConnection(pub(crate) ConnectionReport);
+
+impl std::fmt::Display for HandledConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("connection already handled")
+    }
+}
+
+impl std::error::Error for HandledConnection {}

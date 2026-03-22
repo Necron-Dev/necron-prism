@@ -1,6 +1,6 @@
 use crate::minecraft::{
-    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, ProtocolError, decode_status_request,
-    status_response_packet,
+    decode_status_request, status_response_packet, HandshakeInfo, PacketIo, ProtocolError,
+    MAX_STATUS_PACKET_SIZE,
 };
 use crate::proxy::config::TransportConfig;
 use crate::proxy::players::{PlayerRegistry, PlayerState};
@@ -12,7 +12,6 @@ use tracing::info;
 
 use super::cache::StatusCache;
 use super::context::StatusContext;
-use crate::proxy::config::OutboundConfig;
 
 #[derive(Clone, Default)]
 pub struct MotdService {
@@ -25,7 +24,6 @@ impl MotdService {
         packet_io: &mut PacketIo,
         client: &mut TcpStream,
         transport: &TransportConfig,
-        outbound: &OutboundConfig,
         handshake: &HandshakeInfo,
         handshake_wire_bytes: usize,
         players: &PlayerRegistry,
@@ -34,7 +32,7 @@ impl MotdService {
         let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE)?;
         decode_status_request(&status_request)?;
 
-        let context = StatusContext::new(transport, outbound, handshake, self);
+        let context = StatusContext::new(transport, handshake, self);
         let mut upstream = context.open_upstream()?;
 
         let motd_json = context.build_json(players, upstream.as_mut())?;

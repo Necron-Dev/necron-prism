@@ -5,6 +5,6 @@ mod types;
 
 pub use loader::ConfigLoader;
 pub use types::{
-    ApiConfig, Config, InboundConfig, MotdFaviconMode, MotdMode, MotdProtocolMode, MotdRewrite,
-    OutboundConfig, RelayMode, SocketOptions, StatusPingMode, TransportConfig,
+    ApiConfig, ApiMode, Config, InboundConfig, MotdFaviconMode, MotdMode, MotdProtocolMode,
+    MotdRewrite, RelayMode, SocketOptions, StatusPingMode, TransportConfig,
 };

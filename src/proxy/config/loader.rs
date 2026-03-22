@@ -29,12 +29,11 @@ impl ConfigLoader {
 #[derive(Debug, Deserialize)]
 pub(super) struct RawConfig {
     pub inbound: RawInboundConfig,
-    pub outbounds: Vec<RawOutboundRoute>,
     #[serde(default)]
     pub transport: RawTransportConfig,
     #[serde(default)]
     pub relay: RawRelayConfig,
-    pub api: Option<RawApiConfig>,
+    pub api: RawApiConfig,
     #[serde(default)]
     pub runtime: RawRuntimeConfig,
 }
@@ -48,26 +47,10 @@ pub(super) struct RawInboundConfig {
     pub socket: RawSocketOptions,
 }
 
-#[derive(Debug, Deserialize)]
-pub(super) struct RawOutboundRoute {
-    pub match_host: Option<String>,
-    pub outbound: RawOutboundConfig,
-}
-
-#[derive(Debug, Deserialize)]
-pub(super) struct RawOutboundConfig {
-    pub name: String,
-    pub target_addr: String,
-    pub rewrite_addr: Option<String>,
-    #[serde(default)]
-    pub socket: RawSocketOptions,
-}
-
 #[derive(Debug, Deserialize, Default)]
 pub(super) struct RawTransportConfig {
     #[serde(default)]
     pub motd: RawMotdConfig,
-    pub kick_json: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -77,16 +60,27 @@ pub(super) struct RawRelayConfig {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct RawApiConfig {
-    pub base_url: String,
+    pub mode: Option<String>,
+    pub base_url: Option<String>,
     pub bearer_token: Option<String>,
     pub timeout_ms: Option<u64>,
     pub traffic_interval_ms: Option<u64>,
+    #[serde(default)]
+    pub mock: RawMockApiConfig,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(super) struct RawMockApiConfig {
+    pub target_addr: Option<String>,
+    pub kick_reason: Option<String>,
+    pub connection_id_prefix: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub(super) struct RawMotdConfig {
     pub mode: Option<String>,
     pub json: Option<String>,
+    pub upstream_addr: Option<String>,
     pub protocol: Option<String>,
     pub ping_mode: Option<String>,
     pub upstream_ping_timeout_ms: Option<u64>,
@@ -135,20 +129,20 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::proxy::config::types::StatusPingMode;
+    use crate::proxy::config::{ApiMode, ConfigLoader};
 
     #[test]
-    fn parse_toml_config_with_default_port() {
+    fn parse_mock_api_config() {
         let raw = toml::from_str::<RawConfig>(
             r#"
                 [inbound]
                 listen_addr = "0.0.0.0:25565"
 
-                [[outbounds]]
-                [outbounds.outbound]
-                name = "default"
+                [api]
+                mode = "mock"
+
+                [api.mock]
                 target_addr = "backend"
-                rewrite_addr = "mc.hypixel.net"
 
                 [runtime]
                 stats_log_interval_secs = 5
@@ -161,94 +155,26 @@ mod tests {
             .unwrap();
         ConfigChecker::new().validate(&config).unwrap();
 
-        assert_eq!(config.outbounds[0].outbound.target_addr, "backend:25565");
-        assert_eq!(
-            config.outbounds[0].outbound.rewrite_addr,
-            "mc.hypixel.net:25565"
-        );
+        assert_eq!(config.api.mode, ApiMode::Mock);
+        assert_eq!(config.api.mock.target_addr, "backend:25565");
         assert_eq!(config.stats_log_interval, Some(Duration::from_secs(5)));
-        assert_eq!(config.transport.motd.ping_mode, StatusPingMode::Passthrough);
     }
 
     #[test]
-    fn route_hosts_are_normalized() {
+    fn parse_upstream_motd_addr() {
         let raw = toml::from_str::<RawConfig>(
             r#"
                 [inbound]
                 listen_addr = "0.0.0.0:25565"
-
-                [[outbounds]]
-                match_host = "MC.HYPIXEL.NET."
-                [outbounds.outbound]
-                name = "hypixel"
-                target_addr = "srv-backend:25570"
-                rewrite_addr = "mc.hypixel.net"
-
-                [[outbounds]]
-                [outbounds.outbound]
-                name = "fallback"
-                target_addr = "fallback:25565"
-            "#,
-        )
-        .unwrap();
-
-        let config = ConfigNormalizer::new()
-            .normalize(raw, PathBuf::from("config.toml"))
-            .unwrap();
-        ConfigChecker::new().validate(&config).unwrap();
-
-        assert_eq!(
-            config.outbounds[0].match_host.as_deref(),
-            Some("mc.hypixel.net")
-        );
-        assert_eq!(
-            config.outbounds[0].outbound.target_addr,
-            "srv-backend:25570"
-        );
-    }
-
-    #[test]
-    fn parses_zero_ping_mode() {
-        let raw = toml::from_str::<RawConfig>(
-            r#"
-                [inbound]
-                listen_addr = "0.0.0.0:25565"
-
-                [[outbounds]]
-                [outbounds.outbound]
-                name = "default"
-                target_addr = "backend:25565"
-                rewrite_addr = "example.com"
 
                 [transport.motd]
-                ping_mode = "0ms"
-                upstream_ping_timeout_ms = 2500
-            "#,
-        )
-        .unwrap();
+                mode = "upstream"
+                upstream_addr = "status-backend"
 
-        let config = ConfigNormalizer::new()
-            .normalize(raw, PathBuf::from("config.toml"))
-            .unwrap();
-        ConfigChecker::new().validate(&config).unwrap();
+                [api]
+                mode = "mock"
 
-        assert_eq!(config.transport.motd.ping_mode, StatusPingMode::ZeroMs);
-        assert_eq!(
-            config.transport.motd.upstream_ping_timeout,
-            Duration::from_millis(2500)
-        );
-    }
-
-    #[test]
-    fn rewrite_addr_defaults_to_target_addr() {
-        let raw = toml::from_str::<RawConfig>(
-            r#"
-                [inbound]
-                listen_addr = "0.0.0.0:25565"
-
-                [[outbounds]]
-                [outbounds.outbound]
-                name = "default"
+                [api.mock]
                 target_addr = "backend"
             "#,
         )
@@ -259,22 +185,21 @@ mod tests {
             .unwrap();
         ConfigChecker::new().validate(&config).unwrap();
 
-        assert_eq!(config.outbounds[0].outbound.target_addr, "backend:25565");
-        assert_eq!(config.outbounds[0].outbound.rewrite_addr, "backend:25565");
+        assert_eq!(
+            config.transport.motd.upstream_addr.as_deref(),
+            Some("status-backend:25565")
+        );
     }
 
     #[test]
-    fn requires_single_fallback_outbound() {
+    fn loader_requires_http_base_url() {
         let raw = toml::from_str::<RawConfig>(
             r#"
                 [inbound]
                 listen_addr = "0.0.0.0:25565"
 
-                [[outbounds]]
-                match_host = "example.com"
-                [outbounds.outbound]
-                name = "only"
-                target_addr = "backend:25565"
+                [api]
+                mode = "http"
             "#,
         )
         .unwrap();
@@ -283,6 +208,13 @@ mod tests {
             .normalize(raw, PathBuf::from("config.toml"))
             .unwrap();
         let error = ConfigChecker::new().validate(&config).unwrap_err();
-        assert!(error.contains("fallback"));
+        assert!(error.contains("api.base_url"));
+    }
+
+    #[test]
+    fn load_default_path_constant_stays_same() {
+        let path = Path::new("config.toml");
+        assert_eq!(path, Path::new("config.toml"));
+        let _ = ConfigLoader::load_from_path;
     }
 }

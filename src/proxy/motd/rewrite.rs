@@ -1,7 +1,7 @@
 use regex::Regex;
 use serde_json::Value;
 
-use super::config::{MotdFaviconMode, MotdProtocolMode, MotdRewrite};
+use crate::proxy::config::{MotdFaviconMode, MotdProtocolMode, MotdRewrite};
 
 pub fn rewrite_json(
     raw_json: &str,
@@ -34,7 +34,7 @@ fn apply_protocol(value: &mut Value, protocol_mode: MotdProtocolMode, client_pro
         *value = Value::Object(Default::default());
     }
 
-    let object = value.as_object_mut().unwrap();
+    let object = value.as_object_mut().expect("motd json object");
     let version = object
         .entry("version")
         .or_insert_with(|| Value::Object(Default::default()));
@@ -44,7 +44,7 @@ fn apply_protocol(value: &mut Value, protocol_mode: MotdProtocolMode, client_pro
 
     version
         .as_object_mut()
-        .unwrap()
+        .expect("motd version object")
         .insert("protocol".to_string(), Value::from(protocol));
 }
 
@@ -95,7 +95,7 @@ fn apply_favicon(
                     if let Some(favicon) = source.get("favicon").and_then(Value::as_str) {
                         value
                             .as_object_mut()
-                            .unwrap()
+                            .expect("motd json object")
                             .insert("favicon".to_string(), Value::String(favicon.to_string()));
                     }
                 }
@@ -118,11 +118,14 @@ fn apply_favicon(
         MotdFaviconMode::Override(favicon) => {
             value
                 .as_object_mut()
-                .unwrap()
+                .expect("motd json object")
                 .insert("favicon".to_string(), Value::String(favicon.clone()));
         }
         MotdFaviconMode::Remove => {
-            value.as_object_mut().unwrap().remove("favicon");
+            value
+                .as_object_mut()
+                .expect("motd json object")
+                .remove("favicon");
         }
     }
 }

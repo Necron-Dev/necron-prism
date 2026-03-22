@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use crate::minecraft::{FramedPacket, encode_raw_frame};
+use crate::minecraft::{encode_raw_frame, FramedPacket};
 
 pub fn forward_login_start(
     upstream: &mut std::net::TcpStream,

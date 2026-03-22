@@ -1,63 +1,11 @@
 use std::io;
 use std::net::TcpStream;
 
-use tracing::info;
-
-use crate::minecraft::HandshakeInfo;
-
-use super::config::{Config, OutboundConfig};
+use super::config::SocketOptions;
 use super::network::apply_stream_options;
 
-pub fn fallback_outbound(config: &Config) -> &OutboundConfig {
-    &config
-        .outbounds
-        .iter()
-        .find(|route| route.match_host.is_none())
-        .expect("validated config should include one fallback outbound")
-        .outbound
-}
-
-pub fn select_outbound<'a>(config: &'a Config, handshake: &HandshakeInfo) -> &'a OutboundConfig {
-    let requested_host = normalize_host(&handshake.server_address);
-
-    if let Some(route) = config
-        .outbounds
-        .iter()
-        .find(|route| route.match_host.as_deref() == Some(requested_host.as_str()))
-    {
-        info!(
-            requested_host = %requested_host,
-            selected_outbound = %route.outbound.name,
-            target_addr = %route.outbound.target_addr,
-            rewrite_addr = %route.outbound.rewrite_addr,
-            "matched outbound route"
-        );
-        return &route.outbound;
-    }
-
-    let fallback = config
-        .outbounds
-        .iter()
-        .find(|route| route.match_host.is_none())
-        .expect("validated config should include one fallback outbound");
-
-    info!(
-        requested_host = %requested_host,
-        selected_outbound = %fallback.outbound.name,
-        target_addr = %fallback.outbound.target_addr,
-        rewrite_addr = %fallback.outbound.rewrite_addr,
-        "using fallback outbound"
-    );
-    &fallback.outbound
-}
-
-pub fn connect_addr(selected: &OutboundConfig, target_addr: &str) -> io::Result<TcpStream> {
+pub fn connect_addr(target_addr: &str, socket_options: &SocketOptions) -> io::Result<TcpStream> {
     let stream = TcpStream::connect(target_addr)?;
-    apply_stream_options(&stream, &selected.socket_options)?;
+    apply_stream_options(&stream, socket_options)?;
     Ok(stream)
-}
-
-fn normalize_host(host: &str) -> String {
-    let clean = host.split('\0').next().unwrap_or(host);
-    clean.trim_end_matches('.').to_ascii_lowercase()
 }

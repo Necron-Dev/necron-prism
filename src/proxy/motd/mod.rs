@@ -1,6 +1,7 @@
 mod cache;
 mod context;
 mod legacy;
+mod rewrite;
 mod service;
 mod upstream;
 

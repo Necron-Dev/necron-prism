@@ -4,7 +4,6 @@ mod config;
 mod inbound;
 mod logging;
 mod motd;
-mod motd_json;
 mod network;
 mod outbound;
 mod players;

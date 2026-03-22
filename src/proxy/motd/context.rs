@@ -2,22 +2,19 @@ use std::io::Write;
 use std::net::{Shutdown, TcpStream};
 
 use crate::minecraft::{
-    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, ProtocolError, decode_ping_request,
-    ping_response_packet,
+    decode_ping_request, ping_response_packet, HandshakeInfo, PacketIo, ProtocolError,
+    MAX_STATUS_PACKET_SIZE,
 };
 
+use super::rewrite::rewrite_json;
 use super::service::MotdService;
 use super::upstream::UpstreamStatusSession;
-use crate::proxy::config::{
-    MotdFaviconMode, MotdMode, OutboundConfig, StatusPingMode, TransportConfig,
-};
-use crate::proxy::motd_json::rewrite_json;
+use crate::proxy::config::{MotdFaviconMode, MotdMode, StatusPingMode, TransportConfig};
 use crate::proxy::players::PlayerRegistry;
 use crate::proxy::template;
 
 pub struct StatusContext<'a> {
     transport: &'a TransportConfig,
-    outbound: &'a OutboundConfig,
     handshake: &'a HandshakeInfo,
     service: &'a MotdService,
 }
@@ -25,29 +22,30 @@ pub struct StatusContext<'a> {
 impl<'a> StatusContext<'a> {
     pub fn new(
         transport: &'a TransportConfig,
-        outbound: &'a OutboundConfig,
         handshake: &'a HandshakeInfo,
         service: &'a MotdService,
     ) -> Self {
         Self {
             transport,
-            outbound,
             handshake,
             service,
         }
     }
 
     pub fn open_upstream(&self) -> Result<Option<UpstreamStatusSession>, ProtocolError> {
-        let needs_upstream = self.transport.motd.mode == MotdMode::Upstream
-            || self.transport.motd.ping_mode == StatusPingMode::UpstreamTcp
-            || self.is_local_favicon_passthrough();
+        let Some(upstream_addr) = self.transport.motd.upstream_addr.as_deref() else {
+            return Ok(None);
+        };
 
+        let needs_upstream =
+            self.transport.motd.mode == MotdMode::Upstream || self.is_local_favicon_passthrough();
         if !needs_upstream {
             return Ok(None);
         }
 
         UpstreamStatusSession::connect(
-            self.outbound,
+            upstream_addr,
+            upstream_addr,
             self.handshake,
             self.transport.motd.upstream_ping_timeout,
             self.transport.motd.status_cache_ttl,
@@ -73,11 +71,17 @@ impl<'a> StatusContext<'a> {
         };
 
         let favicon_source = if self.is_local_favicon_passthrough() {
-            self.service.read_cached_status(
-                &self.outbound.target_addr,
-                &self.outbound.rewrite_addr,
-                self.transport.motd.status_cache_ttl,
-            )
+            self.transport
+                .motd
+                .upstream_addr
+                .as_deref()
+                .and_then(|upstream_addr| {
+                    self.service.read_cached_status(
+                        upstream_addr,
+                        upstream_addr,
+                        self.transport.motd.status_cache_ttl,
+                    )
+                })
         } else {
             None
         };
@@ -114,14 +118,25 @@ impl<'a> StatusContext<'a> {
                 let client_payload = decode_ping_request(&ping_request)?;
                 let (payload, measured_ms) = match upstream.as_deref_mut() {
                     Some(session) => session.ping(client_payload),
-                    None => UpstreamStatusSession::connect(
-                        self.outbound,
-                        self.handshake,
-                        self.transport.motd.upstream_ping_timeout,
-                        self.transport.motd.status_cache_ttl,
-                        self.service,
-                    )?
-                    .ping(client_payload),
+                    None => {
+                        let upstream_addr = self
+                            .transport
+                            .motd
+                            .upstream_addr
+                            .as_deref()
+                            .ok_or_else(|| {
+                                ProtocolError::decode("missing MOTD upstream address")
+                            })?;
+                        UpstreamStatusSession::connect(
+                            upstream_addr,
+                            upstream_addr,
+                            self.handshake,
+                            self.transport.motd.upstream_ping_timeout,
+                            self.transport.motd.status_cache_ttl,
+                            self.service,
+                        )?
+                        .ping(client_payload)
+                    }
                 }?;
                 send_pong(client, payload, ping_request.wire_len, Some(measured_ms))
             }

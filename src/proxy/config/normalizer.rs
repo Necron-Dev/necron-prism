@@ -5,13 +5,13 @@ use std::time::Duration;
 use regex::Regex;
 
 use super::loader::{
-    RawApiConfig, RawConfig, RawMotdConfig, RawMotdFavicon, RawMotdRewrite, RawOutboundConfig,
-    RawOutboundRoute, RawRelayConfig, RawSocketOptions,
+    RawApiConfig, RawConfig, RawMockApiConfig, RawMotdConfig, RawMotdFavicon, RawMotdRewrite,
+    RawRelayConfig, RawSocketOptions,
 };
 use super::types::{
-    ApiConfig, Config, InboundConfig, MotdConfig, MotdFaviconMode, MotdMode, MotdProtocolMode,
-    MotdRewrite, OutboundConfig, OutboundRoute, RelayConfig, RelayMode, SocketOptions,
-    StatusPingMode, TransportConfig,
+    ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconMode,
+    MotdMode, MotdProtocolMode, MotdRewrite, RelayConfig, RelayMode, SocketOptions, StatusPingMode,
+    TransportConfig,
 };
 
 pub struct ConfigNormalizer;
@@ -22,25 +22,17 @@ impl ConfigNormalizer {
     }
 
     pub fn normalize(&self, raw: RawConfig, source_path: PathBuf) -> Result<Config, String> {
-        let outbounds = raw
-            .outbounds
-            .into_iter()
-            .map(normalize_outbound_route)
-            .collect::<Result<Vec<_>, String>>()?;
-
         Ok(Config {
             inbound: InboundConfig {
                 listen_addr: raw.inbound.listen_addr,
                 first_packet_timeout: Duration::from_millis(raw.inbound.first_packet_timeout_ms),
                 socket_options: normalize_socket_options(raw.inbound.socket),
             },
-            outbounds,
             transport: TransportConfig {
                 motd: normalize_motd(raw.transport.motd)?,
-                kick_json: raw.transport.kick_json,
             },
             relay: normalize_relay(raw.relay)?,
-            api: raw.api.map(normalize_api).transpose()?,
+            api: normalize_api(raw.api)?,
             stats_log_interval: raw
                 .runtime
                 .stats_log_interval_secs
@@ -52,11 +44,38 @@ impl ConfigNormalizer {
 }
 
 fn normalize_api(raw: RawApiConfig) -> Result<ApiConfig, String> {
+    let mode = normalize_api_mode(raw.mode.as_deref(), raw.base_url.as_deref())?;
+
     Ok(ApiConfig {
-        base_url: raw.base_url.trim_end_matches('/').to_string(),
+        mode,
+        base_url: raw
+            .base_url
+            .map(|value| value.trim_end_matches('/').to_string()),
         bearer_token: raw.bearer_token,
         timeout: Duration::from_millis(raw.timeout_ms.unwrap_or(3_000)),
         traffic_interval: Duration::from_millis(raw.traffic_interval_ms.unwrap_or(5_000)),
+        mock: normalize_mock_api(raw.mock)?,
+    })
+}
+
+fn normalize_api_mode(value: Option<&str>, base_url: Option<&str>) -> Result<ApiMode, String> {
+    match value.unwrap_or(if base_url.is_some() { "http" } else { "mock" }) {
+        "http" | "real" => Ok(ApiMode::Http),
+        "mock" => Ok(ApiMode::Mock),
+        other => Err(format!("invalid api.mode: {other}")),
+    }
+}
+
+fn normalize_mock_api(raw: RawMockApiConfig) -> Result<MockApiConfig, String> {
+    Ok(MockApiConfig {
+        target_addr: normalize_target_addr(
+            raw.target_addr.as_deref().unwrap_or("127.0.0.1:25565"),
+            25565,
+        )?,
+        kick_reason: raw.kick_reason,
+        connection_id_prefix: raw
+            .connection_id_prefix
+            .unwrap_or_else(|| "mock".to_string()),
     })
 }
 
@@ -70,32 +89,15 @@ fn normalize_relay(raw: RawRelayConfig) -> Result<RelayConfig, String> {
     })
 }
 
-fn normalize_outbound_route(raw: RawOutboundRoute) -> Result<OutboundRoute, String> {
-    Ok(OutboundRoute {
-        match_host: raw.match_host.as_deref().map(normalize_host),
-        outbound: normalize_outbound(raw.outbound)?,
-    })
-}
-
-fn normalize_outbound(raw: RawOutboundConfig) -> Result<OutboundConfig, String> {
-    let target_addr = normalize_target_addr(&raw.target_addr, 25565)?;
-    let rewrite_addr = match raw.rewrite_addr {
-        Some(addr) => normalize_target_addr(&addr, parse_target_port(&target_addr, 25565)?)?,
-        None => target_addr.clone(),
-    };
-
-    Ok(OutboundConfig {
-        name: raw.name,
-        target_addr,
-        rewrite_addr,
-        socket_options: normalize_socket_options(raw.socket),
-    })
-}
-
 fn normalize_motd(raw: RawMotdConfig) -> Result<MotdConfig, String> {
     Ok(MotdConfig {
         mode: normalize_motd_mode(raw.mode.as_deref())?,
         local_json: raw.json,
+        upstream_addr: raw
+            .upstream_addr
+            .as_deref()
+            .map(|addr| normalize_target_addr(addr, 25565))
+            .transpose()?,
         protocol_mode: normalize_protocol_mode(raw.protocol.as_deref())?,
         ping_mode: normalize_ping_mode(raw.ping_mode.as_deref())?,
         upstream_ping_timeout: Duration::from_millis(raw.upstream_ping_timeout_ms.unwrap_or(1500)),
@@ -245,8 +247,4 @@ fn parse_port(value: &str, field_name: &str) -> Result<u16, String> {
     value
         .parse::<u16>()
         .map_err(|_| format!("invalid {field_name}: {value}"))
-}
-
-fn normalize_host(host: &str) -> String {
-    host.trim_end_matches('.').to_ascii_lowercase()
 }

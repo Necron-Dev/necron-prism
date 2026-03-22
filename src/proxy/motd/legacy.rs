@@ -2,16 +2,16 @@ use std::io::{self, Write};
 use std::net::TcpStream;
 
 use crate::minecraft::HandshakeInfo;
-use crate::proxy::config::{OutboundConfig, TransportConfig};
-use crate::proxy::motd_json::rewrite_json;
+use crate::proxy::config::TransportConfig;
 use crate::proxy::players::{PlayerRegistry, PlayerState};
 use crate::proxy::stats::ConnectionTraffic;
 use crate::proxy::template;
 
+use super::rewrite::rewrite_json;
+
 pub fn serve_legacy_ping(
     client: &mut TcpStream,
     transport: &TransportConfig,
-    outbound: &OutboundConfig,
     players: &PlayerRegistry,
     connection_id: u64,
 ) -> io::Result<ConnectionTraffic> {
@@ -19,7 +19,7 @@ pub fn serve_legacy_ping(
         transport.motd.mode,
         crate::proxy::config::MotdMode::Upstream
     ) {
-        fetch_upstream_status_json(outbound).unwrap_or_else(|_| {
+        fetch_upstream_status_json(transport).unwrap_or_else(|_| {
             transport
                 .motd
                 .local_json
@@ -53,15 +53,17 @@ pub fn serve_legacy_ping(
     })
 }
 
-fn fetch_upstream_status_json(outbound: &OutboundConfig) -> io::Result<String> {
-    let address = outbound.target_addr.as_str();
+fn fetch_upstream_status_json(transport: &TransportConfig) -> io::Result<String> {
+    let address = transport.motd.upstream_addr.as_deref().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "missing MOTD upstream address")
+    })?;
     let mut stream = TcpStream::connect(address)?;
-    stream.set_read_timeout(Some(std::time::Duration::from_millis(1500)))?;
+    stream.set_read_timeout(Some(transport.motd.upstream_ping_timeout))?;
 
     let handshake = HandshakeInfo {
         protocol_version: 763,
-        server_address: outbound.rewrite_addr.clone(),
-        server_port: extract_port(&outbound.rewrite_addr).unwrap_or(25565),
+        server_address: address.to_string(),
+        server_port: extract_port(address).unwrap_or(25565),
         next_state: 1,
     };
     let mut request = crate::minecraft::encode_handshake(&handshake).map_err(io::Error::other)?;

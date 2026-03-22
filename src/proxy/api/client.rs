@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use super::types::{JoinDecision, TrafficSnapshot};
+use super::types::{JoinDecision, JoinTarget, TrafficSnapshot};
 use crate::proxy::config::ApiConfig;
 
 #[derive(Clone)]
@@ -29,7 +29,7 @@ impl ApiClient {
 
         Ok(Self {
             inner,
-            base_url: config.base_url.clone(),
+            base_url: config.base_url.clone().expect("http api requires base_url"),
         })
     }
 
@@ -55,10 +55,11 @@ impl ApiClient {
         match response.status() {
             StatusCode::OK => {
                 let body = response.json::<JoinOkResponse>().await?;
-                Ok(JoinDecision::Allow {
-                    server_ip: body.data.server_ip,
+                Ok(JoinDecision::Allow(JoinTarget {
+                    target_addr: body.data.target_addr,
+                    rewrite_addr: body.data.rewrite_addr,
                     connection_id: body.data.connection_id,
-                })
+                }))
             }
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::SERVICE_UNAVAILABLE => {
                 let body = response.json::<JoinDenyResponse>().await?;
@@ -94,6 +95,7 @@ impl ApiClient {
             .send()
             .await?;
 
+        let response = response.error_for_status()?;
         let body = response.json::<TrafficResponse>().await?;
         Ok(body.data.connections_to_close)
     }
@@ -120,7 +122,8 @@ struct JoinOkResponse {
 
 #[derive(Debug, Deserialize)]
 struct JoinOkData {
-    server_ip: String,
+    target_addr: String,
+    rewrite_addr: String,
     connection_id: String,
 }
 

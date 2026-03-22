@@ -1,4 +1,4 @@
-use super::types::Config;
+use super::types::{ApiMode, Config, MotdMode};
 
 pub struct ConfigChecker;
 
@@ -8,24 +8,15 @@ impl ConfigChecker {
     }
 
     pub fn validate(&self, config: &Config) -> Result<(), String> {
-        if config.outbounds.is_empty() {
-            return Err("config requires at least one [[outbounds]] entry".to_string());
+        if matches!(config.api.mode, ApiMode::Http) && config.api.base_url.is_none() {
+            return Err("api.mode=http requires api.base_url".to_string());
         }
 
-        let fallback_count = config
-            .outbounds
-            .iter()
-            .filter(|route| route.match_host.is_none())
-            .count();
-        if fallback_count == 0 {
+        if matches!(config.transport.motd.mode, MotdMode::Upstream)
+            && config.transport.motd.upstream_addr.is_none()
+        {
             return Err(
-                "config requires one fallback [[outbounds]] without match_host".to_string(),
-            );
-        }
-        if fallback_count > 1 {
-            return Err(
-                "config only supports one fallback [[outbounds]] entry without match_host"
-                    .to_string(),
+                "transport.motd.mode=upstream requires transport.motd.upstream_addr".to_string(),
             );
         }
 

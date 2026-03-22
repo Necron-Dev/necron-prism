@@ -3,27 +3,22 @@ use std::net::{Shutdown, SocketAddr};
 
 use tracing::info;
 
-use crate::minecraft::{FramedPacket, decode_login_hello, login_disconnect_packet};
+use crate::minecraft::{decode_login_hello, login_disconnect_packet, FramedPacket};
 
 use super::super::api::{ApiService, JoinDecision};
-use super::super::config::Config;
 use super::super::players::{PlayerRegistry, PlayerState};
 use super::super::stats::ConnectionTraffic;
-use super::super::template;
-use super::types::ConnectionReport;
+use super::types::{ConnectionReport, ConnectionRoute};
 
-pub fn handle_login_start(
+pub fn resolve_login_route(
     client: &mut std::net::TcpStream,
-    config: &Config,
-    api: Option<&ApiService>,
+    api: &ApiService,
     players: &PlayerRegistry,
     connection_id: u64,
     handshake_packet: &FramedPacket,
     login_start_packet: &FramedPacket,
-    outbound: &crate::proxy::config::OutboundConfig,
-    api_target_override: &mut Option<String>,
     peer_addr: Option<SocketAddr>,
-) -> io::Result<Option<ConnectionReport>> {
+) -> io::Result<Result<ConnectionRoute, ConnectionReport>> {
     let login_hello = decode_login_hello(login_start_packet)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     players.update_login(
@@ -39,57 +34,34 @@ pub fn handle_login_start(
         "parsed login hello"
     );
 
-    let mut external_connection_id = None;
-    if let Some(api) = api {
-        match api.join(
-            Some(&login_hello.username),
-            login_hello
-                .profile_id
-                .as_ref()
-                .map(ToString::to_string)
-                .as_deref(),
-            peer_addr.as_ref().map(ToString::to_string).as_deref(),
-            players.current_online_count(),
-        ) {
-            Ok(JoinDecision::Allow {
-                server_ip,
-                connection_id: external_id,
-            }) => {
-                players.update_external_connection_id(connection_id, external_id.clone());
-                *api_target_override = Some(server_ip);
-                external_connection_id = Some(external_id);
-            }
-            Ok(JoinDecision::Deny { kick_reason }) => {
-                return deny_with_reason(
-                    client,
-                    &kick_reason,
-                    players,
-                    connection_id,
-                    handshake_packet,
-                    login_start_packet,
-                    outbound.name.as_str(),
-                    external_connection_id,
-                );
-            }
-            Err(error) => return Err(io::Error::other(error)),
+    match api.join(
+        Some(&login_hello.username),
+        login_hello
+            .profile_id
+            .as_ref()
+            .map(ToString::to_string)
+            .as_deref(),
+        peer_addr.as_ref().map(ToString::to_string).as_deref(),
+        players.current_online_count(),
+    ) {
+        Ok(JoinDecision::Allow(target)) => {
+            players.update_external_connection_id(connection_id, target.connection_id.clone());
+            Ok(Ok(ConnectionRoute {
+                target_addr: target.target_addr,
+                rewrite_addr: target.rewrite_addr,
+            }))
         }
-    }
-
-    if let Some(kick_json) = &config.transport.kick_json {
-        let rendered_kick = template::render(kick_json, players);
-        return deny_with_reason(
+        Ok(JoinDecision::Deny { kick_reason }) => deny_with_reason(
             client,
-            &rendered_kick,
+            &kick_reason,
             players,
             connection_id,
             handshake_packet,
             login_start_packet,
-            outbound.name.as_str(),
-            external_connection_id,
-        );
+        )
+        .map(Err),
+        Err(error) => Err(io::Error::other(error)),
     }
-
-    Ok(None)
 }
 
 fn deny_with_reason(
@@ -99,9 +71,7 @@ fn deny_with_reason(
     connection_id: u64,
     handshake_packet: &FramedPacket,
     login_start_packet: &FramedPacket,
-    outbound_name: &str,
-    external_connection_id: Option<String>,
-) -> io::Result<Option<ConnectionReport>> {
+) -> io::Result<ConnectionReport> {
     let kick_packet = login_disconnect_packet(reason)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     client.write_all(&kick_packet)?;
@@ -111,16 +81,16 @@ fn deny_with_reason(
     info!(
         login_start_bytes = login_start_packet.wire_len,
         kick_packet_bytes = kick_packet.len(),
-        "rejected login with local kick packet"
+        "rejected login with api kick packet"
     );
 
-    Ok(Some(ConnectionReport::new(
+    Ok(ConnectionReport::new(
         ConnectionTraffic {
             upload_bytes: (handshake_packet.wire_len + login_start_packet.wire_len) as u64,
             download_bytes: kick_packet.len() as u64,
         },
         None,
-        Some(outbound_name.to_string()),
-        external_connection_id,
-    )))
+        String::new(),
+        String::new(),
+    ))
 }

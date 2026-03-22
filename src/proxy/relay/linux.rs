@@ -3,12 +3,14 @@ use std::net::TcpStream;
 use std::os::fd::OwnedFd;
 use std::thread;
 
+use rustix::io::Errno;
 use rustix::pipe::{PipeFlags, SpliceFlags, pipe_with, splice};
 
 use super::{RelayMode, RelayStats, shutdown_write};
 
-const PIPE_CHUNK_SIZE: usize = 64 * 1024;
-const SPLICE_FLAGS: SpliceFlags = SpliceFlags::MOVE.union(SpliceFlags::MORE);
+const PIPE_CHUNK_SIZE: usize = 4 * 1024;
+const SPLICE_FLAGS: SpliceFlags = SpliceFlags::MOVE.union(SpliceFlags::NONBLOCK);
+const WOULD_BLOCK_RETRY_LIMIT: usize = 32;
 
 pub struct SplicePipes {
     upload: SplicePipe,
@@ -105,14 +107,22 @@ fn splice_copy(
     let mut total = 0_u64;
 
     loop {
-        let moved_into_pipe = splice(src, None, pipe_write, None, PIPE_CHUNK_SIZE, SPLICE_FLAGS)?;
+        let moved_into_pipe = match splice_retry(src, pipe_write, PIPE_CHUNK_SIZE)? {
+            Some(written) => written,
+            None => return relay_with_copy(src, dst, total),
+        };
+
         if moved_into_pipe == 0 {
             return Ok(total);
         }
 
         let mut remaining = moved_into_pipe;
         while remaining > 0 {
-            let moved_from_pipe = splice(pipe_read, None, dst, None, remaining, SPLICE_FLAGS)?;
+            let moved_from_pipe = match splice_retry(pipe_read, dst, remaining)? {
+                Some(written) => written,
+                None => return relay_with_copy(src, dst, total),
+            };
+
             if moved_from_pipe == 0 {
                 return Err(io::Error::new(
                     io::ErrorKind::WriteZero,
@@ -124,4 +134,39 @@ fn splice_copy(
             total += moved_from_pipe as u64;
         }
     }
+}
+
+fn splice_retry(
+    src: impl std::os::fd::AsFd,
+    dst: impl std::os::fd::AsFd,
+    len: usize,
+) -> io::Result<Option<usize>> {
+    let mut would_block_retries = 0;
+
+    loop {
+        match splice(src.as_fd(), None, dst.as_fd(), None, len, SPLICE_FLAGS) {
+            Ok(written) => return Ok(Some(written)),
+            Err(error) if error == Errno::INTR => continue,
+            Err(error) if error == Errno::AGAIN => {
+                would_block_retries += 1;
+                if would_block_retries >= WOULD_BLOCK_RETRY_LIMIT {
+                    return Ok(None);
+                }
+                thread::yield_now();
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+fn relay_with_copy(src: &TcpStream, dst: &TcpStream, already_copied: u64) -> io::Result<u64> {
+    tracing::warn!(
+        already_copied,
+        "splice path is unstable for this flow, falling back to standard copy"
+    );
+
+    let mut src = src.try_clone()?;
+    let mut dst = dst.try_clone()?;
+    let copied = io::copy(&mut src, &mut dst)?;
+    Ok(already_copied + copied)
 }

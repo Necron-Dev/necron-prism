@@ -5,7 +5,12 @@ mod tests {
 
     use crate::proxy::config::checker::ConfigChecker;
     use crate::proxy::config::normalizer::ConfigNormalizer;
-    use crate::proxy::config::schema_types::ConfigFile;
+    use crate::proxy::config::schema_types::{
+        ApiFileConfig, ApiModeLiteral, ConfigFile, InboundFileConfig, MockApiFileConfig,
+        MotdFaviconFileConfig, MotdFaviconModeLiteral, MotdFileConfig, MotdModeLiteral,
+        MotdProtocolLiteral, MotdProtocolNamedLiteral, RelayFileConfig, RelayModeLiteral,
+        StatusPingModeLiteral, TransportFileConfig,
+    };
     use crate::proxy::config::{ApiMode, ConfigLoader};
 
     #[test]
@@ -93,5 +98,54 @@ mod tests {
         let path = Path::new("config.toml");
         assert_eq!(path, Path::new("config.toml"));
         let _ = ConfigLoader::load_from_path;
+    }
+
+    #[test]
+    fn override_favicon_requires_non_empty_value() {
+        let raw = ConfigFile {
+            inbound: InboundFileConfig {
+                listen_addr: "0.0.0.0:25565".to_string(),
+                first_packet_timeout_ms: None,
+                socket: None,
+            },
+            transport: TransportFileConfig {
+                motd: MotdFileConfig {
+                    mode: MotdModeLiteral::Local,
+                    json: Some("{}".to_string()),
+                    upstream_addr: None,
+                    protocol: MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::Client),
+                    ping_mode: StatusPingModeLiteral::Passthrough,
+                    upstream_ping_timeout_ms: None,
+                    status_cache_ttl_ms: None,
+                    rewrite: None,
+                    favicon: Some(MotdFaviconFileConfig {
+                        mode: MotdFaviconModeLiteral::Override,
+                        value: Some(String::new()),
+                    }),
+                },
+            },
+            relay: RelayFileConfig {
+                mode: RelayModeLiteral::Standard,
+            },
+            api: ApiFileConfig {
+                mode: ApiModeLiteral::Mock,
+                base_url: None,
+                bearer_token: None,
+                timeout_ms: None,
+                traffic_interval_ms: None,
+                mock: Some(MockApiFileConfig {
+                    target_addr: Some("backend".to_string()),
+                    kick_reason: None,
+                    connection_id_prefix: Some("mock".to_string()),
+                }),
+            },
+            runtime: None,
+        };
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+        let error = ConfigChecker::new().validate(&config).unwrap_err();
+        assert!(error.contains("non-empty"));
     }
 }

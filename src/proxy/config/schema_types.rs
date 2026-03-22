@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct ConfigFile {
     pub inbound: InboundFileConfig,
+    #[serde(default)]
     pub transport: TransportFileConfig,
+    #[serde(default)]
     pub relay: RelayFileConfig,
     pub api: ApiFileConfig,
     #[serde(default)]
@@ -27,13 +29,31 @@ pub struct InboundFileConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TransportFileConfig {
+    #[serde(default)]
     pub motd: MotdFileConfig,
+}
+
+impl Default for TransportFileConfig {
+    fn default() -> Self {
+        Self {
+            motd: MotdFileConfig::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RelayFileConfig {
+    #[serde(default)]
     pub mode: RelayModeLiteral,
+}
+
+impl Default for RelayFileConfig {
+    fn default() -> Self {
+        Self {
+            mode: RelayModeLiteral::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -66,12 +86,15 @@ pub struct MockApiFileConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MotdFileConfig {
+    #[serde(default)]
     pub mode: MotdModeLiteral,
     #[serde(default)]
     pub json: Option<String>,
     #[serde(default)]
     pub upstream_addr: Option<String>,
+    #[serde(default)]
     pub protocol: MotdProtocolLiteral,
+    #[serde(default)]
     pub ping_mode: StatusPingModeLiteral,
     #[serde(default)]
     pub upstream_ping_timeout_ms: Option<u64>,
@@ -81,6 +104,22 @@ pub struct MotdFileConfig {
     pub rewrite: Option<MotdRewriteFileConfig>,
     #[serde(default)]
     pub favicon: Option<MotdFaviconFileConfig>,
+}
+
+impl Default for MotdFileConfig {
+    fn default() -> Self {
+        Self {
+            mode: MotdModeLiteral::default(),
+            json: None,
+            upstream_addr: None,
+            protocol: MotdProtocolLiteral::default(),
+            ping_mode: StatusPingModeLiteral::default(),
+            upstream_ping_timeout_ms: None,
+            status_cache_ttl_ms: None,
+            rewrite: None,
+            favicon: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -133,11 +172,23 @@ pub enum ApiModeLiteral {
     Mock,
 }
 
+impl Default for ApiModeLiteral {
+    fn default() -> Self {
+        Self::Mock
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RelayModeLiteral {
     Standard,
     LinuxSplice,
+}
+
+impl Default for RelayModeLiteral {
+    fn default() -> Self {
+        Self::Standard
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
@@ -147,11 +198,23 @@ pub enum MotdModeLiteral {
     Upstream,
 }
 
+impl Default for MotdModeLiteral {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum MotdProtocolLiteral {
     Named(MotdProtocolNamedLiteral),
     Fixed(i32),
+}
+
+impl Default for MotdProtocolLiteral {
+    fn default() -> Self {
+        Self::Named(MotdProtocolNamedLiteral::Client)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
@@ -174,6 +237,12 @@ pub enum StatusPingModeLiteral {
     Disconnect,
 }
 
+impl Default for StatusPingModeLiteral {
+    fn default() -> Self {
+        Self::Passthrough
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 pub enum MotdFaviconModeLiteral {
     #[serde(rename = "passthrough")]
@@ -182,4 +251,10 @@ pub enum MotdFaviconModeLiteral {
     Override,
     #[serde(rename = "remove")]
     Remove,
+}
+
+impl Default for MotdFaviconModeLiteral {
+    fn default() -> Self {
+        Self::Passthrough
+    }
 }

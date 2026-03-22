@@ -3,7 +3,8 @@ use std::path::Path;
 
 use schemars::schema_for;
 
-use crate::config_types::{ConfigFile, CONFIG_SCHEMA_FILE};
+use crate::config_schema_types::ConfigFile;
+use crate::config_types::CONFIG_SCHEMA_FILE;
 
 pub fn write_schema_file(root: &Path) -> Result<(), String> {
     let schema = schema_for!(ConfigFile);

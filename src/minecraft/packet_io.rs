@@ -23,6 +23,10 @@ impl PacketIo {
         }
     }
 
+    pub fn queue_slice(&mut self, bytes: &[u8]) {
+        self.decoder.queue_slice(bytes);
+    }
+
     pub fn read_frame<R: Read>(
         &mut self,
         reader: &mut R,

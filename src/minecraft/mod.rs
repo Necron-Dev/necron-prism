@@ -13,9 +13,8 @@ pub use constants::{
 pub use error::ProtocolError;
 pub use packet_io::{FramedPacket, PacketIo};
 pub use protocol::{
-    LoginHelloInfo, decode_handshake, decode_login_hello, decode_ping_request,
-    decode_pong_response, decode_status_request, decode_status_response, encode_handshake,
-    encode_raw_frame, login_disconnect_packet, ping_request_packet, ping_response_packet,
-    status_response_packet,
+    decode_handshake, decode_login_hello, decode_ping_request, decode_pong_response,
+    decode_status_request, decode_status_response, encode_handshake, encode_raw_frame,
+    login_disconnect_packet, ping_request_packet, ping_response_packet, status_response_packet,
 };
 pub use types::HandshakeInfo;

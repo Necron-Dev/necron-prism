@@ -8,11 +8,12 @@ use valence_protocol::packets::login::LoginHelloC2s;
 use valence_protocol::packets::status::{QueryPongS2c, QueryRequestC2s, QueryResponseS2c};
 use valence_protocol::uuid::Uuid;
 
+use super::protocol::LoginHelloInfo;
 use super::{
-    HandshakeInfo, LoginHelloInfo, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
-    MAX_STATUS_PACKET_SIZE, PacketIo, ProtocolError, decode_handshake, decode_login_hello,
-    decode_ping_request, decode_status_request, encode_handshake, encode_raw_frame,
-    login_disconnect_packet, ping_response_packet, status_response_packet,
+    HandshakeInfo, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
+    PacketIo, ProtocolError, decode_handshake, decode_login_hello, decode_ping_request,
+    decode_status_request, encode_handshake, encode_raw_frame, login_disconnect_packet,
+    ping_response_packet, status_response_packet,
 };
 
 fn sample_handshake(server_address: &str, server_port: u16, next_state: i32) -> HandshakeInfo {

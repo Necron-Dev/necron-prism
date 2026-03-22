@@ -3,8 +3,8 @@ use std::io::{Cursor, Read};
 use std::str::FromStr;
 
 use valence_protocol::encode::PacketEncoder;
-use valence_protocol::packets::handshaking::HandshakeC2s;
 use valence_protocol::packets::handshaking::handshake_c2s::HandshakeNextState;
+use valence_protocol::packets::handshaking::HandshakeC2s;
 use valence_protocol::packets::login::{LoginDisconnectS2c, LoginHelloC2s};
 use valence_protocol::packets::status::{
     QueryPingC2s, QueryPongS2c, QueryRequestC2s, QueryResponseS2c,

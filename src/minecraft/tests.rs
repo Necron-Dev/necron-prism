@@ -1,19 +1,19 @@
 use std::io::Cursor;
 use std::str::FromStr;
 
-use valence_protocol::Text;
-use valence_protocol::WritePacket;
 use valence_protocol::packets::login::LoginDisconnectS2c;
 use valence_protocol::packets::login::LoginHelloC2s;
 use valence_protocol::packets::status::{QueryPongS2c, QueryRequestC2s, QueryResponseS2c};
 use valence_protocol::uuid::Uuid;
+use valence_protocol::Text;
+use valence_protocol::WritePacket;
 
 use super::protocol::LoginHelloInfo;
 use super::{
-    HandshakeInfo, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
-    PacketIo, ProtocolError, decode_handshake, decode_login_hello, decode_ping_request,
-    decode_status_request, encode_handshake, encode_raw_frame, login_disconnect_packet,
-    ping_response_packet, status_response_packet,
+    decode_handshake, decode_login_hello, decode_ping_request, decode_status_request,
+    encode_handshake, encode_raw_frame, login_disconnect_packet, ping_response_packet, status_response_packet,
+    HandshakeInfo, PacketIo, ProtocolError, MAX_HANDSHAKE_PACKET_SIZE,
+    MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
 };
 
 fn sample_handshake(server_address: &str, server_port: u16, next_state: i32) -> HandshakeInfo {

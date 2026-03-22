@@ -4,9 +4,11 @@ use std::time::Duration;
 
 use regex::Regex;
 
-use super::loader::{
-    RawApiConfig, RawConfig, RawMockApiConfig, RawMotdConfig, RawMotdFavicon, RawMotdRewrite,
-    RawRelayConfig, RawSocketOptions,
+use super::schema_types::{
+    ApiFileConfig, ApiModeLiteral, ConfigFile, InboundFileConfig, MockApiFileConfig,
+    MotdFaviconFileConfig, MotdFaviconModeLiteral, MotdFileConfig, MotdModeLiteral,
+    MotdProtocolLiteral, MotdProtocolNamedLiteral, MotdRewriteFileConfig, RelayFileConfig,
+    RelayModeLiteral, SocketOptionsFileConfig, StatusPingModeLiteral,
 };
 use super::types::{
     ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconMode,
@@ -21,21 +23,17 @@ impl ConfigNormalizer {
         Self
     }
 
-    pub fn normalize(&self, raw: RawConfig, source_path: PathBuf) -> Result<Config, String> {
+    pub fn normalize(&self, raw: ConfigFile, source_path: PathBuf) -> Result<Config, String> {
         Ok(Config {
-            inbound: InboundConfig {
-                listen_addr: raw.inbound.listen_addr,
-                first_packet_timeout: Duration::from_millis(raw.inbound.first_packet_timeout_ms),
-                socket_options: normalize_socket_options(raw.inbound.socket),
-            },
+            inbound: normalize_inbound(raw.inbound),
             transport: TransportConfig {
                 motd: normalize_motd(raw.transport.motd)?,
             },
-            relay: normalize_relay(raw.relay)?,
+            relay: normalize_relay(raw.relay),
             api: normalize_api(raw.api)?,
             stats_log_interval: raw
                 .runtime
-                .stats_log_interval_secs
+                .and_then(|runtime| runtime.stats_log_interval_secs)
                 .map(Duration::from_secs)
                 .or(Some(Duration::from_secs(10))),
             source_path,
@@ -43,11 +41,20 @@ impl ConfigNormalizer {
     }
 }
 
-fn normalize_api(raw: RawApiConfig) -> Result<ApiConfig, String> {
-    let mode = normalize_api_mode(raw.mode.as_deref(), raw.base_url.as_deref())?;
+fn normalize_inbound(raw: InboundFileConfig) -> InboundConfig {
+    InboundConfig {
+        listen_addr: raw.listen_addr,
+        first_packet_timeout: Duration::from_millis(raw.first_packet_timeout_ms.unwrap_or(5_000)),
+        socket_options: normalize_socket_options(raw.socket),
+    }
+}
 
+fn normalize_api(raw: ApiFileConfig) -> Result<ApiConfig, String> {
     Ok(ApiConfig {
-        mode,
+        mode: match raw.mode {
+            ApiModeLiteral::Http => ApiMode::Http,
+            ApiModeLiteral::Mock => ApiMode::Mock,
+        },
         base_url: raw
             .base_url
             .map(|value| value.trim_end_matches('/').to_string()),
@@ -58,15 +65,13 @@ fn normalize_api(raw: RawApiConfig) -> Result<ApiConfig, String> {
     })
 }
 
-fn normalize_api_mode(value: Option<&str>, base_url: Option<&str>) -> Result<ApiMode, String> {
-    match value.unwrap_or(if base_url.is_some() { "http" } else { "mock" }) {
-        "http" | "real" => Ok(ApiMode::Http),
-        "mock" => Ok(ApiMode::Mock),
-        other => Err(format!("invalid api.mode: {other}")),
-    }
-}
+fn normalize_mock_api(raw: Option<MockApiFileConfig>) -> Result<MockApiConfig, String> {
+    let raw = raw.unwrap_or(MockApiFileConfig {
+        target_addr: None,
+        kick_reason: None,
+        connection_id_prefix: None,
+    });
 
-fn normalize_mock_api(raw: RawMockApiConfig) -> Result<MockApiConfig, String> {
     Ok(MockApiConfig {
         target_addr: normalize_target_addr(
             raw.target_addr.as_deref().unwrap_or("127.0.0.1:25565"),
@@ -79,35 +84,43 @@ fn normalize_mock_api(raw: RawMockApiConfig) -> Result<MockApiConfig, String> {
     })
 }
 
-fn normalize_relay(raw: RawRelayConfig) -> Result<RelayConfig, String> {
-    Ok(RelayConfig {
-        mode: match raw.mode.as_deref().unwrap_or("standard") {
-            "standard" | "copy" => RelayMode::Standard,
-            "splice" | "linux_splice" | "linux-splice" => RelayMode::LinuxSplice,
-            other => return Err(format!("invalid relay.mode: {other}")),
+fn normalize_relay(raw: RelayFileConfig) -> RelayConfig {
+    RelayConfig {
+        mode: match raw.mode {
+            RelayModeLiteral::Standard => RelayMode::Standard,
+            RelayModeLiteral::LinuxSplice => RelayMode::LinuxSplice,
         },
-    })
+    }
 }
 
-fn normalize_motd(raw: RawMotdConfig) -> Result<MotdConfig, String> {
+fn normalize_motd(raw: MotdFileConfig) -> Result<MotdConfig, String> {
     Ok(MotdConfig {
-        mode: normalize_motd_mode(raw.mode.as_deref())?,
+        mode: match raw.mode {
+            MotdModeLiteral::Local => MotdMode::Local,
+            MotdModeLiteral::Upstream => MotdMode::Upstream,
+        },
         local_json: raw.json,
         upstream_addr: raw
             .upstream_addr
             .as_deref()
             .map(|addr| normalize_target_addr(addr, 25565))
             .transpose()?,
-        protocol_mode: normalize_protocol_mode(raw.protocol.as_deref())?,
-        ping_mode: normalize_ping_mode(raw.ping_mode.as_deref())?,
+        protocol_mode: normalize_protocol_mode(raw.protocol),
+        ping_mode: normalize_ping_mode(raw.ping_mode),
         upstream_ping_timeout: Duration::from_millis(raw.upstream_ping_timeout_ms.unwrap_or(1500)),
         status_cache_ttl: Duration::from_millis(raw.status_cache_ttl_ms.unwrap_or(1000)),
         rewrite: normalize_motd_rewrite(raw.rewrite)?,
-        favicon: normalize_favicon_mode(raw.favicon)?,
+        favicon: normalize_favicon_mode(raw.favicon),
     })
 }
 
-fn normalize_motd_rewrite(raw: RawMotdRewrite) -> Result<Option<MotdRewrite>, String> {
+fn normalize_motd_rewrite(
+    raw: Option<MotdRewriteFileConfig>,
+) -> Result<Option<MotdRewrite>, String> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+
     let description_pattern = compile_regex(raw.description_pattern.as_deref())?;
     let favicon_pattern = compile_regex(raw.favicon_pattern.as_deref())?;
 
@@ -136,37 +149,34 @@ fn compile_regex(pattern: Option<&str>) -> Result<Option<Regex>, String> {
     }
 }
 
-fn normalize_favicon_mode(raw: RawMotdFavicon) -> Result<MotdFaviconMode, String> {
-    match raw.mode.as_deref().unwrap_or("passthrough") {
-        "passthrough" => Ok(MotdFaviconMode::Passthrough),
-        "remove" => Ok(MotdFaviconMode::Remove),
-        "override" => raw.value.map(MotdFaviconMode::Override).ok_or_else(|| {
-            "transport.motd.favicon.mode=override requires favicon.value".to_string()
-        }),
-        other => Err(format!("invalid transport.motd.favicon.mode: {other}")),
+fn normalize_favicon_mode(raw: Option<MotdFaviconFileConfig>) -> MotdFaviconMode {
+    match raw.as_ref().map(|value| value.mode) {
+        Some(MotdFaviconModeLiteral::Passthrough) | None => MotdFaviconMode::Passthrough,
+        Some(MotdFaviconModeLiteral::Remove) => MotdFaviconMode::Remove,
+        Some(MotdFaviconModeLiteral::Override) => {
+            MotdFaviconMode::Override(raw.and_then(|favicon| favicon.value).unwrap_or_default())
+        }
     }
 }
 
-fn normalize_motd_mode(value: Option<&str>) -> Result<MotdMode, String> {
-    match value.unwrap_or("local") {
-        "local" => Ok(MotdMode::Local),
-        "upstream" => Ok(MotdMode::Upstream),
-        other => Err(format!("invalid transport.motd.mode: {other}")),
+fn normalize_protocol_mode(value: MotdProtocolLiteral) -> MotdProtocolMode {
+    match value {
+        MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::Client) => MotdProtocolMode::Client,
+        MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::NegativeOne) => {
+            MotdProtocolMode::NegativeOne
+        }
+        MotdProtocolLiteral::Fixed(value) => MotdProtocolMode::Fixed(value),
     }
 }
 
-fn normalize_protocol_mode(value: Option<&str>) -> Result<MotdProtocolMode, String> {
-    match value.unwrap_or("client") {
-        "client" => Ok(MotdProtocolMode::Client),
-        "-1" | "negative_one" => Ok(MotdProtocolMode::NegativeOne),
-        other => other
-            .parse::<i32>()
-            .map(MotdProtocolMode::Fixed)
-            .map_err(|_| format!("invalid transport.motd.protocol: {other}")),
-    }
-}
-
-fn normalize_socket_options(raw: RawSocketOptions) -> SocketOptions {
+fn normalize_socket_options(raw: Option<SocketOptionsFileConfig>) -> SocketOptions {
+    let raw = raw.unwrap_or(SocketOptionsFileConfig {
+        tcp_nodelay: None,
+        keepalive_secs: None,
+        recv_buffer_size: None,
+        send_buffer_size: None,
+        reuse_port: None,
+    });
     let defaults = SocketOptions::default();
     SocketOptions {
         tcp_nodelay: raw.tcp_nodelay.unwrap_or(defaults.tcp_nodelay),
@@ -180,13 +190,12 @@ fn normalize_socket_options(raw: RawSocketOptions) -> SocketOptions {
     }
 }
 
-fn normalize_ping_mode(value: Option<&str>) -> Result<StatusPingMode, String> {
-    match value.unwrap_or("passthrough") {
-        "passthrough" | "echo" => Ok(StatusPingMode::Passthrough),
-        "0ms" | "zero" | "zero_ms" | "zeroping" => Ok(StatusPingMode::ZeroMs),
-        "upstream_tcp" | "upstream-tcp" | "tcp" => Ok(StatusPingMode::UpstreamTcp),
-        "disconnect" => Ok(StatusPingMode::Disconnect),
-        other => Err(format!("invalid transport.motd.ping_mode: {other}")),
+fn normalize_ping_mode(value: StatusPingModeLiteral) -> StatusPingMode {
+    match value {
+        StatusPingModeLiteral::Passthrough => StatusPingMode::Passthrough,
+        StatusPingModeLiteral::ZeroMs => StatusPingMode::ZeroMs,
+        StatusPingModeLiteral::UpstreamTcp => StatusPingMode::UpstreamTcp,
+        StatusPingModeLiteral::Disconnect => StatusPingMode::Disconnect,
     }
 }
 

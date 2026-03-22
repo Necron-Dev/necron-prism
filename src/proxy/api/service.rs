@@ -1,15 +1,26 @@
+use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::client::ApiClient;
 use super::types::{JoinDecision, JoinTarget, TrafficEntry, TrafficSnapshot};
-use crate::proxy::config::{ApiConfig, ApiMode};
+use crate::proxy::config::{ApiConfig, ApiMode, MockApiConfig};
 
 pub struct ApiService {
     runtime: tokio::runtime::Runtime,
-    mode: ApiMode,
-    client: Option<ApiClient>,
-    config: ApiConfig,
-    mock_counter: AtomicU64,
+    inner: ApiBackend,
+}
+
+enum ApiBackend {
+    Http(ApiClient),
+    Mock(MockApiService),
+}
+
+struct MockApiService {
+    target_addr: String,
+    rewrite_addr: String,
+    kick_reason: Option<String>,
+    connection_id_prefix: String,
+    counter: AtomicU64,
 }
 
 impl ApiService {
@@ -18,21 +29,16 @@ impl ApiService {
             .enable_all()
             .build()
             .map_err(|error| format!("failed to build api runtime: {error}"))?;
-        let client = match config.mode {
-            ApiMode::Http => Some(
+
+        let inner = match config.mode {
+            ApiMode::Http => ApiBackend::Http(
                 ApiClient::new(config)
                     .map_err(|error| format!("failed to build api client: {error}"))?,
             ),
-            ApiMode::Mock => None,
+            ApiMode::Mock => ApiBackend::Mock(MockApiService::new(&config.mock)),
         };
 
-        Ok(Self {
-            runtime,
-            mode: config.mode,
-            client,
-            config: config.clone(),
-            mock_counter: AtomicU64::new(0),
-        })
+        Ok(Self { runtime, inner })
     }
 
     pub fn join(
@@ -42,17 +48,12 @@ impl ApiService {
         addr: Option<&str>,
         load: i32,
     ) -> Result<JoinDecision, String> {
-        match self.mode {
-            ApiMode::Http => self
+        match &self.inner {
+            ApiBackend::Http(client) => self
                 .runtime
-                .block_on(
-                    self.client
-                        .as_ref()
-                        .expect("http api client")
-                        .join(name, uuid, addr, load),
-                )
+                .block_on(client.join(name, uuid, addr, load))
                 .map_err(|error| format!("join api request failed: {error}")),
-            ApiMode::Mock => Ok(self.mock_join()),
+            ApiBackend::Mock(mock) => Ok(mock.join()),
         }
     }
 
@@ -62,8 +63,8 @@ impl ApiService {
         send_bytes: u64,
         recv_bytes: u64,
     ) -> Result<Vec<String>, String> {
-        match self.mode {
-            ApiMode::Http => {
+        match &self.inner {
+            ApiBackend::Http(client) => {
                 let mut snapshot = TrafficSnapshot::default();
                 snapshot.entries.insert(
                     connection_id.to_string(),
@@ -74,45 +75,52 @@ impl ApiService {
                 );
 
                 self.runtime
-                    .block_on(
-                        self.client
-                            .as_ref()
-                            .expect("http api client")
-                            .traffic(&snapshot),
-                    )
+                    .block_on(client.traffic(&snapshot))
                     .map_err(|error| format!("traffic api request failed: {error}"))
             }
-            ApiMode::Mock => Ok(Vec::new()),
+            ApiBackend::Mock(_) => Ok(Vec::new()),
         }
     }
 
     pub fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<(), String> {
-        match self.mode {
-            ApiMode::Http => self
+        match &self.inner {
+            ApiBackend::Http(client) => self
                 .runtime
-                .block_on(
-                    self.client
-                        .as_ref()
-                        .expect("http api client")
-                        .closed(cid, send, recv),
-                )
+                .block_on(client.closed(cid, send, recv))
                 .map_err(|error| format!("closed api request failed: {error}")),
-            ApiMode::Mock => Ok(()),
+            ApiBackend::Mock(_) => Ok(()),
+        }
+    }
+}
+
+impl MockApiService {
+    fn new(config: &MockApiConfig) -> Self {
+        Self {
+            target_addr: config.target_addr.clone(),
+            rewrite_addr: config.target_addr.clone(),
+            kick_reason: config.kick_reason.clone(),
+            connection_id_prefix: config.connection_id_prefix.clone(),
+            counter: AtomicU64::new(0),
         }
     }
 
-    fn mock_join(&self) -> JoinDecision {
-        if let Some(kick_reason) = &self.config.mock.kick_reason {
+    fn join(&self) -> JoinDecision {
+        if let Some(kick_reason) = &self.kick_reason {
             return JoinDecision::Deny {
                 kick_reason: kick_reason.clone(),
             };
         }
 
-        let sequence = self.mock_counter.fetch_add(1, Ordering::Relaxed) + 1;
+        let sequence = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
         JoinDecision::Allow(JoinTarget {
-            target_addr: self.config.mock.target_addr.clone(),
-            rewrite_addr: self.config.mock.target_addr.clone(),
-            connection_id: format!("{}-{sequence}", self.config.mock.connection_id_prefix),
+            target_addr: self.target_addr.clone(),
+            rewrite_addr: self.rewrite_addr.clone(),
+            connection_id: format!("{}-{sequence}", self.connection_id_prefix),
         })
+    }
+
+    #[allow(dead_code)]
+    fn kick_reason(&self) -> Option<Cow<'_, str>> {
+        self.kick_reason.as_deref().map(Cow::Borrowed)
     }
 }

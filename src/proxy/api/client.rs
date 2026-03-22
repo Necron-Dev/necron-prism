@@ -6,18 +6,17 @@ use serde::{Deserialize, Serialize};
 use super::types::{JoinDecision, JoinTarget, TrafficSnapshot};
 use crate::proxy::config::ApiConfig;
 
-#[derive(Clone)]
 pub struct ApiClient {
     inner: reqwest::Client,
     base_url: String,
 }
 
 impl ApiClient {
-    pub fn new(config: &ApiConfig) -> Result<Self, reqwest::Error> {
+    pub fn new(config: &ApiConfig) -> Result<Self, String> {
         let mut headers = reqwest::header::HeaderMap::new();
         if let Some(token) = &config.bearer_token {
             let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-                .expect("validated bearer token header");
+                .map_err(|error| format!("invalid api.bearer_token header: {error}"))?;
             value.set_sensitive(true);
             headers.insert(reqwest::header::AUTHORIZATION, value);
         }
@@ -25,11 +24,16 @@ impl ApiClient {
         let inner = reqwest::Client::builder()
             .default_headers(headers)
             .timeout(config.timeout)
-            .build()?;
+            .build()
+            .map_err(|error| format!("build reqwest client: {error}"))?;
+        let base_url = config
+            .base_url
+            .clone()
+            .ok_or_else(|| "http api requires api.base_url".to_string())?;
 
         Ok(Self {
             inner,
-            base_url: config.base_url.clone().expect("http api requires base_url"),
+            base_url,
         })
     }
 

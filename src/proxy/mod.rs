@@ -1,6 +1,6 @@
 mod api;
 mod app;
-mod config;
+pub mod config;
 mod inbound;
 mod logging;
 mod motd;

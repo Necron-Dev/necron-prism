@@ -16,8 +16,8 @@ use super::relay::relay_bidirectional;
 use super::stats::ConnectionTraffic;
 use super::traffic::{ConnectionCounters, TrafficReporter};
 use crate::minecraft::{
-    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN, INTENT_STATUS,
-    MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN,
+    INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
 };
 
 pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};

@@ -4,9 +4,9 @@ use std::os::fd::OwnedFd;
 use std::thread;
 
 use rustix::io::Errno;
-use rustix::pipe::{PipeFlags, SpliceFlags, pipe_with, splice};
+use rustix::pipe::{pipe_with, splice, PipeFlags, SpliceFlags};
 
-use super::{RelayMode, RelayStats, shutdown_write};
+use super::{shutdown_write, RelayMode, RelayStats};
 
 const PIPE_CHUNK_SIZE: usize = 4 * 1024;
 const SPLICE_FLAGS: SpliceFlags = SpliceFlags::MOVE.union(SpliceFlags::NONBLOCK);

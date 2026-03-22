@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 use crate::minecraft::{
-    decode_pong_response, decode_status_response, encode_handshake, ping_request_packet,
-    HandshakeInfo, PacketIo, ProtocolError,
+    decode_pong_response, decode_status_response, encode_handshake, ping_request_packet, HandshakeInfo,
+    PacketIo, ProtocolError,
 };
 
 use super::service::MotdService;

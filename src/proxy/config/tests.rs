@@ -4,13 +4,13 @@ mod tests {
     use std::time::Duration;
 
     use crate::proxy::config::checker::ConfigChecker;
-    use crate::proxy::config::loader::RawConfig;
     use crate::proxy::config::normalizer::ConfigNormalizer;
+    use crate::proxy::config::schema_types::ConfigFile;
     use crate::proxy::config::{ApiMode, ConfigLoader};
 
     #[test]
     fn parse_mock_api_config() {
-        let raw = toml::from_str::<RawConfig>(
+        let raw = toml::from_str::<ConfigFile>(
             r#"
                 [inbound]
                 listen_addr = "0.0.0.0:25565"
@@ -25,7 +25,7 @@ mod tests {
                 stats_log_interval_secs = 5
             "#,
         )
-            .unwrap();
+        .unwrap();
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))
@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn parse_upstream_motd_addr() {
-        let raw = toml::from_str::<RawConfig>(
+        let raw = toml::from_str::<ConfigFile>(
             r#"
                 [inbound]
                 listen_addr = "0.0.0.0:25565"
@@ -55,7 +55,7 @@ mod tests {
                 target_addr = "backend"
             "#,
         )
-            .unwrap();
+        .unwrap();
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn loader_requires_http_base_url() {
-        let raw = toml::from_str::<RawConfig>(
+        let raw = toml::from_str::<ConfigFile>(
             r#"
                 [inbound]
                 listen_addr = "0.0.0.0:25565"
@@ -79,7 +79,7 @@ mod tests {
                 mode = "http"
             "#,
         )
-            .unwrap();
+        .unwrap();
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))

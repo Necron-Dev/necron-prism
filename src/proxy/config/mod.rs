@@ -1,8 +1,9 @@
 mod checker;
 mod loader;
 mod normalizer;
-mod types;
+mod schema_types;
 mod tests;
+mod types;
 
 pub use loader::ConfigLoader;
 pub use types::{

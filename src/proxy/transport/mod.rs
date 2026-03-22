@@ -26,6 +26,7 @@ pub fn handle_client(
     mut client: std::net::TcpStream,
     config: &Config,
     api: &ApiService,
+    motd: &MotdService,
     traffic_reporter: &TrafficReporter,
     players: &PlayerRegistry,
     context: ConnectionContext,
@@ -64,7 +65,7 @@ pub fn handle_client(
     );
 
     if handshake.next_state == INTENT_STATUS {
-        let traffic = MotdService::default()
+        let traffic = motd
             .serve(
                 &mut packet_io,
                 &mut client,

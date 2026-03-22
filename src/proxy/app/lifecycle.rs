@@ -17,6 +17,7 @@ pub fn run_connection(state: AppState, stream: std::net::TcpStream, context: Con
         stream,
         &state.config,
         &state.api,
+        &state.motd,
         &state.traffic_reporter,
         &state.players,
         context,

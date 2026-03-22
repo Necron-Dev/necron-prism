@@ -46,6 +46,7 @@ pub struct MotdConfig {
     pub protocol_mode: MotdProtocolMode,
     pub ping_mode: StatusPingMode,
     pub upstream_ping_timeout: Duration,
+    pub status_cache_ttl: Duration,
     pub rewrite: Option<MotdRewrite>,
     pub favicon: MotdFaviconMode,
 }

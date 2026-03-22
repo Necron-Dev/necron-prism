@@ -11,7 +11,7 @@ use crate::minecraft::{
 };
 
 use super::config::Config;
-use super::motd::serve_motd;
+use super::motd::MotdService;
 use super::outbound::{SelectedOutbound, connect as connect_outbound, select_outbound};
 use super::players::{PlayerRegistry, PlayerState};
 use super::relay::{RelayMode, relay_bidirectional};
@@ -49,6 +49,7 @@ pub fn handle_client(
 
     let selected = select_outbound(config, &handshake);
     let selected_for_player = SelectedOutbound::from(selected);
+    let motd = MotdService::default();
 
     info!(
         protocol_version = handshake.protocol_version,
@@ -62,17 +63,18 @@ pub fn handle_client(
     );
 
     if handshake.next_state == INTENT_STATUS {
-        let traffic = serve_motd(
-            &mut packet_io,
-            &mut client,
-            &config.transport,
-            selected,
-            &handshake,
-            handshake_packet.wire_len,
-            players,
-            context.id,
-        )
-        .map_err(protocol_error)?;
+        let traffic = motd
+            .serve(
+                &mut packet_io,
+                &mut client,
+                &config.transport,
+                selected,
+                &handshake,
+                handshake_packet.wire_len,
+                players,
+                context.id,
+            )
+            .map_err(protocol_error)?;
 
         return Ok(ConnectionReport {
             traffic,

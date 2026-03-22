@@ -77,6 +77,7 @@ fn normalize_motd(raw: RawMotdConfig) -> Result<MotdConfig, String> {
         protocol_mode: normalize_protocol_mode(raw.protocol.as_deref())?,
         ping_mode: normalize_ping_mode(raw.ping_mode.as_deref())?,
         upstream_ping_timeout: Duration::from_millis(raw.upstream_ping_timeout_ms.unwrap_or(1500)),
+        status_cache_ttl: Duration::from_millis(raw.status_cache_ttl_ms.unwrap_or(1000)),
         rewrite: normalize_motd_rewrite(raw.rewrite)?,
         favicon: normalize_favicon_mode(raw.favicon)?,
     })

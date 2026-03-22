@@ -74,6 +74,7 @@ pub(super) struct RawMotdConfig {
     pub protocol: Option<String>,
     pub ping_mode: Option<String>,
     pub upstream_ping_timeout_ms: Option<u64>,
+    pub status_cache_ttl_ms: Option<u64>,
     #[serde(default)]
     pub rewrite: RawMotdRewrite,
     #[serde(default)]

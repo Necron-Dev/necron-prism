@@ -33,6 +33,8 @@ pub(super) struct RawConfig {
     #[serde(default)]
     pub transport: RawTransportConfig,
     #[serde(default)]
+    pub relay: RawRelayConfig,
+    #[serde(default)]
     pub runtime: RawRuntimeConfig,
 }
 
@@ -65,6 +67,11 @@ pub(super) struct RawTransportConfig {
     #[serde(default)]
     pub motd: RawMotdConfig,
     pub kick_json: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(super) struct RawRelayConfig {
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]

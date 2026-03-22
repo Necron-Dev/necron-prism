@@ -152,7 +152,7 @@ pub fn handle_client(
         upstream.write_all(&encoded_login_start)?;
     }
 
-    let relay_stats = relay_bidirectional(client, upstream)?;
+    let relay_stats = relay_bidirectional(client, upstream, config.relay.mode)?;
     let traffic = ConnectionTraffic {
         upload_bytes: relay_stats.upload_bytes
             + handshake_packet.wire_len as u64

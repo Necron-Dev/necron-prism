@@ -8,6 +8,7 @@ pub struct Config {
     pub inbound: InboundConfig,
     pub outbounds: Vec<OutboundRoute>,
     pub transport: TransportConfig,
+    pub relay: RelayConfig,
     pub stats_log_interval: Option<Duration>,
     pub source_path: PathBuf,
 }
@@ -37,6 +38,17 @@ pub struct OutboundRoute {
 pub struct TransportConfig {
     pub motd: MotdConfig,
     pub kick_json: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RelayConfig {
+    pub mode: RelayMode,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RelayMode {
+    Standard,
+    LinuxSplice,
 }
 
 #[derive(Clone, Debug)]

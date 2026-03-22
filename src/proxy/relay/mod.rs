@@ -3,6 +3,8 @@ use std::io;
 use std::net::{Shutdown, TcpStream};
 use std::thread;
 
+use super::config::RelayMode as ConfigRelayMode;
+
 #[cfg(target_os = "linux")]
 mod linux;
 
@@ -36,14 +38,24 @@ pub struct RelayStats {
     pub mode: Option<RelayMode>,
 }
 
-pub fn relay_bidirectional(client: TcpStream, upstream: TcpStream) -> io::Result<RelayStats> {
+pub fn relay_bidirectional(
+    client: TcpStream,
+    upstream: TcpStream,
+    #[cfg(target_os = "linux")] config_mode: ConfigRelayMode,
+    #[cfg(not(target_os = "linux"))] _config_mode: ConfigRelayMode,
+) -> io::Result<RelayStats> {
     #[cfg(target_os = "linux")]
     {
-        if let Some(pipes) = linux::prepare_pipes() {
-            return linux::relay_with_splice(client, upstream, pipes);
-        }
+        if matches!(config_mode, ConfigRelayMode::LinuxSplice) {
+            tracing::warn!(
+                "linux splice relay favors throughput and may increase latency jitter for Minecraft gameplay"
+            );
+            if let Some(pipes) = linux::prepare_pipes() {
+                return linux::relay_with_splice(client, upstream, pipes);
+            }
 
-        tracing::warn!("falling back to standard relay because splice pipes are unavailable");
+            tracing::warn!("falling back to standard relay because splice pipes are unavailable");
+        }
     }
 
     relay_with_copy(client, upstream)

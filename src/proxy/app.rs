@@ -29,6 +29,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         fallback_rewrite_addr = %config.outbounds.iter().find(|route| route.match_host.is_none()).map(|route| route.outbound.rewrite_addr.as_str()).unwrap_or("<missing>"),
         motd_enabled = true,
         kick_enabled = config.transport.kick_json.is_some(),
+        relay_mode = ?config.relay.mode,
         extra_outbounds = config.outbounds.len(),
         config_path = %config.source_path.display(),
         "proxy listening"

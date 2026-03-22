@@ -6,11 +6,12 @@ use regex::Regex;
 
 use super::loader::{
     RawConfig, RawMotdConfig, RawMotdFavicon, RawMotdRewrite, RawOutboundConfig, RawOutboundRoute,
-    RawSocketOptions,
+    RawRelayConfig, RawSocketOptions,
 };
 use super::types::{
     Config, InboundConfig, MotdConfig, MotdFaviconMode, MotdMode, MotdProtocolMode, MotdRewrite,
-    OutboundConfig, OutboundRoute, SocketOptions, StatusPingMode, TransportConfig,
+    OutboundConfig, OutboundRoute, RelayConfig, RelayMode, SocketOptions, StatusPingMode,
+    TransportConfig,
 };
 
 pub struct ConfigNormalizer;
@@ -38,6 +39,7 @@ impl ConfigNormalizer {
                 motd: normalize_motd(raw.transport.motd)?,
                 kick_json: raw.transport.kick_json,
             },
+            relay: normalize_relay(raw.relay)?,
             stats_log_interval: raw
                 .runtime
                 .stats_log_interval_secs
@@ -46,6 +48,16 @@ impl ConfigNormalizer {
             source_path,
         })
     }
+}
+
+fn normalize_relay(raw: RawRelayConfig) -> Result<RelayConfig, String> {
+    Ok(RelayConfig {
+        mode: match raw.mode.as_deref().unwrap_or("standard") {
+            "standard" | "copy" => RelayMode::Standard,
+            "splice" | "linux_splice" | "linux-splice" => RelayMode::LinuxSplice,
+            other => return Err(format!("invalid relay.mode: {other}")),
+        },
+    })
 }
 
 fn normalize_outbound_route(raw: RawOutboundRoute) -> Result<OutboundRoute, String> {

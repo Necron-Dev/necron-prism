@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::client::ApiClient;
@@ -117,10 +116,5 @@ impl MockApiService {
             rewrite_addr: self.rewrite_addr.clone(),
             connection_id: format!("{}-{sequence}", self.connection_id_prefix),
         })
-    }
-
-    #[allow(dead_code)]
-    fn kick_reason(&self) -> Option<Cow<'_, str>> {
-        self.kick_reason.as_deref().map(Cow::Borrowed)
     }
 }

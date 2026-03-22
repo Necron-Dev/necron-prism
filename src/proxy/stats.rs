@@ -23,25 +23,20 @@ impl TrafficStats {
             + bytes
     }
 
-    pub fn snapshot(&self) -> TrafficSnapshot {
-        TrafficSnapshot {
-            total_upload_bytes: self.total_upload_bytes.load(Ordering::Relaxed),
-            total_download_bytes: self.total_download_bytes.load(Ordering::Relaxed),
-            total_connections: self.total_connections.load(Ordering::Relaxed),
-        }
+    pub fn total_upload_bytes(&self) -> u64 {
+        self.total_upload_bytes.load(Ordering::Relaxed)
     }
-}
 
-#[derive(Clone, Copy, Debug)]
-pub struct TrafficSnapshot {
-    pub total_upload_bytes: u64,
-    pub total_download_bytes: u64,
-    pub total_connections: u64,
-}
+    pub fn total_download_bytes(&self) -> u64 {
+        self.total_download_bytes.load(Ordering::Relaxed)
+    }
 
-impl TrafficSnapshot {
-    pub fn total_bytes(self) -> u64 {
-        self.total_upload_bytes + self.total_download_bytes
+    pub fn total_connections(&self) -> u64 {
+        self.total_connections.load(Ordering::Relaxed)
+    }
+
+    pub fn total_bytes(&self) -> u64 {
+        self.total_upload_bytes() + self.total_download_bytes()
     }
 }
 

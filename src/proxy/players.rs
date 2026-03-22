@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+use valence_protocol::uuid::Uuid;
 
 use crate::minecraft::{HandshakeInfo, INTENT_LOGIN, INTENT_STATUS};
+use crate::proxy::outbound::SelectedOutbound;
 
 #[derive(Clone, Default)]
 pub struct PlayerRegistry {
@@ -14,23 +16,21 @@ impl PlayerRegistry {
     pub fn register_connection(
         &self,
         connection_id: u64,
-        peer_addr: Option<SocketAddr>,
-        now: Instant,
+        connection_ip: Option<SocketAddr>,
     ) -> usize {
+        let now = Instant::now();
+
         let mut sessions = self.sessions.write().expect("player registry poisoned");
         sessions.insert(
             connection_id,
             PlayerSession {
                 connection_id,
-                peer_addr,
+                connection_ip,
                 protocol_version: None,
-                requested_host: None,
-                requested_port: None,
                 next_state: None,
                 username: None,
+                uuid: None,
                 selected_outbound: None,
-                rewritten_host: None,
-                rewritten_port: None,
                 state: PlayerState::Accepted,
                 connected_at: now,
                 last_updated_at: now,
@@ -42,8 +42,6 @@ impl PlayerRegistry {
     pub fn update_handshake(&self, connection_id: u64, handshake: &HandshakeInfo, now: Instant) {
         self.update(connection_id, now, |session| {
             session.protocol_version = Some(handshake.protocol_version);
-            session.requested_host = Some(handshake.server_address.clone());
-            session.requested_port = Some(handshake.server_port);
             session.next_state = Some(handshake.next_state);
             session.state = match handshake.next_state {
                 INTENT_STATUS => PlayerState::Status,
@@ -53,28 +51,27 @@ impl PlayerRegistry {
         });
     }
 
-    pub fn update_username(&self, connection_id: u64, username: String, now: Instant) {
-        self.update(connection_id, now, move |session| {
-            session.username = Some(username.clone());
+    pub fn update_username(&self, connection_id: u64, username: String) {
+        self.update(connection_id, Instant::now(), |session| {
+            session.username = Some(username);
         });
     }
 
-    pub fn update_outbound(
-        &self,
-        connection_id: u64,
-        outbound_name: &str,
-        rewritten_addr: &str,
-        now: Instant,
-    ) {
-        self.update(connection_id, now, |session| {
-            session.selected_outbound = Some(outbound_name.to_string());
-            if let Some((host, port)) = split_host_port(rewritten_addr) {
-                session.rewritten_host = Some(host.to_string());
-                session.rewritten_port = Some(port);
-            } else {
-                session.rewritten_host = Some(rewritten_addr.to_string());
-                session.rewritten_port = None;
-            }
+    pub fn update_uuid(&self, connection_id: u64, uuid: Uuid) {
+        self.update(connection_id, Instant::now(), |session| {
+            session.uuid = Some(uuid);
+        });
+    }
+
+    pub fn clear_uuid(&self, connection_id: u64) {
+        self.update(connection_id, Instant::now(), |session| {
+            session.uuid = None;
+        });
+    }
+
+    pub fn update_outbound(&self, connection_id: u64, selected_outbound: SelectedOutbound) {
+        self.update(connection_id, Instant::now(), move |session| {
+            session.selected_outbound = Some(selected_outbound);
             session.state = match session.next_state {
                 Some(INTENT_STATUS) => PlayerState::StatusProxying,
                 Some(INTENT_LOGIN) => PlayerState::LoginProxying,
@@ -117,23 +114,9 @@ impl PlayerRegistry {
             .len()
     }
 
-    pub fn snapshot(&self, now: Instant) -> PlayerRegistrySnapshot {
-        let sessions = self.sessions.read().expect("player registry poisoned");
-        let players = sessions
-            .values()
-            .cloned()
-            .map(|session| session.into_snapshot(now))
-            .collect::<Vec<_>>();
-
-        PlayerRegistrySnapshot {
-            active_sessions: players.len(),
-            players,
-        }
-    }
-
-    fn update<F>(&self, connection_id: u64, now: Instant, mut update: F)
+    fn update<F>(&self, connection_id: u64, now: Instant, update: F)
     where
-        F: FnMut(&mut PlayerSession),
+        F: FnOnce(&mut PlayerSession),
     {
         let mut sessions = self.sessions.write().expect("player registry poisoned");
         if let Some(session) = sessions.get_mut(&connection_id) {
@@ -143,52 +126,18 @@ impl PlayerRegistry {
     }
 }
 
-fn split_host_port(addr: &str) -> Option<(&str, u16)> {
-    if let Some(stripped) = addr.strip_prefix('[') {
-        let (host, port) = stripped.split_once(']')?;
-        let port = port.strip_prefix(':')?.parse::<u16>().ok()?;
-        return Some((host, port));
-    }
-
-    let (host, port) = addr.rsplit_once(':')?;
-    Some((host, port.parse::<u16>().ok()?))
-}
-
 #[derive(Clone, Debug)]
 struct PlayerSession {
     connection_id: u64,
-    peer_addr: Option<SocketAddr>,
-    protocol_version: Option<i32>,
-    requested_host: Option<String>,
-    requested_port: Option<u16>,
-    next_state: Option<i32>,
+    connection_ip: Option<SocketAddr>,
     username: Option<String>,
-    selected_outbound: Option<String>,
-    rewritten_host: Option<String>,
-    rewritten_port: Option<u16>,
+    uuid: Option<Uuid>,
+    selected_outbound: Option<SelectedOutbound>,
+    protocol_version: Option<i32>,
+    next_state: Option<i32>,
     state: PlayerState,
     connected_at: Instant,
     last_updated_at: Instant,
-}
-
-impl PlayerSession {
-    fn into_snapshot(self, now: Instant) -> PlayerSnapshot {
-        PlayerSnapshot {
-            connection_id: self.connection_id,
-            peer_addr: self.peer_addr,
-            protocol_version: self.protocol_version,
-            requested_host: self.requested_host,
-            requested_port: self.requested_port,
-            next_state: self.next_state,
-            username: self.username,
-            selected_outbound: self.selected_outbound,
-            rewritten_host: self.rewritten_host,
-            rewritten_port: self.rewritten_port,
-            state: self.state,
-            connected_for_ms: now.duration_since(self.connected_at).as_millis() as u64,
-            idle_for_ms: now.duration_since(self.last_updated_at).as_millis() as u64,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -204,29 +153,6 @@ pub enum PlayerState {
     Proxying,
 }
 
-#[derive(Clone, Debug)]
-pub struct PlayerSnapshot {
-    pub connection_id: u64,
-    pub peer_addr: Option<SocketAddr>,
-    pub protocol_version: Option<i32>,
-    pub requested_host: Option<String>,
-    pub requested_port: Option<u16>,
-    pub next_state: Option<i32>,
-    pub username: Option<String>,
-    pub selected_outbound: Option<String>,
-    pub rewritten_host: Option<String>,
-    pub rewritten_port: Option<u16>,
-    pub state: PlayerState,
-    pub connected_for_ms: u64,
-    pub idle_for_ms: u64,
-}
-
-#[derive(Clone, Debug)]
-pub struct PlayerRegistrySnapshot {
-    pub active_sessions: usize,
-    pub players: Vec<PlayerSnapshot>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,9 +160,8 @@ mod tests {
     #[test]
     fn registry_tracks_active_sessions() {
         let registry = PlayerRegistry::default();
-        let now = Instant::now();
 
-        assert_eq!(registry.register_connection(1, None, now), 1);
+        assert_eq!(registry.register_connection(1, None), 1);
         assert_eq!(registry.active_count(), 1);
         assert_eq!(registry.remove_connection(1), 0);
         assert_eq!(registry.active_count(), 0);

@@ -41,21 +41,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     warn!(error = %error, "failed to apply inbound socket options");
                 }
 
-                let peer_addr = stream.peer_addr().ok();
+                let connection_ip = stream.peer_addr().ok();
                 let connection_id = stats.connection_opened();
-                let active_connections =
-                    players.register_connection(connection_id, peer_addr, Instant::now());
+                let active_connections = players.register_connection(connection_id, connection_ip);
 
                 info!(
                     connection_id,
-                    peer_addr = ?peer_addr,
+                    peer_addr = ?connection_ip,
                     active_connections,
                     "accepted inbound connection"
                 );
 
                 let context = ConnectionContext {
                     id: connection_id,
-                    peer_addr,
+                    peer_addr: connection_ip,
                 };
                 let config = Arc::clone(&config);
                 let players = players.clone();
@@ -73,36 +72,15 @@ fn spawn_stats_logger(stats: TrafficStats, players: PlayerRegistry, interval: Du
     thread::spawn(move || {
         loop {
             thread::sleep(interval);
-            let snapshot = stats.snapshot();
-            let player_snapshot = players.snapshot(Instant::now());
             info!(
-                active_connections = player_snapshot.active_sessions,
-                total_connections = snapshot.total_connections,
-                total_upload_bytes = snapshot.total_upload_bytes,
-                total_download_bytes = snapshot.total_download_bytes,
-                total_bytes = snapshot.total_bytes(),
+                active_connections = players.active_count(),
+                total_connections = stats.total_connections(),
+                total_upload_bytes = stats.total_upload_bytes(),
+                total_download_bytes = stats.total_download_bytes(),
+                total_bytes = stats.total_bytes(),
                 interval_secs = interval.as_secs(),
-                "stats snapshot"
+                "traffic stats"
             );
-
-            for player in player_snapshot.players {
-                info!(
-                    connection_id = player.connection_id,
-                    peer_addr = ?player.peer_addr,
-                    protocol_version = ?player.protocol_version,
-                    requested_host = ?player.requested_host,
-                    requested_port = ?player.requested_port,
-                    next_state = ?player.next_state,
-                    username = ?player.username,
-                    selected_outbound = ?player.selected_outbound,
-                    rewritten_host = ?player.rewritten_host,
-                    rewritten_port = ?player.rewritten_port,
-                    player_state = ?player.state,
-                    connected_for_ms = player.connected_for_ms,
-                    idle_for_ms = player.idle_for_ms,
-                    "player snapshot"
-                );
-            }
         }
     });
 }
@@ -142,7 +120,6 @@ fn log_connection_success(
     let total_upload = stats.add_upload(report.traffic.upload_bytes);
     let total_download = stats.add_download(report.traffic.download_bytes);
     let active_remaining = players.remove_connection(context.id);
-    let snapshot = stats.snapshot();
 
     if let Some(mode) = report.relay_mode {
         info!(relay_mode = %mode, "relay completed");
@@ -160,11 +137,10 @@ fn log_connection_success(
         total_bytes = report.traffic.total_bytes(),
         total_upload_bytes = total_upload,
         total_download_bytes = total_download,
-        total_connections = snapshot.total_connections,
+        total_connections = stats.total_connections(),
         active_connections = active_remaining,
         current_online_players = players.current_online_count(),
-        observed_total_upload_bytes = snapshot.total_upload_bytes,
-        observed_total_download_bytes = snapshot.total_download_bytes,
+        observed_total_bytes = stats.total_bytes(),
         "connection finished"
     );
 }

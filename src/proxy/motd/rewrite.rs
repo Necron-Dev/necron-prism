@@ -30,11 +30,7 @@ fn apply_protocol(value: &mut Value, protocol_mode: MotdProtocolMode, client_pro
         MotdProtocolMode::Fixed(protocol) => protocol,
     };
 
-    if !value.is_object() {
-        *value = Value::Object(Default::default());
-    }
-
-    let object = value.as_object_mut().expect("motd json object");
+    let object = ensure_object(value);
     let version = object
         .entry("version")
         .or_insert_with(|| Value::Object(Default::default()));
@@ -42,10 +38,9 @@ fn apply_protocol(value: &mut Value, protocol_mode: MotdProtocolMode, client_pro
         *version = Value::Object(Default::default());
     }
 
-    version
-        .as_object_mut()
-        .expect("motd version object")
-        .insert("protocol".to_string(), Value::from(protocol));
+    if let Some(version) = version.as_object_mut() {
+        version.insert("protocol".to_string(), Value::from(protocol));
+    }
 }
 
 fn apply_rewrite(value: &mut Value, rewrite: Option<&MotdRewrite>) {
@@ -84,18 +79,12 @@ fn apply_favicon(
     rewrite: Option<&MotdRewrite>,
     passthrough_favicon_json: Option<&str>,
 ) {
-    if !value.is_object() {
-        *value = Value::Object(Default::default());
-    }
-
     match favicon_mode {
         MotdFaviconMode::Passthrough => {
             if let Some(json) = passthrough_favicon_json {
                 if let Ok(source) = serde_json::from_str::<Value>(json) {
                     if let Some(favicon) = source.get("favicon").and_then(Value::as_str) {
-                        value
-                            .as_object_mut()
-                            .expect("motd json object")
+                        ensure_object(value)
                             .insert("favicon".to_string(), Value::String(favicon.to_string()));
                     }
                 }
@@ -116,17 +105,22 @@ fn apply_favicon(
             }
         }
         MotdFaviconMode::Override(favicon) => {
-            value
-                .as_object_mut()
-                .expect("motd json object")
-                .insert("favicon".to_string(), Value::String(favicon.clone()));
+            ensure_object(value).insert("favicon".to_string(), Value::String(favicon.clone()));
         }
         MotdFaviconMode::Remove => {
-            value
-                .as_object_mut()
-                .expect("motd json object")
-                .remove("favicon");
+            ensure_object(value).remove("favicon");
         }
+    }
+}
+
+fn ensure_object(value: &mut Value) -> &mut serde_json::Map<String, Value> {
+    if !value.is_object() {
+        *value = Value::Object(Default::default());
+    }
+
+    match value {
+        Value::Object(object) => object,
+        _ => unreachable!(),
     }
 }
 

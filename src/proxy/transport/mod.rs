@@ -6,12 +6,13 @@ use tracing::info;
 
 use crate::minecraft::{
     INTENT_LOGIN, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, PacketIo,
-    ProtocolError, decode_handshake, decode_login_hello, encode_handshake, login_disconnect_packet,
+    ProtocolError, decode_handshake, decode_login_hello, encode_handshake, encode_raw_frame,
+    login_disconnect_packet,
 };
 
 use super::config::Config;
 use super::motd::serve_motd;
-use super::outbound::{connect as connect_outbound, select_outbound};
+use super::outbound::{SelectedOutbound, connect as connect_outbound, select_outbound};
 use super::players::{PlayerRegistry, PlayerState};
 use super::relay::{RelayMode, relay_bidirectional};
 use super::stats::ConnectionTraffic;
@@ -47,6 +48,7 @@ pub fn handle_client(
     players.update_handshake(context.id, &handshake, Instant::now());
 
     let selected = select_outbound(config, &handshake);
+    let selected_for_player = SelectedOutbound::from(selected);
 
     info!(
         protocol_version = handshake.protocol_version,
@@ -64,7 +66,7 @@ pub fn handle_client(
             &mut packet_io,
             &mut client,
             &config.transport,
-            &selected,
+            selected,
             &handshake,
             handshake_packet.wire_len,
             players,
@@ -75,17 +77,43 @@ pub fn handle_client(
         return Ok(ConnectionReport {
             traffic,
             relay_mode: None,
-            outbound_name: Some(selected.name),
+            outbound_name: Some(selected.name.clone()),
         });
     }
 
-    if handshake.next_state == INTENT_LOGIN {
+    let login_start_packet = if handshake.next_state == INTENT_LOGIN {
+        Some(
+            packet_io
+                .read_frame(&mut client, MAX_LOGIN_PACKET_SIZE)
+                .map_err(protocol_error)?,
+        )
+    } else {
+        None
+    };
+
+    if let Some(login_start_packet) = login_start_packet.as_ref() {
+        let login_hello = decode_login_hello(login_start_packet).map_err(protocol_error)?;
+        players.update_username(context.id, login_hello.username.clone());
+        if let Some(uuid) = login_hello.profile_id {
+            players.update_uuid(context.id, uuid);
+        } else {
+            players.clear_uuid(context.id);
+        }
+
+        info!(
+            player_name = %login_hello.username,
+            player_uuid = ?login_hello.profile_id,
+            login_start_bytes = login_start_packet.wire_len,
+            "parsed login hello"
+        );
+
         if let Some(kick_json) = &config.transport.kick_json {
             let traffic = handle_login_kick(
-                &mut packet_io,
                 &mut client,
                 kick_json,
                 handshake_packet.wire_len,
+                login_start_packet.wire_len,
+                &login_hello.username,
                 players,
                 context.id,
             )?;
@@ -93,7 +121,7 @@ pub fn handle_client(
             return Ok(ConnectionReport {
                 traffic,
                 relay_mode: None,
-                outbound_name: Some(selected.name),
+                outbound_name: Some(selected.name.clone()),
             });
         }
     }
@@ -101,12 +129,7 @@ pub fn handle_client(
     handshake
         .rewrite_addr(&selected.rewrite_addr)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    players.update_outbound(
-        context.id,
-        &selected.name,
-        &selected.rewrite_addr,
-        Instant::now(),
-    );
+    players.update_outbound(context.id, selected_for_player);
 
     let rewritten_packet = encode_handshake(&handshake).map_err(protocol_error)?;
 
@@ -120,36 +143,40 @@ pub fn handle_client(
 
     client.set_read_timeout(None)?;
 
-    let mut upstream = connect_outbound(&selected)?;
+    let mut upstream = connect_outbound(selected)?;
     upstream.write_all(&rewritten_packet)?;
+    if let Some(login_start_packet) = login_start_packet.as_ref() {
+        let encoded_login_start = encode_raw_frame(login_start_packet).map_err(protocol_error)?;
+        upstream.write_all(&encoded_login_start)?;
+    }
 
     let relay_stats = relay_bidirectional(client, upstream)?;
     let traffic = ConnectionTraffic {
-        upload_bytes: relay_stats.upload_bytes + handshake_packet.wire_len as u64,
+        upload_bytes: relay_stats.upload_bytes
+            + handshake_packet.wire_len as u64
+            + login_start_packet
+                .as_ref()
+                .map(|packet| packet.wire_len as u64)
+                .unwrap_or(0),
         download_bytes: relay_stats.download_bytes,
     };
 
     Ok(ConnectionReport {
         traffic,
         relay_mode: relay_stats.mode,
-        outbound_name: Some(selected.name),
+        outbound_name: Some(selected.name.clone()),
     })
 }
 
 fn handle_login_kick(
-    packet_io: &mut PacketIo,
     client: &mut TcpStream,
     kick_json: &str,
     handshake_wire_bytes: usize,
+    login_start_wire_bytes: usize,
+    player_name: &str,
     players: &PlayerRegistry,
     connection_id: u64,
 ) -> io::Result<ConnectionTraffic> {
-    let login_start = packet_io
-        .read_frame(client, MAX_LOGIN_PACKET_SIZE)
-        .map_err(protocol_error)?;
-    let player_name = decode_login_hello(&login_start).map_err(protocol_error)?;
-    players.update_username(connection_id, player_name.clone(), Instant::now());
-
     let rendered_kick = template::render(kick_json, players);
     let kick_packet = login_disconnect_packet(&rendered_kick).map_err(protocol_error)?;
     client.write_all(&kick_packet)?;
@@ -162,13 +189,13 @@ fn handle_login_kick(
 
     info!(
         player_name = %player_name,
-        login_start_bytes = login_start.wire_len,
+        login_start_bytes = login_start_wire_bytes,
         kick_packet_bytes = kick_packet.len(),
         "rejected login with local kick packet"
     );
 
     Ok(ConnectionTraffic {
-        upload_bytes: (handshake_wire_bytes + login_start.wire_len) as u64,
+        upload_bytes: (handshake_wire_bytes + login_start_wire_bytes) as u64,
         download_bytes: kick_packet.len() as u64,
     })
 }

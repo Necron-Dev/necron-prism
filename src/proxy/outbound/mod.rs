@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::minecraft::HandshakeInfo;
 
-use super::config::{Config, OutboundConfig, SocketOptions};
+use super::config::{Config, OutboundConfig};
 use super::socket::apply_stream_options;
 
 #[derive(Clone, Debug)]
@@ -13,10 +13,9 @@ pub struct SelectedOutbound {
     pub name: String,
     pub target_addr: String,
     pub rewrite_addr: String,
-    pub socket_options: SocketOptions,
 }
 
-pub fn select_outbound(config: &Config, handshake: &HandshakeInfo) -> SelectedOutbound {
+pub fn select_outbound<'a>(config: &'a Config, handshake: &HandshakeInfo) -> &'a OutboundConfig {
     let requested_host = normalize_host(&handshake.server_address);
 
     if let Some(route) = config
@@ -31,7 +30,7 @@ pub fn select_outbound(config: &Config, handshake: &HandshakeInfo) -> SelectedOu
             rewrite_addr = %route.outbound.rewrite_addr,
             "matched outbound route"
         );
-        return SelectedOutbound::from(route.outbound.clone());
+        return &route.outbound;
     }
 
     let fallback = config
@@ -47,10 +46,10 @@ pub fn select_outbound(config: &Config, handshake: &HandshakeInfo) -> SelectedOu
         rewrite_addr = %fallback.outbound.rewrite_addr,
         "using fallback outbound"
     );
-    SelectedOutbound::from(fallback.outbound.clone())
+    &fallback.outbound
 }
 
-pub fn connect(selected: &SelectedOutbound) -> io::Result<TcpStream> {
+pub fn connect(selected: &OutboundConfig) -> io::Result<TcpStream> {
     let stream = TcpStream::connect(&selected.target_addr)?;
     apply_stream_options(&stream, &selected.socket_options)?;
     Ok(stream)
@@ -61,13 +60,12 @@ fn normalize_host(host: &str) -> String {
     clean.trim_end_matches('.').to_ascii_lowercase()
 }
 
-impl From<OutboundConfig> for SelectedOutbound {
-    fn from(value: OutboundConfig) -> Self {
+impl From<&OutboundConfig> for SelectedOutbound {
+    fn from(value: &OutboundConfig) -> Self {
         Self {
-            name: value.name,
-            target_addr: value.target_addr,
-            rewrite_addr: value.rewrite_addr,
-            socket_options: value.socket_options,
+            name: value.name.clone(),
+            target_addr: value.target_addr.clone(),
+            rewrite_addr: value.rewrite_addr.clone(),
         }
     }
 }

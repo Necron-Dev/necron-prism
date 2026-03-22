@@ -4,12 +4,15 @@ use std::str::FromStr;
 use valence_protocol::Text;
 use valence_protocol::WritePacket;
 use valence_protocol::packets::login::LoginDisconnectS2c;
+use valence_protocol::packets::login::LoginHelloC2s;
 use valence_protocol::packets::status::{QueryPongS2c, QueryRequestC2s, QueryResponseS2c};
+use valence_protocol::uuid::Uuid;
 
 use super::{
-    HandshakeInfo, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
-    PacketIo, ProtocolError, decode_handshake, decode_ping_request, decode_status_request,
-    encode_handshake, login_disconnect_packet, ping_response_packet, status_response_packet,
+    HandshakeInfo, LoginHelloInfo, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    MAX_STATUS_PACKET_SIZE, PacketIo, ProtocolError, decode_handshake, decode_login_hello,
+    decode_ping_request, decode_status_request, encode_handshake, encode_raw_frame,
+    login_disconnect_packet, ping_response_packet, status_response_packet,
 };
 
 fn sample_handshake(server_address: &str, server_port: u16, next_state: i32) -> HandshakeInfo {
@@ -98,6 +101,70 @@ fn encode_login_disconnect_packet() {
     let expected = Text::from_str(kick_json).unwrap();
 
     assert_eq!(&*decoded.reason, &expected);
+}
+
+#[test]
+fn decode_login_hello_modern_packet() {
+    let profile_id = Uuid::from_bytes([1; 16]);
+    let mut packet = Vec::new();
+
+    valence_protocol::encode::PacketWriter::new(&mut packet, None)
+        .write_packet_fallible(&LoginHelloC2s {
+            username: "Me0wo",
+            profile_id: Some(profile_id),
+        })
+        .unwrap();
+
+    let frame = PacketIo::new()
+        .read_frame(&mut Cursor::new(packet), MAX_LOGIN_PACKET_SIZE)
+        .unwrap();
+
+    assert_eq!(
+        decode_login_hello(&frame).unwrap(),
+        LoginHelloInfo {
+            username: "Me0wo".to_owned(),
+            profile_id: Some(profile_id),
+        }
+    );
+}
+
+#[test]
+fn decode_login_hello_legacy_packet_without_profile_id() {
+    let mut packet = vec![0, 5];
+    packet.extend_from_slice(b"Me0wo");
+    packet.insert(0, packet.len() as u8);
+
+    let frame = PacketIo::new()
+        .read_frame(&mut Cursor::new(packet), MAX_LOGIN_PACKET_SIZE)
+        .unwrap();
+
+    assert_eq!(
+        decode_login_hello(&frame).unwrap(),
+        LoginHelloInfo {
+            username: "Me0wo".to_owned(),
+            profile_id: None,
+        }
+    );
+}
+
+#[test]
+fn encode_raw_frame_round_trip() {
+    let profile_id = Uuid::from_bytes([2; 16]);
+    let mut packet = Vec::new();
+
+    valence_protocol::encode::PacketWriter::new(&mut packet, None)
+        .write_packet_fallible(&LoginHelloC2s {
+            username: "Me0wo",
+            profile_id: Some(profile_id),
+        })
+        .unwrap();
+
+    let frame = PacketIo::new()
+        .read_frame(&mut Cursor::new(packet.clone()), MAX_LOGIN_PACKET_SIZE)
+        .unwrap();
+    let encoded = encode_raw_frame(&frame).unwrap();
+
+    assert_eq!(encoded, packet);
 }
 
 #[test]

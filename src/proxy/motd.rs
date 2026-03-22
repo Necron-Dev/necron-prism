@@ -10,9 +10,8 @@ use crate::minecraft::{
     ping_request_packet, ping_response_packet, status_response_packet,
 };
 
-use super::config::{MotdFaviconMode, MotdMode, StatusPingMode, TransportConfig};
+use super::config::{MotdFaviconMode, MotdMode, OutboundConfig, StatusPingMode, TransportConfig};
 use super::motd_json::rewrite_json;
-use super::outbound::SelectedOutbound;
 use super::players::{PlayerRegistry, PlayerState};
 use super::stats::ConnectionTraffic;
 use super::template;
@@ -21,7 +20,7 @@ pub fn serve_motd(
     packet_io: &mut PacketIo,
     client: &mut TcpStream,
     transport: &TransportConfig,
-    selected_outbound: &SelectedOutbound,
+    selected_outbound: &OutboundConfig,
     handshake: &HandshakeInfo,
     handshake_wire_bytes: usize,
     players: &PlayerRegistry,
@@ -86,7 +85,7 @@ struct StatusExchange<'a> {
     packet_io: &'a mut PacketIo,
     client: &'a mut TcpStream,
     transport: &'a TransportConfig,
-    selected_outbound: &'a SelectedOutbound,
+    selected_outbound: &'a OutboundConfig,
     handshake: &'a HandshakeInfo,
     upstream: Option<&'a mut UpstreamStatusSession>,
 }
@@ -96,7 +95,7 @@ impl<'a> StatusExchange<'a> {
         packet_io: &'a mut PacketIo,
         client: &'a mut TcpStream,
         transport: &'a TransportConfig,
-        selected_outbound: &'a SelectedOutbound,
+        selected_outbound: &'a OutboundConfig,
         handshake: &'a HandshakeInfo,
         upstream: Option<&'a mut UpstreamStatusSession>,
     ) -> Self {
@@ -197,7 +196,8 @@ fn build_motd_json(
         MotdMode::Upstream => upstream
             .as_deref_mut()
             .ok_or_else(|| ProtocolError::decode("missing upstream MOTD session"))?
-            .read_status_json()?,
+            .read_status_json()?
+            .to_owned(),
     };
 
     let favicon_source = if transport.motd.mode == MotdMode::Local
@@ -223,13 +223,13 @@ fn build_motd_json(
 struct UpstreamStatusSession {
     stream: TcpStream,
     packet_io: PacketIo,
-    target_addr: String,
+    target_addr: std::net::SocketAddr,
     cached_status_json: Option<String>,
 }
 
 impl UpstreamStatusSession {
     fn connect(
-        selected_outbound: &SelectedOutbound,
+        selected_outbound: &OutboundConfig,
         handshake: &HandshakeInfo,
         timeout: Duration,
     ) -> Result<Self, ProtocolError> {
@@ -249,20 +249,19 @@ impl UpstreamStatusSession {
         Ok(Self {
             stream,
             packet_io: PacketIo::new(),
-            target_addr: selected_outbound.target_addr.clone(),
+            target_addr: address,
             cached_status_json: None,
         })
     }
 
-    fn read_status_json(&mut self) -> Result<String, ProtocolError> {
-        if let Some(json) = &self.cached_status_json {
-            return Ok(json.clone());
+    fn read_status_json(&mut self) -> Result<&str, ProtocolError> {
+        if self.cached_status_json.is_none() {
+            let frame = self.packet_io.read_frame(&mut self.stream, 64 * 1024)?;
+            let json = decode_status_response(&frame)?;
+            self.cached_status_json = Some(json);
         }
 
-        let frame = self.packet_io.read_frame(&mut self.stream, 64 * 1024)?;
-        let json = decode_status_response(&frame)?;
-        self.cached_status_json = Some(json.clone());
-        Ok(json)
+        Ok(self.cached_status_json.as_deref().unwrap_or("{}"))
     }
 
     fn ping(&mut self, client_payload: u64) -> Result<(u64, u32), ProtocolError> {

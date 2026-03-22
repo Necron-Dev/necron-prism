@@ -8,6 +8,15 @@ use crate::minecraft::HandshakeInfo;
 use super::config::{Config, OutboundConfig};
 use super::network::apply_stream_options;
 
+pub fn fallback_outbound(config: &Config) -> &OutboundConfig {
+    &config
+        .outbounds
+        .iter()
+        .find(|route| route.match_host.is_none())
+        .expect("validated config should include one fallback outbound")
+        .outbound
+}
+
 pub fn select_outbound<'a>(config: &'a Config, handshake: &HandshakeInfo) -> &'a OutboundConfig {
     let requested_host = normalize_host(&handshake.server_address);
 
@@ -42,8 +51,8 @@ pub fn select_outbound<'a>(config: &'a Config, handshake: &HandshakeInfo) -> &'a
     &fallback.outbound
 }
 
-pub fn connect(selected: &OutboundConfig) -> io::Result<TcpStream> {
-    let stream = TcpStream::connect(&selected.target_addr)?;
+pub fn connect_addr(selected: &OutboundConfig, target_addr: &str) -> io::Result<TcpStream> {
+    let stream = TcpStream::connect(target_addr)?;
     apply_stream_options(&stream, &selected.socket_options)?;
     Ok(stream)
 }

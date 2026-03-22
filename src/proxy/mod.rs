@@ -10,6 +10,7 @@ pub mod relay;
 mod socket;
 mod stats;
 mod template;
+mod traffic;
 mod transport;
 
 pub use app::run;

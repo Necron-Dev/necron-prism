@@ -41,7 +41,7 @@ fn set_reuse_port(socket: &Socket) -> io::Result<()> {
 use socket2::{Domain, Protocol, Socket, Type};
 
 use super::config::InboundConfig;
-use super::socket::apply_stream_options;
+use super::network::apply_stream_options;
 
 pub fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
     let address = resolve_first_address(&config.listen_addr)?;

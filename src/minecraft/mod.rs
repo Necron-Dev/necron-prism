@@ -11,7 +11,7 @@ pub use constants::{
     MAX_STATUS_PACKET_SIZE,
 };
 pub use error::ProtocolError;
-pub use packet_io::PacketIo;
+pub use packet_io::{FramedPacket, PacketIo};
 pub use protocol::{
     LoginHelloInfo, decode_handshake, decode_login_hello, decode_ping_request,
     decode_pong_response, decode_status_request, decode_status_response, encode_handshake,

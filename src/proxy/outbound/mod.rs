@@ -6,14 +6,7 @@ use tracing::info;
 use crate::minecraft::HandshakeInfo;
 
 use super::config::{Config, OutboundConfig};
-use super::socket::apply_stream_options;
-
-#[derive(Clone, Debug)]
-pub struct SelectedOutbound {
-    pub name: String,
-    pub target_addr: String,
-    pub rewrite_addr: String,
-}
+use super::network::apply_stream_options;
 
 pub fn select_outbound<'a>(config: &'a Config, handshake: &HandshakeInfo) -> &'a OutboundConfig {
     let requested_host = normalize_host(&handshake.server_address);
@@ -58,14 +51,4 @@ pub fn connect(selected: &OutboundConfig) -> io::Result<TcpStream> {
 fn normalize_host(host: &str) -> String {
     let clean = host.split('\0').next().unwrap_or(host);
     clean.trim_end_matches('.').to_ascii_lowercase()
-}
-
-impl From<&OutboundConfig> for SelectedOutbound {
-    fn from(value: &OutboundConfig) -> Self {
-        Self {
-            name: value.name.clone(),
-            target_addr: value.target_addr.clone(),
-            rewrite_addr: value.rewrite_addr.clone(),
-        }
-    }
 }

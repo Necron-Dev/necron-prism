@@ -3,7 +3,7 @@ use std::net::TcpStream;
 
 use socket2::{SockRef, TcpKeepalive};
 
-use super::config::SocketOptions;
+use super::super::config::SocketOptions;
 
 pub fn apply_stream_options(stream: &TcpStream, options: &SocketOptions) -> io::Result<()> {
     let socket = SockRef::from(stream);

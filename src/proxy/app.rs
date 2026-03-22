@@ -42,9 +42,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     warn!(error = %error, "failed to apply inbound socket options");
                 }
 
-                let connection_ip = stream.peer_addr().ok();
                 let connection_id = stats.connection_opened();
-                let active_connections = players.register_connection(connection_id, connection_ip);
+                let connection_ip = stream.peer_addr().ok();
+                let active_connections = players.register_connection(connection_id);
 
                 info!(
                     connection_id,

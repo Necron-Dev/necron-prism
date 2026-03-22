@@ -14,6 +14,7 @@ pub struct ConnectionReport {
     pub traffic: ConnectionTraffic,
     pub relay_mode: Option<RelayMode>,
     pub outbound_name: Option<String>,
+    pub external_connection_id: Option<String>,
 }
 
 impl ConnectionReport {
@@ -21,11 +22,13 @@ impl ConnectionReport {
         traffic: ConnectionTraffic,
         relay_mode: Option<RelayMode>,
         outbound_name: Option<String>,
+        external_connection_id: Option<String>,
     ) -> Self {
         Self {
             traffic,
             relay_mode,
             outbound_name,
+            external_connection_id,
         }
     }
 }

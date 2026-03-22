@@ -34,6 +34,7 @@ pub(super) struct RawConfig {
     pub transport: RawTransportConfig,
     #[serde(default)]
     pub relay: RawRelayConfig,
+    pub api: Option<RawApiConfig>,
     #[serde(default)]
     pub runtime: RawRuntimeConfig,
 }
@@ -72,6 +73,14 @@ pub(super) struct RawTransportConfig {
 #[derive(Debug, Deserialize, Default)]
 pub(super) struct RawRelayConfig {
     pub mode: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct RawApiConfig {
+    pub base_url: String,
+    pub bearer_token: Option<String>,
+    pub timeout_ms: Option<u64>,
+    pub traffic_interval_ms: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Default)]

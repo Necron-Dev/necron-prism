@@ -2,6 +2,7 @@ use valence_protocol::uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub(super) struct PlayerSession {
+    pub external_connection_id: Option<String>,
     pub username: Option<String>,
     pub uuid: Option<Uuid>,
     pub outbound_name: Option<String>,

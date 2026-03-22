@@ -5,13 +5,13 @@ use std::time::Duration;
 use regex::Regex;
 
 use super::loader::{
-    RawConfig, RawMotdConfig, RawMotdFavicon, RawMotdRewrite, RawOutboundConfig, RawOutboundRoute,
-    RawRelayConfig, RawSocketOptions,
+    RawApiConfig, RawConfig, RawMotdConfig, RawMotdFavicon, RawMotdRewrite, RawOutboundConfig,
+    RawOutboundRoute, RawRelayConfig, RawSocketOptions,
 };
 use super::types::{
-    Config, InboundConfig, MotdConfig, MotdFaviconMode, MotdMode, MotdProtocolMode, MotdRewrite,
-    OutboundConfig, OutboundRoute, RelayConfig, RelayMode, SocketOptions, StatusPingMode,
-    TransportConfig,
+    ApiConfig, Config, InboundConfig, MotdConfig, MotdFaviconMode, MotdMode, MotdProtocolMode,
+    MotdRewrite, OutboundConfig, OutboundRoute, RelayConfig, RelayMode, SocketOptions,
+    StatusPingMode, TransportConfig,
 };
 
 pub struct ConfigNormalizer;
@@ -40,6 +40,7 @@ impl ConfigNormalizer {
                 kick_json: raw.transport.kick_json,
             },
             relay: normalize_relay(raw.relay)?,
+            api: raw.api.map(normalize_api).transpose()?,
             stats_log_interval: raw
                 .runtime
                 .stats_log_interval_secs
@@ -48,6 +49,15 @@ impl ConfigNormalizer {
             source_path,
         })
     }
+}
+
+fn normalize_api(raw: RawApiConfig) -> Result<ApiConfig, String> {
+    Ok(ApiConfig {
+        base_url: raw.base_url.trim_end_matches('/').to_string(),
+        bearer_token: raw.bearer_token,
+        timeout: Duration::from_millis(raw.timeout_ms.unwrap_or(3_000)),
+        traffic_interval: Duration::from_millis(raw.traffic_interval_ms.unwrap_or(5_000)),
+    })
 }
 
 fn normalize_relay(raw: RawRelayConfig) -> Result<RelayConfig, String> {

@@ -9,6 +9,7 @@ pub struct Config {
     pub outbounds: Vec<OutboundRoute>,
     pub transport: TransportConfig,
     pub relay: RelayConfig,
+    pub api: Option<ApiConfig>,
     pub stats_log_interval: Option<Duration>,
     pub source_path: PathBuf,
 }
@@ -43,6 +44,14 @@ pub struct TransportConfig {
 #[derive(Clone, Debug)]
 pub struct RelayConfig {
     pub mode: RelayMode,
+}
+
+#[derive(Clone, Debug)]
+pub struct ApiConfig {
+    pub base_url: String,
+    pub bearer_token: Option<String>,
+    pub timeout: Duration,
+    pub traffic_interval: Duration,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

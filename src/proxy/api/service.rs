@@ -1,5 +1,4 @@
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 
 use super::client::ApiClient;
 use super::types::{JoinDecision, JoinTarget, TrafficEntry, TrafficSnapshot};
@@ -10,7 +9,6 @@ pub struct ApiService {
     mode: ApiMode,
     client: Option<ApiClient>,
     config: ApiConfig,
-    gate: Mutex<()>,
     mock_counter: AtomicU64,
 }
 
@@ -33,7 +31,6 @@ impl ApiService {
             mode: config.mode,
             client,
             config: config.clone(),
-            gate: Mutex::new(()),
             mock_counter: AtomicU64::new(0),
         })
     }
@@ -46,17 +43,15 @@ impl ApiService {
         load: i32,
     ) -> Result<JoinDecision, String> {
         match self.mode {
-            ApiMode::Http => {
-                let _guard = self.gate.lock().expect("api runtime poisoned");
-                self.runtime
-                    .block_on(
-                        self.client
-                            .as_ref()
-                            .expect("http api client")
-                            .join(name, uuid, addr, load),
-                    )
-                    .map_err(|error| format!("join api request failed: {error}"))
-            }
+            ApiMode::Http => self
+                .runtime
+                .block_on(
+                    self.client
+                        .as_ref()
+                        .expect("http api client")
+                        .join(name, uuid, addr, load),
+                )
+                .map_err(|error| format!("join api request failed: {error}")),
             ApiMode::Mock => Ok(self.mock_join()),
         }
     }
@@ -78,7 +73,6 @@ impl ApiService {
                     },
                 );
 
-                let _guard = self.gate.lock().expect("api runtime poisoned");
                 self.runtime
                     .block_on(
                         self.client
@@ -94,17 +88,15 @@ impl ApiService {
 
     pub fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<(), String> {
         match self.mode {
-            ApiMode::Http => {
-                let _guard = self.gate.lock().expect("api runtime poisoned");
-                self.runtime
-                    .block_on(
-                        self.client
-                            .as_ref()
-                            .expect("http api client")
-                            .closed(cid, send, recv),
-                    )
-                    .map_err(|error| format!("closed api request failed: {error}"))
-            }
+            ApiMode::Http => self
+                .runtime
+                .block_on(
+                    self.client
+                        .as_ref()
+                        .expect("http api client")
+                        .closed(cid, send, recv),
+                )
+                .map_err(|error| format!("closed api request failed: {error}")),
             ApiMode::Mock => Ok(()),
         }
     }

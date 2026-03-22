@@ -32,7 +32,7 @@ impl TrafficReporter {
     pub fn register(
         &self,
         connection_id: u64,
-        external_connection_id: String,
+        external_connection_id: &str,
         counters: ConnectionCounters,
         closer: std::net::TcpStream,
     ) {
@@ -40,7 +40,7 @@ impl TrafficReporter {
         sessions.insert(
             connection_id,
             TrafficSession {
-                external_connection_id: external_connection_id.clone(),
+                external_connection_id: external_connection_id.to_string(),
                 counters,
                 last_sent_upload: 0,
                 last_sent_download: 0,
@@ -50,7 +50,7 @@ impl TrafficReporter {
         self.closers
             .lock()
             .expect("traffic reporter closers poisoned")
-            .insert(external_connection_id, closer);
+            .insert(external_connection_id.to_string(), closer);
     }
 
     pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
@@ -86,44 +86,42 @@ impl TrafficReporter {
         let sessions = Arc::clone(&self.sessions);
         let closers = Arc::clone(&self.closers);
 
-        std::thread::spawn(move || {
-            loop {
-                std::thread::sleep(interval);
+        std::thread::spawn(move || loop {
+            std::thread::sleep(interval);
 
-                let snapshot = {
-                    let mut sessions = sessions.lock().expect("traffic reporter poisoned");
-                    let mut snapshot = Vec::new();
-                    for session in sessions.values_mut() {
-                        let upload = session.counters.upload();
-                        let download = session.counters.download();
-                        let delta_upload = upload.saturating_sub(session.last_sent_upload);
-                        let delta_download = download.saturating_sub(session.last_sent_download);
-                        if delta_upload == 0 && delta_download == 0 {
-                            continue;
-                        }
-
-                        session.last_sent_upload = upload;
-                        session.last_sent_download = download;
-                        snapshot.push((
-                            session.external_connection_id.clone(),
-                            delta_upload,
-                            delta_download,
-                        ));
+            let snapshot = {
+                let mut sessions = sessions.lock().expect("traffic reporter poisoned");
+                let mut snapshot = Vec::new();
+                for session in sessions.values_mut() {
+                    let upload = session.counters.upload();
+                    let download = session.counters.download();
+                    let delta_upload = upload.saturating_sub(session.last_sent_upload);
+                    let delta_download = download.saturating_sub(session.last_sent_download);
+                    if delta_upload == 0 && delta_download == 0 {
+                        continue;
                     }
-                    snapshot
-                };
 
-                for (cid, send_bytes, recv_bytes) in snapshot {
-                    match api.traffic_single(&cid, send_bytes, recv_bytes) {
-                        Ok(connections_to_close) => {
-                            if !connections_to_close.is_empty() {
-                                close_connections(&closers, &connections_to_close);
-                                warn!(cid = %cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
-                            }
+                    session.last_sent_upload = upload;
+                    session.last_sent_download = download;
+                    snapshot.push((
+                        session.external_connection_id.clone(),
+                        delta_upload,
+                        delta_download,
+                    ));
+                }
+                snapshot
+            };
+
+            for (cid, send_bytes, recv_bytes) in snapshot {
+                match api.traffic_single(&cid, send_bytes, recv_bytes) {
+                    Ok(connections_to_close) => {
+                        if !connections_to_close.is_empty() {
+                            close_connections(&closers, &connections_to_close);
+                            warn!(cid = %cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
                         }
-                        Err(error) => {
-                            warn!(error = %error, cid = %cid, "failed to report traffic api event")
-                        }
+                    }
+                    Err(error) => {
+                        warn!(error = %error, cid = %cid, "failed to report traffic api event")
                     }
                 }
             }

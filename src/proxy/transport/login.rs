@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use std::net::{Shutdown, SocketAddr};
+use std::sync::Arc;
 
 use tracing::info;
 
@@ -47,8 +48,8 @@ pub fn resolve_login_route(
         Ok(JoinDecision::Allow(target)) => {
             players.update_external_connection_id(connection_id, target.connection_id.clone());
             Ok(Ok(ConnectionRoute {
-                target_addr: target.target_addr,
-                rewrite_addr: target.rewrite_addr,
+                target_addr: Arc::<str>::from(target.target_addr),
+                rewrite_addr: Arc::<str>::from(target.rewrite_addr),
             }))
         }
         Ok(JoinDecision::Deny { kick_reason }) => deny_with_reason(
@@ -90,7 +91,7 @@ fn deny_with_reason(
             download_bytes: kick_packet.len() as u64,
         },
         None,
-        String::new(),
-        String::new(),
+        Arc::<str>::from(""),
+        Arc::<str>::from(""),
     ))
 }

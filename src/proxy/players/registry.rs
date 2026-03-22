@@ -59,12 +59,15 @@ impl PlayerRegistry {
         });
     }
 
-    pub fn external_connection_id(&self, connection_id: u64) -> Option<String> {
+    pub fn with_external_connection_id<R, F>(&self, connection_id: u64, f: F) -> Option<R>
+    where
+        F: FnOnce(&str) -> R,
+    {
         self.sessions
             .read()
             .expect("player registry poisoned")
             .get(&connection_id)
-            .and_then(|session| session.external_connection_id.clone())
+            .and_then(|session| session.external_connection_id.as_deref().map(f))
     }
 
     pub fn update_outbound(&self, connection_id: u64, outbound_name: String) {

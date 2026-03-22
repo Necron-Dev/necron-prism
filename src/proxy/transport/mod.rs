@@ -3,6 +3,7 @@ mod login;
 mod types;
 
 use std::io::{self, Read, Write};
+use std::sync::Arc;
 use std::time::Instant;
 
 use tracing::info;
@@ -16,8 +17,8 @@ use super::relay::relay_bidirectional;
 use super::stats::ConnectionTraffic;
 use super::traffic::{ConnectionCounters, TrafficReporter};
 use crate::minecraft::{
-    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN,
-    INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN, INTENT_STATUS,
+    MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
 };
 
 pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};
@@ -42,8 +43,8 @@ pub fn handle_client(
         return Ok(ConnectionReport::new(
             traffic,
             None,
-            String::new(),
-            String::new(),
+            Arc::<str>::from(""),
+            Arc::<str>::from(""),
         ));
     }
 
@@ -80,8 +81,8 @@ pub fn handle_client(
         return Ok(ConnectionReport::new(
             traffic,
             None,
-            String::new(),
-            String::new(),
+            Arc::<str>::from(""),
+            Arc::<str>::from(""),
         ));
     }
 
@@ -135,8 +136,8 @@ fn resolve_connection_route(
 ) -> io::Result<ConnectionRoute> {
     let Some(login_start_packet) = login_start_packet else {
         return Ok(ConnectionRoute {
-            target_addr: config.api.mock.target_addr.clone(),
-            rewrite_addr: config.api.mock.target_addr.clone(),
+            target_addr: Arc::<str>::from(config.api.mock.target_addr.as_str()),
+            rewrite_addr: Arc::<str>::from(config.api.mock.target_addr.as_str()),
         });
     };
 
@@ -166,9 +167,9 @@ fn proxy_connection(
     route: ConnectionRoute,
 ) -> io::Result<ConnectionReport> {
     handshake
-        .rewrite_addr(&route.rewrite_addr)
+        .rewrite_addr(route.rewrite_addr.as_ref())
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    players.update_outbound(context.id, route.target_addr.clone());
+    players.update_outbound(context.id, route.target_addr.to_string());
 
     let rewritten_packet = encode_handshake(&handshake).map_err(protocol_error)?;
 
@@ -180,13 +181,12 @@ fn proxy_connection(
     );
 
     let socket_options: &SocketOptions = &config.inbound.socket_options;
-    let mut upstream = connect_outbound_addr(&route.target_addr, socket_options)?;
+    let mut upstream = connect_outbound_addr(route.target_addr.as_ref(), socket_options)?;
     let counters = ConnectionCounters::default();
-    if let (Some(cid), Ok(closer)) = (
-        players.external_connection_id(context.id),
-        upstream.try_clone(),
-    ) {
-        traffic_reporter.register(context.id, cid, counters.clone(), closer);
+    if let Ok(closer) = upstream.try_clone() {
+        players.with_external_connection_id(context.id, |cid| {
+            traffic_reporter.register(context.id, cid, counters.clone(), closer);
+        });
     }
 
     upstream.write_all(&rewritten_packet)?;

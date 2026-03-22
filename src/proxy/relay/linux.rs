@@ -3,7 +3,6 @@ use std::net::TcpStream;
 use std::os::fd::OwnedFd;
 use std::thread;
 
-use rustix::fd::AsFd;
 use rustix::pipe::{PipeFlags, SpliceFlags, pipe_with, splice};
 
 use super::{RelayMode, RelayStats, shutdown_write};

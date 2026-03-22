@@ -1,6 +1,43 @@
 use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+#[cfg(any(
+    target_os = "android",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "fuchsia",
+    target_os = "linux",
+    target_os = "netbsd",
+    target_vendor = "apple"
+))]
+use std::os::fd::AsRawFd;
 
+#[cfg(any(
+    target_os = "android",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "fuchsia",
+    target_os = "linux",
+    target_os = "netbsd",
+    target_vendor = "apple"
+))]
+fn set_reuse_port(socket: &Socket) -> io::Result<()> {
+    let value: libc::c_int = 1;
+    let result = unsafe {
+        libc::setsockopt(
+            socket.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_REUSEPORT,
+            (&value as *const libc::c_int).cast(),
+            std::mem::size_of_val(&value) as libc::socklen_t,
+        )
+    };
+
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
 use socket2::{Domain, Protocol, Socket, Type};
 
 use super::config::InboundConfig;
@@ -25,7 +62,7 @@ pub fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
         target_vendor = "apple"
     ))]
     if config.socket_options.reuse_port {
-        socket.set_reuse_port(true)?;
+        set_reuse_port(&socket)?;
     }
 
     socket.bind(&address.into())?;

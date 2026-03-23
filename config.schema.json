@@ -1,244 +1,260 @@
 {
-  "$comment": "#:schema ./config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConfigFile",
+  "description": "#:schema ./config.schema.json",
+  "type": "object",
+  "properties": {
+    "api": {
+      "$ref": "#/$defs/ApiFileConfig",
+      "default": {
+        "base_url": null,
+        "bearer_token": null,
+        "mock": {
+          "connection_id_prefix": "debug",
+          "kick_reason": null,
+          "target_addr": "mc.hypixel.net:25565"
+        },
+        "mode": "mock",
+        "timeout_ms": 3000,
+        "traffic_interval_ms": 5000
+      }
+    },
+    "inbound": {
+      "$ref": "#/$defs/InboundFileConfig",
+      "default": {
+        "first_packet_timeout_ms": 5000,
+        "listen_addr": "0.0.0.0:25565",
+        "socket": {
+          "keepalive_secs": 30,
+          "recv_buffer_size": null,
+          "reuse_port": false,
+          "send_buffer_size": null,
+          "tcp_nodelay": true
+        }
+      }
+    },
+    "relay": {
+      "$ref": "#/$defs/RelayFileConfig",
+      "default": {
+        "mode": "standard"
+      }
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeFileConfig",
+      "default": {
+        "stats_log_interval_secs": 10
+      }
+    },
+    "transport": {
+      "$ref": "#/$defs/TransportFileConfig",
+      "default": {
+        "motd": {
+          "favicon": {
+            "mode": "passthrough",
+            "value": null
+          },
+          "json": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}",
+          "mode": "local",
+          "ping_mode": "upstream_tcp",
+          "protocol": "client",
+          "rewrite": {
+            "description_pattern": null,
+            "description_replacement": null,
+            "favicon_pattern": null,
+            "favicon_replacement": null
+          },
+          "status_cache_ttl_ms": 1000,
+          "upstream_addr": "mc.hypixel.net:25565",
+          "upstream_ping_timeout_ms": 1500
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
   "$defs": {
     "ApiFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "base_url": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "bearer_token": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "mock": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MockApiFileConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/MockApiFileConfig",
+          "default": {
+            "connection_id_prefix": "debug",
+            "kick_reason": null,
+            "target_addr": "mc.hypixel.net:25565"
+          }
         },
         "mode": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ApiModeLiteral"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/ApiModeLiteral",
+          "default": "mock"
         },
         "timeout_ms": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 3000,
+          "minimum": 0
         },
         "traffic_interval_ms": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 5000,
+          "minimum": 0
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "ApiModeLiteral": {
-      "description": "http | mock",
+      "type": "string",
       "enum": [
         "http",
         "mock"
-      ],
-      "type": "string"
+      ]
     },
     "InboundFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "first_packet_timeout_ms": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 5000,
+          "minimum": 0
         },
         "listen_addr": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string",
+          "default": "0.0.0.0:25565"
         },
         "socket": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SocketOptionsFileConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/SocketOptionsFileConfig",
+          "default": {
+            "keepalive_secs": 30,
+            "recv_buffer_size": null,
+            "reuse_port": false,
+            "send_buffer_size": null,
+            "tcp_nodelay": true
+          }
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "MockApiFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "connection_id_prefix": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string",
+          "default": "debug"
         },
         "kick_reason": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "target_addr": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string",
+          "default": "mc.hypixel.net:25565"
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "MotdFaviconFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "mode": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MotdFaviconModeLiteral"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/MotdFaviconModeLiteral",
+          "default": "passthrough"
         },
         "value": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "MotdFaviconModeLiteral": {
-      "description": "passthrough | override | remove",
+      "type": "string",
       "enum": [
         "passthrough",
         "override",
         "remove"
-      ],
-      "type": "string"
+      ]
     },
     "MotdFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "favicon": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MotdFaviconFileConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/MotdFaviconFileConfig",
+          "default": {
+            "mode": "passthrough",
+            "value": null
+          }
         },
         "json": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string",
+          "default": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}"
         },
         "mode": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MotdModeLiteral"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/MotdModeLiteral",
+          "default": "local"
         },
         "ping_mode": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StatusPingModeLiteral"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/StatusPingModeLiteral",
+          "default": "upstream_tcp"
         },
         "protocol": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MotdProtocolLiteral"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/MotdProtocolLiteral",
+          "default": "client"
         },
         "rewrite": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MotdRewriteFileConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/MotdRewriteFileConfig",
+          "default": {
+            "description_pattern": null,
+            "description_replacement": null,
+            "favicon_pattern": null,
+            "favicon_replacement": null
+          }
         },
         "status_cache_ttl_ms": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 1000,
+          "minimum": 0
         },
         "upstream_addr": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string",
+          "default": "mc.hypixel.net:25565"
         },
         "upstream_ping_timeout_ms": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 1500,
+          "minimum": 0
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "MotdModeLiteral": {
-      "description": "local | upstream",
+      "type": "string",
       "enum": [
         "local",
         "upstream"
-      ],
-      "type": "string"
+      ]
     },
     "MotdProtocolLiteral": {
       "anyOf": [
@@ -246,211 +262,155 @@
           "$ref": "#/$defs/MotdProtocolNamedLiteral"
         },
         {
-          "format": "int32",
-          "type": "integer"
+          "type": "integer",
+          "format": "int32"
         }
-      ],
-      "description": "client | -1 | <integer>"
+      ]
     },
     "MotdProtocolNamedLiteral": {
+      "type": "string",
       "enum": [
         "client",
         "-1"
-      ],
-      "type": "string"
+      ]
     },
     "MotdRewriteFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "description_pattern": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "description_replacement": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "favicon_pattern": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         },
         "favicon_replacement": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "RelayFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "mode": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RelayModeLiteral"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/RelayModeLiteral",
+          "default": "standard"
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "RelayModeLiteral": {
-      "description": "standard | linux_splice",
+      "type": "string",
       "enum": [
         "standard",
         "linux_splice"
-      ],
-      "type": "string"
+      ]
     },
     "RuntimeFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "stats_log_interval_secs": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 10,
+          "minimum": 0
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "SocketOptionsFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "keepalive_secs": {
+          "type": "integer",
           "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "default": 30,
+          "minimum": 0
         },
         "recv_buffer_size": {
-          "format": "uint",
-          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "format": "uint",
+          "default": null,
+          "minimum": 0
         },
         "reuse_port": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean",
+          "default": false
         },
         "send_buffer_size": {
-          "format": "uint",
-          "minimum": 0,
           "type": [
             "integer",
             "null"
-          ]
+          ],
+          "format": "uint",
+          "default": null,
+          "minimum": 0
         },
         "tcp_nodelay": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean",
+          "default": true
         }
       },
-      "type": "object"
+      "additionalProperties": false
     },
     "StatusPingModeLiteral": {
-      "description": "passthrough | 0ms | upstream_tcp | disconnect",
+      "type": "string",
       "enum": [
         "passthrough",
         "0ms",
         "upstream_tcp",
         "disconnect"
-      ],
-      "type": "string"
+      ]
     },
     "TransportFileConfig": {
-      "additionalProperties": false,
+      "type": "object",
       "properties": {
         "motd": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/MotdFileConfig"
+          "$ref": "#/$defs/MotdFileConfig",
+          "default": {
+            "favicon": {
+              "mode": "passthrough",
+              "value": null
             },
-            {
-              "type": "null"
-            }
-          ]
+            "json": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}",
+            "mode": "local",
+            "ping_mode": "upstream_tcp",
+            "protocol": "client",
+            "rewrite": {
+              "description_pattern": null,
+              "description_replacement": null,
+              "favicon_pattern": null,
+              "favicon_replacement": null
+            },
+            "status_cache_ttl_ms": 1000,
+            "upstream_addr": "mc.hypixel.net:25565",
+            "upstream_ping_timeout_ms": 1500
+          }
         }
       },
-      "type": "object"
+      "additionalProperties": false
     }
-  },
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": false,
-  "description": "#:schema ./config.schema.json",
-  "properties": {
-    "api": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ApiFileConfig"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "inbound": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/InboundFileConfig"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "relay": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/RelayFileConfig"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "runtime": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/RuntimeFileConfig"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "transport": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/TransportFileConfig"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    }
-  },
-  "title": "ConfigFile",
-  "type": "object"
+  }
 }

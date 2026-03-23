@@ -3,16 +3,14 @@ use std::io::{Cursor, Read};
 use std::str::FromStr;
 
 use valence_protocol::encode::PacketEncoder;
-use valence_protocol::packets::handshaking::handshake_c2s::HandshakeNextState;
-use valence_protocol::packets::handshaking::HandshakeC2s;
 use valence_protocol::packets::login::{LoginDisconnectS2c, LoginHelloC2s};
 use valence_protocol::packets::status::{
     QueryPingC2s, QueryPongS2c, QueryRequestC2s, QueryResponseS2c,
 };
 use valence_protocol::uuid::Uuid;
-use valence_protocol::{Packet, Text, VarInt};
+use valence_protocol::{packet_id, Decode, Encode, Packet, PacketState, Text, VarInt};
 
-use super::constants::{INTENT_LOGIN, INTENT_STATUS};
+use super::constants::{INTENT_LOGIN, INTENT_STATUS, INTENT_TRANSFER};
 use super::error::ProtocolError;
 use super::packet_io::FramedPacket;
 use super::types::HandshakeInfo;
@@ -23,10 +21,29 @@ pub struct LoginHelloInfo {
     pub profile_id: Option<Uuid>,
 }
 
+#[derive(Clone, Debug, Encode, Decode, Packet)]
+#[packet(id = packet_id::HANDSHAKE_C2S, state = PacketState::Handshaking)]
+pub struct HandshakeC2sNew<'a> {
+    pub protocol_version: VarInt,
+    pub server_address: &'a str,
+    pub server_port: u16,
+    pub next_state: HandshakeNextStateNew,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum HandshakeNextStateNew {
+    #[packet(tag = 1)]
+    Status,
+    #[packet(tag = 2)]
+    Login,
+    #[packet(tag = 3)]
+    Transfer,
+}
+
 pub fn decode_handshake(frame: &FramedPacket) -> Result<HandshakeInfo, ProtocolError> {
     let packet = frame
         .frame
-        .decode::<HandshakeC2s<'_>>()
+        .decode::<HandshakeC2sNew<'_>>()
         .map_err(ProtocolError::decode)?;
 
     Ok(HandshakeInfo {
@@ -99,7 +116,7 @@ pub fn ping_request_packet(payload: u64) -> Result<Vec<u8>, ProtocolError> {
 }
 
 pub fn encode_handshake(handshake: &HandshakeInfo) -> Result<Vec<u8>, ProtocolError> {
-    let packet = HandshakeC2s {
+    let packet = HandshakeC2sNew {
         protocol_version: VarInt(handshake.protocol_version),
         server_address: &handshake.server_address,
         server_port: handshake.server_port,
@@ -261,17 +278,19 @@ fn varint_len(value: i32) -> usize {
     len
 }
 
-fn next_state_to_int(state: HandshakeNextState) -> i32 {
+fn next_state_to_int(state: HandshakeNextStateNew) -> i32 {
     match state {
-        HandshakeNextState::Status => INTENT_STATUS,
-        HandshakeNextState::Login => INTENT_LOGIN,
+        HandshakeNextStateNew::Status => INTENT_STATUS,
+        HandshakeNextStateNew::Login => INTENT_LOGIN,
+        HandshakeNextStateNew::Transfer => INTENT_TRANSFER,
     }
 }
 
-fn int_to_next_state(state: i32) -> Result<HandshakeNextState, ProtocolError> {
+fn int_to_next_state(state: i32) -> Result<HandshakeNextStateNew, ProtocolError> {
     match state {
-        INTENT_STATUS => Ok(HandshakeNextState::Status),
-        INTENT_LOGIN => Ok(HandshakeNextState::Login),
+        INTENT_STATUS => Ok(HandshakeNextStateNew::Status),
+        INTENT_LOGIN => Ok(HandshakeNextStateNew::Login),
+        INTENT_TRANSFER => Ok(HandshakeNextStateNew::Transfer),
         _ => Err(ProtocolError::InvalidNextState(state)),
     }
 }

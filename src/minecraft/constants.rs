@@ -4,3 +4,4 @@ pub const MAX_LOGIN_PACKET_SIZE: usize = 1024;
 
 pub const INTENT_STATUS: i32 = 1;
 pub const INTENT_LOGIN: i32 = 2;
+pub const INTENT_TRANSFER: i32 = 3;

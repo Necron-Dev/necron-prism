@@ -11,8 +11,8 @@ use valence_protocol::WritePacket;
 use super::protocol::LoginHelloInfo;
 use super::{
     decode_handshake, decode_login_hello, decode_ping_request, decode_status_request,
-    encode_handshake, encode_raw_frame, login_disconnect_packet, ping_response_packet, status_response_packet,
-    HandshakeInfo, PacketIo, ProtocolError, MAX_HANDSHAKE_PACKET_SIZE,
+    encode_handshake, encode_raw_frame, login_disconnect_packet, ping_response_packet,
+    status_response_packet, HandshakeInfo, PacketIo, ProtocolError, MAX_HANDSHAKE_PACKET_SIZE,
     MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
 };
 
@@ -28,6 +28,18 @@ fn sample_handshake(server_address: &str, server_port: u16, next_state: i32) -> 
 #[test]
 fn handshake_round_trip() {
     let handshake = sample_handshake("example.com", 25565, 2);
+    let packet = encode_handshake(&handshake).unwrap();
+    let frame = PacketIo::new()
+        .read_frame(&mut Cursor::new(packet), MAX_HANDSHAKE_PACKET_SIZE)
+        .unwrap();
+    let decoded = decode_handshake(&frame).unwrap();
+
+    assert_eq!(decoded, handshake);
+}
+
+#[test]
+fn handshake_transfer_round_trip() {
+    let handshake = sample_handshake("example.com", 25565, 3);
     let packet = encode_handshake(&handshake).unwrap();
     let frame = PacketIo::new()
         .read_frame(&mut Cursor::new(packet), MAX_HANDSHAKE_PACKET_SIZE)

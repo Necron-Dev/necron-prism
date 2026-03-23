@@ -269,7 +269,7 @@ pub enum StatusPingModeLiteral {
 
 impl Default for StatusPingModeLiteral {
     fn default() -> Self {
-        Self::UpstreamTcp
+        Self::Passthrough
     }
 }
 

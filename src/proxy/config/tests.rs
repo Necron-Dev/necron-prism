@@ -100,21 +100,6 @@ mod tests {
     }
 
     #[test]
-    fn override_favicon_requires_non_empty_value() {
-        let mut raw = ConfigDefaults::file();
-        raw.transport.motd.mode = MotdModeLiteral::Local;
-        raw.transport.motd.json = "{}".to_string();
-        raw.transport.motd.favicon.mode = MotdFaviconModeLiteral::Override;
-        raw.transport.motd.favicon.value = Some(String::new());
-
-        let config = ConfigNormalizer::new()
-            .normalize(raw, PathBuf::from("config.toml"))
-            .unwrap();
-        let error = ConfigChecker::new().validate(&config).unwrap_err();
-        assert!(error.contains("non-empty"));
-    }
-
-    #[test]
     fn loader_writes_default_config_when_missing() {
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)

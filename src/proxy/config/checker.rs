@@ -37,14 +37,6 @@ impl ConfigChecker {
             ));
         }
 
-        if let super::types::MotdFaviconMode::Override(value) = &config.transport.motd.favicon {
-            if value.is_empty() {
-                return Err(format!(
-                    "{CONFIG_SCHEMA_DIRECTIVE}\ntransport.motd.favicon.mode=override requires a non-empty favicon.value"
-                ));
-            }
-        }
-
         Ok(())
     }
 }

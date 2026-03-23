@@ -37,7 +37,6 @@ pub fn serve_legacy_ping(
         &upstream_json,
         transport.motd.protocol_mode,
         763,
-        transport.motd.rewrite.as_ref(),
         &transport.motd.favicon,
         None,
     );

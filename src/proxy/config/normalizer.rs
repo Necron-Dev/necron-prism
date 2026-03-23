@@ -10,7 +10,7 @@ use super::schema_types::{
 };
 use super::types::{
     ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconMode,
-    MotdMode, MotdProtocolMode, MotdRewrite, RelayConfig, RelayMode, SocketOptions, StatusPingMode,
+    MotdMode, MotdProtocolMode, RelayConfig, RelayMode, SocketOptions, StatusPingMode,
     TransportConfig,
 };
 
@@ -51,7 +51,6 @@ impl ConfigNormalizer {
                         raw.transport.motd.upstream_ping_timeout_ms,
                     ),
                     status_cache_ttl: Duration::from_millis(raw.transport.motd.status_cache_ttl_ms),
-                    rewrite: normalize_motd_rewrite(raw.transport.motd.rewrite)?,
                     favicon: normalize_favicon_mode(raw.transport.motd.favicon),
                 },
             },
@@ -85,44 +84,10 @@ impl ConfigNormalizer {
     }
 }
 
-fn normalize_motd_rewrite(
-    raw: super::schema_types::MotdRewriteFileConfig,
-) -> Result<Option<MotdRewrite>, String> {
-    let description_pattern = compile_regex(raw.description_pattern.as_deref())?;
-    let favicon_pattern = compile_regex(raw.favicon_pattern.as_deref())?;
-
-    if description_pattern.is_none()
-        && raw.description_replacement.is_none()
-        && favicon_pattern.is_none()
-        && raw.favicon_replacement.is_none()
-    {
-        return Ok(None);
-    }
-
-    Ok(Some(MotdRewrite {
-        description_pattern,
-        description_replacement: raw.description_replacement,
-        favicon_pattern,
-        favicon_replacement: raw.favicon_replacement,
-    }))
-}
-
-fn compile_regex(pattern: Option<&str>) -> Result<Option<Regex>, String> {
-    match pattern {
-        Some(pattern) => Regex::new(pattern)
-            .map(Some)
-            .map_err(|error| format!("invalid regex '{pattern}': {error}")),
-        None => Ok(None),
-    }
-}
-
 fn normalize_favicon_mode(raw: super::schema_types::MotdFaviconFileConfig) -> MotdFaviconMode {
     match raw.mode {
         MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
         MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
-        MotdFaviconModeLiteral::Override => {
-            MotdFaviconMode::Override(raw.value.unwrap_or_default())
-        }
     }
 }
 

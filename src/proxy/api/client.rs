@@ -31,10 +31,7 @@ impl ApiClient {
             .clone()
             .ok_or_else(|| "http api requires api.base_url".to_string())?;
 
-        Ok(Self {
-            inner,
-            base_url,
-        })
+        Ok(Self { inner, base_url })
     }
 
     pub async fn join(

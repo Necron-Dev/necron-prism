@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use regex::Regex;
-
 #[derive(Clone, Debug)]
 pub struct Config {
     pub inbound: InboundConfig,
@@ -68,7 +66,6 @@ pub struct MotdConfig {
     pub ping_mode: StatusPingMode,
     pub upstream_ping_timeout: Duration,
     pub status_cache_ttl: Duration,
-    pub rewrite: Option<MotdRewrite>,
     pub favicon: MotdFaviconMode,
 }
 
@@ -94,17 +91,8 @@ pub enum StatusPingMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct MotdRewrite {
-    pub description_pattern: Option<Regex>,
-    pub description_replacement: Option<String>,
-    pub favicon_pattern: Option<Regex>,
-    pub favicon_replacement: Option<String>,
-}
-
-#[derive(Clone, Debug)]
 pub enum MotdFaviconMode {
     Passthrough,
-    Override(String),
     Remove,
 }
 

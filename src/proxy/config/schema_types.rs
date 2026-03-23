@@ -132,8 +132,6 @@ pub struct MotdFileConfig {
     #[serde(default)]
     pub status_cache_ttl_ms: u64,
     #[serde(default)]
-    pub rewrite: MotdRewriteFileConfig,
-    #[serde(default)]
     pub favicon: MotdFaviconFileConfig,
 }
 
@@ -147,23 +145,9 @@ impl Default for MotdFileConfig {
             ping_mode: StatusPingModeLiteral::default(),
             upstream_ping_timeout_ms: DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
             status_cache_ttl_ms: DEFAULT_MOTD_STATUS_CACHE_TTL_MS,
-            rewrite: MotdRewriteFileConfig::default(),
             favicon: MotdFaviconFileConfig::default(),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(deny_unknown_fields)]
-pub struct MotdRewriteFileConfig {
-    #[serde(default)]
-    pub description_pattern: Option<String>,
-    #[serde(default)]
-    pub description_replacement: Option<String>,
-    #[serde(default)]
-    pub favicon_pattern: Option<String>,
-    #[serde(default)]
-    pub favicon_replacement: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -293,8 +277,6 @@ impl Default for StatusPingModeLiteral {
 pub enum MotdFaviconModeLiteral {
     #[serde(rename = "passthrough")]
     Passthrough,
-    #[serde(rename = "override")]
-    Override,
     #[serde(rename = "remove")]
     Remove,
 }

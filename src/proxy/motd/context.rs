@@ -90,7 +90,6 @@ impl<'a> StatusContext<'a> {
             &base_json,
             self.transport.motd.protocol_mode,
             self.handshake.protocol_version,
-            self.transport.motd.rewrite.as_ref(),
             &self.transport.motd.favicon,
             favicon_source.as_deref(),
         ))

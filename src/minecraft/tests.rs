@@ -11,8 +11,8 @@ use valence_protocol::WritePacket;
 use super::protocol::LoginHelloInfo;
 use super::{
     decode_handshake, decode_login_hello, decode_ping_request, decode_status_request,
-    encode_handshake, encode_raw_frame, login_disconnect_packet, ping_response_packet,
-    status_response_packet, HandshakeInfo, PacketIo, ProtocolError, MAX_HANDSHAKE_PACKET_SIZE,
+    encode_handshake, encode_raw_frame, login_disconnect_packet, ping_response_packet, status_response_packet,
+    HandshakeInfo, PacketIo, ProtocolError, MAX_HANDSHAKE_PACKET_SIZE,
     MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
 };
 

@@ -13,5 +13,5 @@ pub use loader::ConfigLoader;
 pub use schema::write_schema_file;
 pub use types::{
     ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdFaviconMode, MotdMode,
-    MotdProtocolMode, MotdRewrite, RelayMode, SocketOptions, StatusPingMode, TransportConfig,
+    MotdProtocolMode, RelayMode, SocketOptions, StatusPingMode, TransportConfig,
 };

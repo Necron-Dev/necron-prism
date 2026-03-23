@@ -57,12 +57,6 @@
           "mode": "local",
           "ping_mode": "upstream_tcp",
           "protocol": "client",
-          "rewrite": {
-            "description_pattern": null,
-            "description_replacement": null,
-            "favicon_pattern": null,
-            "favicon_replacement": null
-          },
           "status_cache_ttl_ms": 1000,
           "upstream_addr": "mc.hypixel.net:25565",
           "upstream_ping_timeout_ms": 1500
@@ -104,13 +98,13 @@
         "timeout_ms": {
           "type": "integer",
           "format": "uint64",
-          "default": 3000,
+          "default": 0,
           "minimum": 0
         },
         "traffic_interval_ms": {
           "type": "integer",
           "format": "uint64",
-          "default": 5000,
+          "default": 0,
           "minimum": 0
         }
       },
@@ -129,12 +123,12 @@
         "first_packet_timeout_ms": {
           "type": "integer",
           "format": "uint64",
-          "default": 5000,
+          "default": 0,
           "minimum": 0
         },
         "listen_addr": {
           "type": "string",
-          "default": "0.0.0.0:25565"
+          "default": ""
         },
         "socket": {
           "$ref": "#/$defs/SocketOptionsFileConfig",
@@ -154,7 +148,7 @@
       "properties": {
         "connection_id_prefix": {
           "type": "string",
-          "default": "debug"
+          "default": ""
         },
         "kick_reason": {
           "type": [
@@ -165,7 +159,7 @@
         },
         "target_addr": {
           "type": "string",
-          "default": "mc.hypixel.net:25565"
+          "default": ""
         }
       },
       "additionalProperties": false
@@ -191,7 +185,6 @@
       "type": "string",
       "enum": [
         "passthrough",
-        "override",
         "remove"
       ]
     },
@@ -207,7 +200,7 @@
         },
         "json": {
           "type": "string",
-          "default": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}"
+          "default": ""
         },
         "mode": {
           "$ref": "#/$defs/MotdModeLiteral",
@@ -221,29 +214,20 @@
           "$ref": "#/$defs/MotdProtocolLiteral",
           "default": "client"
         },
-        "rewrite": {
-          "$ref": "#/$defs/MotdRewriteFileConfig",
-          "default": {
-            "description_pattern": null,
-            "description_replacement": null,
-            "favicon_pattern": null,
-            "favicon_replacement": null
-          }
-        },
         "status_cache_ttl_ms": {
           "type": "integer",
           "format": "uint64",
-          "default": 1000,
+          "default": 0,
           "minimum": 0
         },
         "upstream_addr": {
           "type": "string",
-          "default": "mc.hypixel.net:25565"
+          "default": ""
         },
         "upstream_ping_timeout_ms": {
           "type": "integer",
           "format": "uint64",
-          "default": 1500,
+          "default": 0,
           "minimum": 0
         }
       },
@@ -274,40 +258,6 @@
         "-1"
       ]
     },
-    "MotdRewriteFileConfig": {
-      "type": "object",
-      "properties": {
-        "description_pattern": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "description_replacement": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "favicon_pattern": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "favicon_replacement": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
-    },
     "RelayFileConfig": {
       "type": "object",
       "properties": {
@@ -331,7 +281,7 @@
         "stats_log_interval_secs": {
           "type": "integer",
           "format": "uint64",
-          "default": 10,
+          "default": 0,
           "minimum": 0
         }
       },
@@ -343,7 +293,7 @@
         "keepalive_secs": {
           "type": "integer",
           "format": "uint64",
-          "default": 30,
+          "default": 0,
           "minimum": 0
         },
         "recv_buffer_size": {
@@ -370,7 +320,7 @@
         },
         "tcp_nodelay": {
           "type": "boolean",
-          "default": true
+          "default": false
         }
       },
       "additionalProperties": false
@@ -398,12 +348,6 @@
             "mode": "local",
             "ping_mode": "upstream_tcp",
             "protocol": "client",
-            "rewrite": {
-              "description_pattern": null,
-              "description_replacement": null,
-              "favicon_pattern": null,
-              "favicon_replacement": null
-            },
             "status_cache_ttl_ms": 1000,
             "upstream_addr": "mc.hypixel.net:25565",
             "upstream_ping_timeout_ms": 1500

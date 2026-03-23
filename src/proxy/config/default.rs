@@ -2,8 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use super::literals::{
-    config_comment, API_MODE_HINT, API_MODE_MOCK, CONFIG_SCHEMA_DIRECTIVE, MOTD_FAVICON_MODE_HINT,
-    MOTD_MODE_HINT, MOTD_PROTOCOL_HINT, RELAY_MODE_HINT, STATUS_PING_MODE_HINT,
+    API_MODE_HINT, API_MODE_MOCK, CONFIG_SCHEMA_DIRECTIVE, MOTD_FAVICON_MODE_HINT, MOTD_MODE_HINT,
+    MOTD_PROTOCOL_HINT, RELAY_MODE_HINT, STATUS_PING_MODE_HINT,
 };
 use super::schema_types::{
     ApiFileConfig, ApiModeLiteral, ConfigFile, InboundFileConfig, MockApiFileConfig,
@@ -32,8 +32,8 @@ impl ConfigDefaults {
             transport: Some(TransportFileConfig {
                 motd: Some(MotdFileConfig {
                     mode: Some(MotdModeLiteral::Local),
-                    json: Some("{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}".to_string()),
-                    upstream_addr: Some("mc.hypixel.net:25565".to_string()),
+                    json: Some(DEFAULT_LOCAL_MOTD_JSON.to_string()),
+                    upstream_addr: Some(DEFAULT_MOTD_UPSTREAM_ADDR.to_string()),
                     protocol: Some(MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::Client)),
                     ping_mode: Some(StatusPingModeLiteral::UpstreamTcp),
                     upstream_ping_timeout_ms: Some(1_500),
@@ -60,7 +60,7 @@ impl ConfigDefaults {
                 timeout_ms: Some(3_000),
                 traffic_interval_ms: Some(5_000),
                 mock: Some(MockApiFileConfig {
-                    target_addr: Some("mc.hypixel.net:25565".to_string()),
+                    target_addr: Some(DEFAULT_API_TARGET_ADDR.to_string()),
                     kick_reason: None,
                     connection_id_prefix: Some("debug".to_string()),
                 }),
@@ -82,65 +82,23 @@ impl ConfigDefaults {
             return Ok(());
         }
 
-        let content = Self::render_toml()?;
-        fs::write(path, content)
+        fs::write(path, Self::render_toml())
             .map_err(|error| format!("failed to write default config {}: {error}", path.display()))
     }
 
-    pub fn render_toml() -> Result<String, String> {
-        let mut content = toml::to_string_pretty(&Self::file())
-            .map_err(|error| format!("failed to serialize default config: {error}"))?;
-
-        content = format!("{CONFIG_SCHEMA_DIRECTIVE}\n\n{content}");
-        content = content.replacen(
-            "[transport.motd]\n",
-            &format!(
-                "[transport.motd]\n{}\n",
-                config_comment("mode", MOTD_MODE_HINT)
-            ),
-            1,
-        );
-        content = content.replacen(
-            "protocol = \"client\"\n",
-            &format!(
-                "{}\nprotocol = \"client\"\n",
-                config_comment("protocol", MOTD_PROTOCOL_HINT)
-            ),
-            1,
-        );
-        content = content.replacen(
-            "ping_mode = \"upstream_tcp\"\n",
-            &format!(
-                "{}\nping_mode = \"upstream_tcp\"\n",
-                config_comment("ping_mode", STATUS_PING_MODE_HINT)
-            ),
-            1,
-        );
-        content = content.replacen(
-            "[transport.motd.favicon]\n",
-            &format!(
-                "[transport.motd.favicon]\n{}\n",
-                config_comment("mode", MOTD_FAVICON_MODE_HINT)
-            ),
-            1,
-        );
-        content = content.replacen(
-            "[relay]\n",
-            &format!("[relay]\n{}\n", config_comment("mode", RELAY_MODE_HINT)),
-            1,
-        );
-        content = content.replacen(
-            &format!("mode = \"{API_MODE_MOCK}\"\n"),
-            &format!(
-                "{}\nmode = \"{API_MODE_MOCK}\"\n",
-                config_comment("mode", API_MODE_HINT)
-            ),
-            1,
-        );
-
-        Ok(content)
+    pub fn render_toml() -> String {
+        format!(
+            "{CONFIG_SCHEMA_DIRECTIVE}\n\n[inbound]\nlisten_addr = \"0.0.0.0:25565\"\nfirst_packet_timeout_ms = 5000\n\n[inbound.socket]\ntcp_nodelay = true\nkeepalive_secs = 30\nreuse_port = false\n\n[transport.motd]\n# mode: \"{MOTD_MODE_HINT}\"\nmode = \"local\"\njson = {local_json:?}\n# protocol: \"{MOTD_PROTOCOL_HINT}\"\nprotocol = \"client\"\n# ping_mode: \"{STATUS_PING_MODE_HINT}\"\nping_mode = \"upstream_tcp\"\nupstream_addr = \"{motd_upstream_addr}\"\nupstream_ping_timeout_ms = 1500\nstatus_cache_ttl_ms = 1000\n\n[transport.motd.rewrite]\n\n[transport.motd.favicon]\n# mode: \"{MOTD_FAVICON_MODE_HINT}\"\nmode = \"passthrough\"\n\n[relay]\n# mode: \"{RELAY_MODE_HINT}\"\nmode = \"standard\"\n\n[api]\n# mode: \"{API_MODE_HINT}\"\nmode = \"{API_MODE_MOCK}\"\ntimeout_ms = 3000\ntraffic_interval_ms = 5000\n\n[api.mock]\ntarget_addr = \"{api_target_addr}\"\nconnection_id_prefix = \"debug\"\n\n[runtime]\nstats_log_interval_secs = 10\n",
+            local_json = DEFAULT_LOCAL_MOTD_JSON,
+            motd_upstream_addr = DEFAULT_MOTD_UPSTREAM_ADDR,
+            api_target_addr = DEFAULT_API_TARGET_ADDR,
+        )
     }
 }
+
+const DEFAULT_MOTD_UPSTREAM_ADDR: &str = "mc.hypixel.net:25565";
+const DEFAULT_API_TARGET_ADDR: &str = "mc.hypixel.net:25565";
+const DEFAULT_LOCAL_MOTD_JSON: &str = "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}";
 
 fn merge_config(target: &mut ConfigFile, defaults: ConfigFile) {
     merge_option(&mut target.inbound, defaults.inbound, merge_inbound);

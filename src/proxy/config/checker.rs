@@ -1,13 +1,29 @@
-use super::types::{
-    ApiMode, Config, API_MODE_HTTP, API_MODE_MOCK, CONFIG_SCHEMA_DIRECTIVE,
-    MOTD_FAVICON_MODE_OVERRIDE, MOTD_MODE_UPSTREAM,
+use super::literals::{
+    API_MODE_HTTP, API_MODE_MOCK, CONFIG_SCHEMA_DIRECTIVE, MOTD_FAVICON_MODE_OVERRIDE,
+    MOTD_MODE_UPSTREAM,
 };
+use super::schema_types::ConfigFile;
+use super::types::{ApiMode, Config};
 
 pub struct ConfigChecker;
 
 impl ConfigChecker {
     pub fn new() -> Self {
         Self
+    }
+
+    pub fn validate_file(&self, config: &ConfigFile) -> Result<(), String> {
+        if config.inbound.is_none() {
+            return Err(format!(
+                "{CONFIG_SCHEMA_DIRECTIVE}\nmissing [inbound] config"
+            ));
+        }
+
+        if config.api.is_none() {
+            return Err(format!("{CONFIG_SCHEMA_DIRECTIVE}\nmissing [api] config"));
+        }
+
+        Ok(())
     }
 
     pub fn validate(&self, config: &Config) -> Result<(), String> {

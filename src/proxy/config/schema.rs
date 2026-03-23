@@ -4,12 +4,11 @@ use std::path::Path;
 use schemars::schema_for;
 use serde_json::Value;
 
-use crate::config_schema_types::ConfigFile;
-use crate::config_types::CONFIG_SCHEMA_FILE;
-use crate::config_types::{
-    API_MODE_HINT, CONFIG_SCHEMA_DIRECTIVE, MOTD_FAVICON_MODE_HINT, MOTD_MODE_HINT,
-    MOTD_PROTOCOL_HINT, RELAY_MODE_HINT, STATUS_PING_MODE_HINT,
+use super::config_literals::{
+    API_MODE_HINT, CONFIG_SCHEMA_DIRECTIVE, CONFIG_SCHEMA_FILE, MOTD_FAVICON_MODE_HINT,
+    MOTD_MODE_HINT, MOTD_PROTOCOL_HINT, RELAY_MODE_HINT, STATUS_PING_MODE_HINT,
 };
+use super::schema_types::ConfigFile;
 
 pub fn write_schema_file(root: &Path) -> Result<(), String> {
     let mut schema = serde_json::to_value(schema_for!(ConfigFile))
@@ -27,6 +26,10 @@ fn inject_schema_hints(schema: &mut Value) {
     if let Some(root) = schema.as_object_mut() {
         root.insert(
             "description".to_string(),
+            Value::String(CONFIG_SCHEMA_DIRECTIVE.to_string()),
+        );
+        root.insert(
+            "$comment".to_string(),
             Value::String(CONFIG_SCHEMA_DIRECTIVE.to_string()),
         );
     }

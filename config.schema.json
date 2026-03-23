@@ -1,17 +1,16 @@
 {
+  "$comment": "#:schema ./config.schema.json",
   "$defs": {
     "ApiFileConfig": {
       "additionalProperties": false,
       "properties": {
         "base_url": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "bearer_token": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -25,14 +24,19 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "mode": {
-          "$ref": "#/$defs/ApiModeLiteral"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApiModeLiteral"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "timeout_ms": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -41,7 +45,6 @@
           ]
         },
         "traffic_interval_ms": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -50,9 +53,6 @@
           ]
         }
       },
-      "required": [
-        "mode"
-      ],
       "type": "object"
     },
     "ApiModeLiteral": {
@@ -67,7 +67,6 @@
       "additionalProperties": false,
       "properties": {
         "first_packet_timeout_ms": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -76,7 +75,10 @@
           ]
         },
         "listen_addr": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "socket": {
           "anyOf": [
@@ -86,34 +88,27 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         }
       },
-      "required": [
-        "listen_addr"
-      ],
       "type": "object"
     },
     "MockApiFileConfig": {
       "additionalProperties": false,
       "properties": {
         "connection_id_prefix": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "kick_reason": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "target_addr": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -126,19 +121,22 @@
       "additionalProperties": false,
       "properties": {
         "mode": {
-          "$ref": "#/$defs/MotdFaviconModeLiteral"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotdFaviconModeLiteral"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "value": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         }
       },
-      "required": [
-        "mode"
-      ],
       "type": "object"
     },
     "MotdFaviconModeLiteral": {
@@ -161,27 +159,43 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "json": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "mode": {
-          "$ref": "#/$defs/MotdModeLiteral",
-          "default": "local"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotdModeLiteral"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "ping_mode": {
-          "$ref": "#/$defs/StatusPingModeLiteral",
-          "default": "passthrough"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatusPingModeLiteral"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "protocol": {
-          "$ref": "#/$defs/MotdProtocolLiteral",
-          "default": "client"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotdProtocolLiteral"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "rewrite": {
           "anyOf": [
@@ -191,11 +205,9 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "status_cache_ttl_ms": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -204,14 +216,12 @@
           ]
         },
         "upstream_addr": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "upstream_ping_timeout_ms": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -253,28 +263,24 @@
       "additionalProperties": false,
       "properties": {
         "description_pattern": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "description_replacement": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "favicon_pattern": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "favicon_replacement": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -287,8 +293,14 @@
       "additionalProperties": false,
       "properties": {
         "mode": {
-          "$ref": "#/$defs/RelayModeLiteral",
-          "default": "standard"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RelayModeLiteral"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object"
@@ -305,7 +317,6 @@
       "additionalProperties": false,
       "properties": {
         "stats_log_interval_secs": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -320,7 +331,6 @@
       "additionalProperties": false,
       "properties": {
         "keepalive_secs": {
-          "default": null,
           "format": "uint64",
           "minimum": 0,
           "type": [
@@ -329,7 +339,6 @@
           ]
         },
         "recv_buffer_size": {
-          "default": null,
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -338,14 +347,12 @@
           ]
         },
         "reuse_port": {
-          "default": null,
           "type": [
             "boolean",
             "null"
           ]
         },
         "send_buffer_size": {
-          "default": null,
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -354,7 +361,6 @@
           ]
         },
         "tcp_nodelay": {
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -377,18 +383,14 @@
       "additionalProperties": false,
       "properties": {
         "motd": {
-          "$ref": "#/$defs/MotdFileConfig",
-          "default": {
-            "favicon": null,
-            "json": null,
-            "mode": "local",
-            "ping_mode": "passthrough",
-            "protocol": "client",
-            "rewrite": null,
-            "status_cache_ttl_ms": null,
-            "upstream_addr": null,
-            "upstream_ping_timeout_ms": null
-          }
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MotdFileConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object"
@@ -399,16 +401,34 @@
   "description": "#:schema ./config.schema.json",
   "properties": {
     "api": {
-      "$ref": "#/$defs/ApiFileConfig"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApiFileConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "inbound": {
-      "$ref": "#/$defs/InboundFileConfig"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InboundFileConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "relay": {
-      "$ref": "#/$defs/RelayFileConfig",
-      "default": {
-        "mode": "standard"
-      }
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RelayFileConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "runtime": {
       "anyOf": [
@@ -418,30 +438,19 @@
         {
           "type": "null"
         }
-      ],
-      "default": null
+      ]
     },
     "transport": {
-      "$ref": "#/$defs/TransportFileConfig",
-      "default": {
-        "motd": {
-          "favicon": null,
-          "json": null,
-          "mode": "local",
-          "ping_mode": "passthrough",
-          "protocol": "client",
-          "rewrite": null,
-          "status_cache_ttl_ms": null,
-          "upstream_addr": null,
-          "upstream_ping_timeout_ms": null
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TransportFileConfig"
+        },
+        {
+          "type": "null"
         }
-      }
+      ]
     }
   },
-  "required": [
-    "inbound",
-    "api"
-  ],
   "title": "ConfigFile",
   "type": "object"
 }

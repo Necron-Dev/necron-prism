@@ -1,14 +1,23 @@
-#[path = "../proxy/config/schema.rs"]
-mod config_schema;
-#[path = "../proxy/config/schema_types.rs"]
-mod config_schema_types;
-#[path = "../proxy/config/types.rs"]
-mod config_types;
+#![allow(dead_code)]
+
+mod proxy {
+    pub mod config {
+        #[path = "../../../proxy/config/literals.rs"]
+        pub mod literals;
+        pub(crate) use literals as config_literals;
+
+        #[path = "../../../proxy/config/schema_types.rs"]
+        pub mod schema_types;
+
+        #[path = "../../../proxy/config/schema.rs"]
+        pub mod schema;
+    }
+}
 
 use std::path::Path;
 
 fn main() {
-    if let Err(error) = config_schema::write_schema_file(Path::new(".")) {
+    if let Err(error) = proxy::config::schema::write_schema_file(Path::new(".")) {
         eprintln!("error: {error}");
         std::process::exit(1);
     }

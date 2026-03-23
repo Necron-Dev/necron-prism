@@ -21,8 +21,6 @@ impl ConfigLoader {
             .map_err(|error| format!("failed to read config {}: {error}", path.display()))?;
         let raw = toml::from_str::<ConfigFile>(&content)
             .map_err(|error| format!("failed to parse TOML config {}: {error}", path.display()))?;
-        ConfigChecker::new().validate_file(&raw)?;
-        let raw = ConfigDefaults::apply(raw);
 
         let config = ConfigNormalizer::new().normalize(raw, path.to_path_buf())?;
         ConfigChecker::new().validate(&config)?;

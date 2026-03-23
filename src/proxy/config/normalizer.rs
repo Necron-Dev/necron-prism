@@ -5,10 +5,8 @@ use std::time::Duration;
 use regex::Regex;
 
 use super::schema_types::{
-    ApiFileConfig, ApiModeLiteral, ConfigFile, InboundFileConfig, MockApiFileConfig,
-    MotdFaviconFileConfig, MotdFaviconModeLiteral, MotdFileConfig, MotdModeLiteral,
-    MotdProtocolLiteral, MotdProtocolNamedLiteral, MotdRewriteFileConfig, RelayFileConfig,
-    RelayModeLiteral, SocketOptionsFileConfig, StatusPingModeLiteral,
+    ApiModeLiteral, ConfigFile, MotdFaviconModeLiteral, MotdProtocolLiteral,
+    MotdProtocolNamedLiteral, StatusPingModeLiteral,
 };
 use super::types::{
     ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconMode,
@@ -24,154 +22,72 @@ impl ConfigNormalizer {
     }
 
     pub fn normalize(&self, raw: ConfigFile, source_path: PathBuf) -> Result<Config, String> {
-        let inbound = raw
-            .inbound
-            .ok_or_else(|| "missing [inbound] config after defaults applied".to_string())?;
-        let transport = raw
-            .transport
-            .ok_or_else(|| "missing [transport] config after defaults applied".to_string())?;
-        let relay = raw
-            .relay
-            .ok_or_else(|| "missing [relay] config after defaults applied".to_string())?;
-        let api = raw
-            .api
-            .ok_or_else(|| "missing [api] config after defaults applied".to_string())?;
-
         Ok(Config {
-            inbound: normalize_inbound(inbound)?,
-            transport: TransportConfig {
-                motd: normalize_motd(transport.motd.ok_or_else(|| {
-                    "missing [transport.motd] config after defaults applied".to_string()
-                })?)?,
+            inbound: InboundConfig {
+                listen_addr: raw.inbound.listen_addr,
+                first_packet_timeout: Duration::from_millis(raw.inbound.first_packet_timeout_ms),
+                socket_options: SocketOptions {
+                    tcp_nodelay: raw.inbound.socket.tcp_nodelay,
+                    keepalive: Some(Duration::from_secs(raw.inbound.socket.keepalive_secs)),
+                    recv_buffer_size: raw.inbound.socket.recv_buffer_size,
+                    send_buffer_size: raw.inbound.socket.send_buffer_size,
+                    reuse_port: raw.inbound.socket.reuse_port,
+                },
             },
-            relay: normalize_relay(relay)?,
-            api: normalize_api(api)?,
-            stats_log_interval: raw
-                .runtime
-                .and_then(|runtime| runtime.stats_log_interval_secs)
-                .map(Duration::from_secs),
+            transport: TransportConfig {
+                motd: MotdConfig {
+                    mode: match raw.transport.motd.mode {
+                        super::schema_types::MotdModeLiteral::Local => MotdMode::Local,
+                        super::schema_types::MotdModeLiteral::Upstream => MotdMode::Upstream,
+                    },
+                    local_json: Some(raw.transport.motd.json),
+                    upstream_addr: Some(normalize_target_addr(
+                        &raw.transport.motd.upstream_addr,
+                        25565,
+                    )?),
+                    protocol_mode: normalize_protocol_mode(raw.transport.motd.protocol),
+                    ping_mode: normalize_ping_mode(raw.transport.motd.ping_mode),
+                    upstream_ping_timeout: Duration::from_millis(
+                        raw.transport.motd.upstream_ping_timeout_ms,
+                    ),
+                    status_cache_ttl: Duration::from_millis(raw.transport.motd.status_cache_ttl_ms),
+                    rewrite: normalize_motd_rewrite(raw.transport.motd.rewrite)?,
+                    favicon: normalize_favicon_mode(raw.transport.motd.favicon),
+                },
+            },
+            relay: RelayConfig {
+                mode: match raw.relay.mode {
+                    super::schema_types::RelayModeLiteral::Standard => RelayMode::Standard,
+                    super::schema_types::RelayModeLiteral::LinuxSplice => RelayMode::LinuxSplice,
+                },
+            },
+            api: ApiConfig {
+                mode: match raw.api.mode {
+                    ApiModeLiteral::Http => ApiMode::Http,
+                    ApiModeLiteral::Mock => ApiMode::Mock,
+                },
+                base_url: raw
+                    .api
+                    .base_url
+                    .map(|value| value.trim_end_matches('/').to_string()),
+                bearer_token: raw.api.bearer_token,
+                timeout: Duration::from_millis(raw.api.timeout_ms),
+                traffic_interval: Duration::from_millis(raw.api.traffic_interval_ms),
+                mock: MockApiConfig {
+                    target_addr: normalize_target_addr(&raw.api.mock.target_addr, 25565)?,
+                    kick_reason: raw.api.mock.kick_reason,
+                    connection_id_prefix: raw.api.mock.connection_id_prefix,
+                },
+            },
+            stats_log_interval: Some(Duration::from_secs(raw.runtime.stats_log_interval_secs)),
             source_path,
         })
     }
 }
 
-fn normalize_inbound(raw: InboundFileConfig) -> Result<InboundConfig, String> {
-    Ok(InboundConfig {
-        listen_addr: raw
-            .listen_addr
-            .ok_or_else(|| "missing inbound.listen_addr after defaults applied".to_string())?,
-        first_packet_timeout: Duration::from_millis(raw.first_packet_timeout_ms.ok_or_else(
-            || "missing inbound.first_packet_timeout_ms after defaults applied".to_string(),
-        )?),
-        socket_options: normalize_socket_options(
-            raw.socket.ok_or_else(|| {
-                "missing inbound.socket config after defaults applied".to_string()
-            })?,
-        )?,
-    })
-}
-
-fn normalize_api(raw: ApiFileConfig) -> Result<ApiConfig, String> {
-    Ok(ApiConfig {
-        mode: match raw
-            .mode
-            .ok_or_else(|| "missing api.mode after defaults applied".to_string())?
-        {
-            ApiModeLiteral::Http => ApiMode::Http,
-            ApiModeLiteral::Mock => ApiMode::Mock,
-        },
-        base_url: raw
-            .base_url
-            .map(|value| value.trim_end_matches('/').to_string()),
-        bearer_token: raw.bearer_token,
-        timeout: Duration::from_millis(
-            raw.timeout_ms
-                .ok_or_else(|| "missing api.timeout_ms after defaults applied".to_string())?,
-        ),
-        traffic_interval: Duration::from_millis(
-            raw.traffic_interval_ms.ok_or_else(|| {
-                "missing api.traffic_interval_ms after defaults applied".to_string()
-            })?,
-        ),
-        mock: normalize_mock_api(
-            raw.mock
-                .ok_or_else(|| "missing api.mock config after defaults applied".to_string())?,
-        )?,
-    })
-}
-
-fn normalize_mock_api(raw: MockApiFileConfig) -> Result<MockApiConfig, String> {
-    Ok(MockApiConfig {
-        target_addr: normalize_target_addr(
-            raw.target_addr
-                .as_deref()
-                .ok_or_else(|| "missing api.mock.target_addr after defaults applied".to_string())?,
-            25565,
-        )?,
-        kick_reason: raw.kick_reason,
-        connection_id_prefix: raw.connection_id_prefix.ok_or_else(|| {
-            "missing api.mock.connection_id_prefix after defaults applied".to_string()
-        })?,
-    })
-}
-
-fn normalize_relay(raw: RelayFileConfig) -> Result<RelayConfig, String> {
-    Ok(RelayConfig {
-        mode: match raw
-            .mode
-            .ok_or_else(|| "missing relay.mode after defaults applied".to_string())?
-        {
-            RelayModeLiteral::Standard => RelayMode::Standard,
-            RelayModeLiteral::LinuxSplice => RelayMode::LinuxSplice,
-        },
-    })
-}
-
-fn normalize_motd(raw: MotdFileConfig) -> Result<MotdConfig, String> {
-    Ok(MotdConfig {
-        mode: match raw
-            .mode
-            .ok_or_else(|| "missing transport.motd.mode after defaults applied".to_string())?
-        {
-            MotdModeLiteral::Local => MotdMode::Local,
-            MotdModeLiteral::Upstream => MotdMode::Upstream,
-        },
-        local_json: raw.json,
-        upstream_addr: raw
-            .upstream_addr
-            .as_deref()
-            .map(|addr| normalize_target_addr(addr, 25565))
-            .transpose()?,
-        protocol_mode: normalize_protocol_mode(
-            raw.protocol.ok_or_else(|| {
-                "missing transport.motd.protocol after defaults applied".to_string()
-            })?,
-        ),
-        ping_mode: normalize_ping_mode(raw.ping_mode.ok_or_else(|| {
-            "missing transport.motd.ping_mode after defaults applied".to_string()
-        })?),
-        upstream_ping_timeout: Duration::from_millis(raw.upstream_ping_timeout_ms.ok_or_else(
-            || "missing transport.motd.upstream_ping_timeout_ms after defaults applied".to_string(),
-        )?),
-        status_cache_ttl: Duration::from_millis(raw.status_cache_ttl_ms.ok_or_else(|| {
-            "missing transport.motd.status_cache_ttl_ms after defaults applied".to_string()
-        })?),
-        rewrite: normalize_motd_rewrite(raw.rewrite)?,
-        favicon: normalize_favicon_mode(
-            raw.favicon.ok_or_else(|| {
-                "missing transport.motd.favicon after defaults applied".to_string()
-            })?,
-        )?,
-    })
-}
-
 fn normalize_motd_rewrite(
-    raw: Option<MotdRewriteFileConfig>,
+    raw: super::schema_types::MotdRewriteFileConfig,
 ) -> Result<Option<MotdRewrite>, String> {
-    let Some(raw) = raw else {
-        return Ok(None);
-    };
-
     let description_pattern = compile_regex(raw.description_pattern.as_deref())?;
     let favicon_pattern = compile_regex(raw.favicon_pattern.as_deref())?;
 
@@ -200,18 +116,14 @@ fn compile_regex(pattern: Option<&str>) -> Result<Option<Regex>, String> {
     }
 }
 
-fn normalize_favicon_mode(raw: MotdFaviconFileConfig) -> Result<MotdFaviconMode, String> {
-    Ok(
-        match raw.mode.ok_or_else(|| {
-            "missing transport.motd.favicon.mode after defaults applied".to_string()
-        })? {
-            MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
-            MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
-            MotdFaviconModeLiteral::Override => {
-                MotdFaviconMode::Override(raw.value.unwrap_or_default())
-            }
-        },
-    )
+fn normalize_favicon_mode(raw: super::schema_types::MotdFaviconFileConfig) -> MotdFaviconMode {
+    match raw.mode {
+        MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
+        MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
+        MotdFaviconModeLiteral::Override => {
+            MotdFaviconMode::Override(raw.value.unwrap_or_default())
+        }
+    }
 }
 
 fn normalize_protocol_mode(value: MotdProtocolLiteral) -> MotdProtocolMode {
@@ -222,22 +134,6 @@ fn normalize_protocol_mode(value: MotdProtocolLiteral) -> MotdProtocolMode {
         }
         MotdProtocolLiteral::Fixed(value) => MotdProtocolMode::Fixed(value),
     }
-}
-
-fn normalize_socket_options(raw: SocketOptionsFileConfig) -> Result<SocketOptions, String> {
-    Ok(SocketOptions {
-        tcp_nodelay: raw.tcp_nodelay.ok_or_else(|| {
-            "missing inbound.socket.tcp_nodelay after defaults applied".to_string()
-        })?,
-        keepalive: Some(Duration::from_secs(raw.keepalive_secs.ok_or_else(
-            || "missing inbound.socket.keepalive_secs after defaults applied".to_string(),
-        )?)),
-        recv_buffer_size: raw.recv_buffer_size,
-        send_buffer_size: raw.send_buffer_size,
-        reuse_port: raw.reuse_port.ok_or_else(|| {
-            "missing inbound.socket.reuse_port after defaults applied".to_string()
-        })?,
-    })
 }
 
 fn normalize_ping_mode(value: StatusPingModeLiteral) -> StatusPingMode {

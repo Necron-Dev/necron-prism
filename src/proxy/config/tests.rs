@@ -7,34 +7,28 @@ mod tests {
     use crate::proxy::config::checker::ConfigChecker;
     use crate::proxy::config::default::ConfigDefaults;
     use crate::proxy::config::normalizer::ConfigNormalizer;
-    use crate::proxy::config::schema_types::{
-        ApiFileConfig, ApiModeLiteral, ConfigFile, InboundFileConfig, MockApiFileConfig,
-        MotdFaviconFileConfig, MotdFaviconModeLiteral, MotdFileConfig, MotdModeLiteral,
-        MotdProtocolLiteral, MotdProtocolNamedLiteral, RelayFileConfig, RelayModeLiteral,
-        StatusPingModeLiteral, TransportFileConfig,
-    };
+    use crate::proxy::config::schema_types::{ConfigFile, MotdFaviconModeLiteral, MotdModeLiteral};
     use crate::proxy::config::{ApiMode, ConfigLoader};
 
     #[test]
     fn parse_mock_api_config() {
-        let raw = ConfigDefaults::apply(
-            toml::from_str::<ConfigFile>(
-                r#"
-                    [inbound]
-                    listen_addr = "0.0.0.0:25565"
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
 
-                    [api]
-                    mode = "mock"
+                [api]
+                mode = "mock"
 
-                    [api.mock]
-                    target_addr = "backend"
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
 
-                    [runtime]
-                    stats_log_interval_secs = 5
-                "#,
-            )
-            .unwrap(),
-        );
+                [runtime]
+                stats_log_interval_secs = 5
+            "#,
+        )
+        .unwrap();
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))
@@ -48,25 +42,24 @@ mod tests {
 
     #[test]
     fn parse_upstream_motd_addr() {
-        let raw = ConfigDefaults::apply(
-            toml::from_str::<ConfigFile>(
-                r#"
-                    [inbound]
-                    listen_addr = "0.0.0.0:25565"
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
 
-                    [transport.motd]
-                    mode = "upstream"
-                    upstream_addr = "status-backend"
+                [transport.motd]
+                mode = "upstream"
+                upstream_addr = "status-backend"
 
-                    [api]
-                    mode = "mock"
+                [api]
+                mode = "mock"
 
-                    [api.mock]
-                    target_addr = "backend"
-                "#,
-            )
-            .unwrap(),
-        );
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))
@@ -81,18 +74,16 @@ mod tests {
 
     #[test]
     fn loader_requires_http_base_url() {
-        let raw = ConfigDefaults::apply(
-            toml::from_str::<ConfigFile>(
-                r#"
-                    [inbound]
-                    listen_addr = "0.0.0.0:25565"
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
 
-                    [api]
-                    mode = "http"
-                "#,
-            )
-            .unwrap(),
-        );
+                [api]
+                mode = "http"
+            "#,
+        )
+        .unwrap();
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))
@@ -110,45 +101,11 @@ mod tests {
 
     #[test]
     fn override_favicon_requires_non_empty_value() {
-        let raw = ConfigDefaults::apply(ConfigFile {
-            inbound: Some(InboundFileConfig {
-                listen_addr: Some("0.0.0.0:25565".to_string()),
-                first_packet_timeout_ms: None,
-                socket: None,
-            }),
-            transport: Some(TransportFileConfig {
-                motd: Some(MotdFileConfig {
-                    mode: Some(MotdModeLiteral::Local),
-                    json: Some("{}".to_string()),
-                    upstream_addr: None,
-                    protocol: Some(MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::Client)),
-                    ping_mode: Some(StatusPingModeLiteral::Passthrough),
-                    upstream_ping_timeout_ms: None,
-                    status_cache_ttl_ms: None,
-                    rewrite: None,
-                    favicon: Some(MotdFaviconFileConfig {
-                        mode: Some(MotdFaviconModeLiteral::Override),
-                        value: Some(String::new()),
-                    }),
-                }),
-            }),
-            relay: Some(RelayFileConfig {
-                mode: Some(RelayModeLiteral::Standard),
-            }),
-            api: Some(ApiFileConfig {
-                mode: Some(ApiModeLiteral::Mock),
-                base_url: None,
-                bearer_token: None,
-                timeout_ms: None,
-                traffic_interval_ms: None,
-                mock: Some(MockApiFileConfig {
-                    target_addr: Some("backend".to_string()),
-                    kick_reason: None,
-                    connection_id_prefix: Some("mock".to_string()),
-                }),
-            }),
-            runtime: None,
-        });
+        let mut raw = ConfigDefaults::file();
+        raw.transport.motd.mode = MotdModeLiteral::Local;
+        raw.transport.motd.json = "{}".to_string();
+        raw.transport.motd.favicon.mode = MotdFaviconModeLiteral::Override;
+        raw.transport.motd.favicon.value = Some(String::new());
 
         let config = ConfigNormalizer::new()
             .normalize(raw, PathBuf::from("config.toml"))

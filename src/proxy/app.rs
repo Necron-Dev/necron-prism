@@ -20,7 +20,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = bind_listener(&state.config.inbound)?;
 
     if let Some(interval) = state.config.stats_log_interval {
-        spawn_stats_logger(state.stats.clone(), state.players.clone(), interval);
+        spawn_stats_logger(
+            state.connection_stats.clone(),
+            state.connection_totals.clone(),
+            state.players.clone(),
+            (*state.traffic_reporter).clone(),
+            interval,
+        );
     }
 
     info!(
@@ -48,7 +54,7 @@ fn handle_incoming_connection(state: AppState, stream: std::net::TcpStream) {
         warn!(error = %error, "failed to apply inbound socket options");
     }
 
-    let connection_id = state.stats.connection_opened();
+    let connection_id = state.connection_stats.connection_opened();
     let connection_ip = stream.peer_addr().ok();
     let active_connections = state.players.register_connection(connection_id);
 

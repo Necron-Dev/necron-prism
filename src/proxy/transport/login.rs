@@ -16,7 +16,6 @@ pub fn resolve_login_route(
     api: &ApiService,
     players: &PlayerRegistry,
     connection_id: u64,
-    handshake_packet: &FramedPacket,
     login_start_packet: &FramedPacket,
     peer_addr: Option<SocketAddr>,
 ) -> io::Result<Result<ConnectionRoute, ConnectionReport>> {
@@ -57,7 +56,6 @@ pub fn resolve_login_route(
             &kick_reason,
             players,
             connection_id,
-            handshake_packet,
             login_start_packet,
         )
         .map(Err),
@@ -70,7 +68,6 @@ fn deny_with_reason(
     reason: &str,
     players: &PlayerRegistry,
     connection_id: u64,
-    handshake_packet: &FramedPacket,
     login_start_packet: &FramedPacket,
 ) -> io::Result<ConnectionReport> {
     let kick_packet = login_disconnect_packet(reason)
@@ -86,10 +83,7 @@ fn deny_with_reason(
     );
 
     Ok(ConnectionReport::new(
-        ConnectionTraffic {
-            upload_bytes: (handshake_packet.wire_len + login_start_packet.wire_len) as u64,
-            download_bytes: kick_packet.len() as u64,
-        },
+        ConnectionTraffic::default(),
         None,
         Arc::<str>::from(""),
         Arc::<str>::from(""),

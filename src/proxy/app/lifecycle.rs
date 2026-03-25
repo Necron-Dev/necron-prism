@@ -46,8 +46,12 @@ fn log_connection_success(
     started_at: Instant,
     report: ConnectionReport,
 ) {
-    let total_upload = state.stats.add_upload(report.traffic.upload_bytes);
-    let total_download = state.stats.add_download(report.traffic.download_bytes);
+    state
+        .traffic_reporter
+        .finish(context.id, report.connection_traffic);
+    let settled_totals = state
+        .connection_totals
+        .record_finished_connection(report.connection_traffic);
     let active_remaining = state.players.remove_connection(context.id);
 
     if let Some(mode) = report.relay_mode {
@@ -62,20 +66,18 @@ fn log_connection_success(
         );
     }
 
-    state.traffic_reporter.finish(context.id, report.traffic);
-
     info!(
         connection_id = context.id,
         elapsed_ms = started_at.elapsed().as_millis() as u64,
-        upload_bytes = report.traffic.upload_bytes,
-        download_bytes = report.traffic.download_bytes,
-        total_bytes = report.traffic.total_bytes(),
-        total_upload_bytes = total_upload,
-        total_download_bytes = total_download,
-        total_connections = state.stats.total_connections(),
+        connection_upload_mb = report.connection_traffic.upload_bytes as f64 / 1_000_000.0,
+        connection_download_mb = report.connection_traffic.download_bytes as f64 / 1_000_000.0,
+        connection_total_mb = report.connection_traffic.total_bytes() as f64 / 1_000_000.0,
+        settled_connection_upload_mb = settled_totals.upload_bytes as f64 / 1_000_000.0,
+        settled_connection_download_mb = settled_totals.download_bytes as f64 / 1_000_000.0,
+        total_connections = state.connection_stats.total_connections(),
         active_connections = active_remaining,
         current_online_players = state.players.current_online_count(),
-        observed_total_bytes = state.stats.total_bytes(),
+        observed_connection_total_mb = settled_totals.total_bytes() as f64 / 1_000_000.0,
         "connection finished"
     );
 }

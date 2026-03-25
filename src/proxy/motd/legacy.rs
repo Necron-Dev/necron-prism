@@ -4,7 +4,6 @@ use std::net::TcpStream;
 use crate::minecraft::HandshakeInfo;
 use crate::proxy::config::TransportConfig;
 use crate::proxy::players::{PlayerRegistry, PlayerState};
-use crate::proxy::stats::ConnectionTraffic;
 use crate::proxy::template;
 
 use super::rewrite::rewrite_json;
@@ -14,7 +13,7 @@ pub fn serve_legacy_ping(
     transport: &TransportConfig,
     players: &PlayerRegistry,
     connection_id: u64,
-) -> io::Result<ConnectionTraffic> {
+) -> io::Result<()> {
     let upstream_json = if matches!(
         transport.motd.mode,
         crate::proxy::config::MotdMode::Upstream
@@ -46,10 +45,7 @@ pub fn serve_legacy_ping(
 
     players.set_state(connection_id, PlayerState::StatusServedLocally);
 
-    Ok(ConnectionTraffic {
-        upload_bytes: 1,
-        download_bytes: response.len() as u64,
-    })
+    Ok(())
 }
 
 fn fetch_upstream_status_json(transport: &TransportConfig) -> io::Result<String> {

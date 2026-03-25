@@ -4,7 +4,6 @@ use crate::minecraft::{
 };
 use crate::proxy::config::TransportConfig;
 use crate::proxy::players::{PlayerRegistry, PlayerState};
-use crate::proxy::stats::ConnectionTraffic;
 use std::io::Write;
 use std::net::TcpStream;
 
@@ -25,10 +24,9 @@ impl MotdService {
         client: &mut TcpStream,
         transport: &TransportConfig,
         handshake: &HandshakeInfo,
-        handshake_wire_bytes: usize,
         players: &PlayerRegistry,
         connection_id: u64,
-    ) -> Result<ConnectionTraffic, ProtocolError> {
+    ) -> Result<(), ProtocolError> {
         let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE)?;
         decode_status_request(&status_request)?;
 
@@ -54,12 +52,7 @@ impl MotdService {
             "served MOTD"
         );
 
-        Ok(ConnectionTraffic {
-            upload_bytes: (handshake_wire_bytes
-                + status_request.wire_len
-                + outcome.ping_request_bytes) as u64,
-            download_bytes: (status_response.len() + outcome.pong_bytes) as u64,
-        })
+        Ok(())
     }
 
     pub fn read_cached_status(

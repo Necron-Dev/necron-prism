@@ -6,6 +6,8 @@ use std::thread;
 use rustix::io::Errno;
 use rustix::pipe::{pipe_with, splice, PipeFlags, SpliceFlags};
 
+use crate::proxy::traffic::ConnectionCounters;
+
 use super::{shutdown_write, RelayMode, RelayStats};
 
 const PIPE_CHUNK_SIZE: usize = 4 * 1024;
@@ -56,11 +58,14 @@ pub fn relay_with_splice(
     client: TcpStream,
     upstream: TcpStream,
     pipes: SplicePipes,
+    counters: ConnectionCounters,
 ) -> io::Result<RelayStats> {
     let client_read = client.try_clone()?;
     let client_write = client;
     let upstream_read = upstream.try_clone()?;
     let upstream_write = upstream;
+    let upload_counters = counters.clone();
+    let download_counters = counters;
 
     let upload = thread::spawn(move || -> io::Result<u64> {
         let copied = splice_copy(
@@ -68,6 +73,8 @@ pub fn relay_with_splice(
             &upstream_write,
             &pipes.upload.read_end,
             &pipes.upload.write_end,
+            &upload_counters,
+            true,
         )?;
         shutdown_write(&upstream_write);
         Ok(copied)
@@ -79,6 +86,8 @@ pub fn relay_with_splice(
             &client_write,
             &pipes.download.read_end,
             &pipes.download.write_end,
+            &download_counters,
+            false,
         )?;
         shutdown_write(&client_write);
         Ok(copied)
@@ -103,6 +112,8 @@ fn splice_copy(
     dst: &TcpStream,
     pipe_read: &OwnedFd,
     pipe_write: &OwnedFd,
+    counters: &ConnectionCounters,
+    upload_direction: bool,
 ) -> io::Result<u64> {
     let mut total = 0_u64;
 
@@ -131,7 +142,13 @@ fn splice_copy(
             }
 
             remaining -= moved_from_pipe;
-            total += moved_from_pipe as u64;
+            let bytes = moved_from_pipe as u64;
+            total += bytes;
+            if upload_direction {
+                counters.add_upload(bytes);
+            } else {
+                counters.add_download(bytes);
+            }
         }
     }
 }

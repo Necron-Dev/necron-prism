@@ -17,8 +17,8 @@ use super::relay::relay_bidirectional;
 use super::stats::ConnectionTraffic;
 use super::traffic::{ConnectionCounters, TrafficReporter};
 use crate::minecraft::{
-    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN,
-    INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    decode_handshake, encode_handshake, PacketIo, ProtocolError, INTENT_LOGIN, INTENT_STATUS,
+    MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
 };
 
 pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};
@@ -39,9 +39,9 @@ pub fn handle_client(
     let mut first_byte = [0_u8; 1];
     client.read_exact(&mut first_byte)?;
     if first_byte[0] == 0xFE {
-        let traffic = serve_legacy_ping(&mut client, &config.transport, players, context.id)?;
+        serve_legacy_ping(&mut client, &config.transport, players, context.id)?;
         return Ok(ConnectionReport::new(
-            traffic,
+            ConnectionTraffic::default(),
             None,
             Arc::<str>::from(""),
             Arc::<str>::from(""),
@@ -66,20 +66,18 @@ pub fn handle_client(
     );
 
     if handshake.next_state == INTENT_STATUS {
-        let traffic = motd
-            .serve(
-                &mut packet_io,
-                &mut client,
-                &config.transport,
-                &handshake,
-                handshake_packet.wire_len,
-                players,
-                context.id,
-            )
-            .map_err(protocol_error)?;
+        motd.serve(
+            &mut packet_io,
+            &mut client,
+            &config.transport,
+            &handshake,
+            players,
+            context.id,
+        )
+        .map_err(protocol_error)?;
 
         return Ok(ConnectionReport::new(
-            traffic,
+            ConnectionTraffic::default(),
             None,
             Arc::<str>::from(""),
             Arc::<str>::from(""),
@@ -92,7 +90,6 @@ pub fn handle_client(
         api,
         players,
         context,
-        &handshake_packet,
         login_start_packet.as_ref(),
         config,
     )?;
@@ -130,7 +127,6 @@ fn resolve_connection_route(
     api: &ApiService,
     players: &PlayerRegistry,
     context: ConnectionContext,
-    handshake_packet: &crate::minecraft::FramedPacket,
     login_start_packet: Option<&crate::minecraft::FramedPacket>,
     config: &Config,
 ) -> io::Result<ConnectionRoute> {
@@ -146,7 +142,6 @@ fn resolve_connection_route(
         api,
         players,
         context.id,
-        handshake_packet,
         login_start_packet,
         context.peer_addr,
     )? {
@@ -192,22 +187,18 @@ fn proxy_connection(
     upstream.write_all(&rewritten_packet)?;
     forward::forward_login_start(&mut upstream, login_start_packet.as_ref())?;
 
-    counters.add_upload(forward::compute_upload_bytes(
-        &handshake_packet,
-        login_start_packet.as_ref(),
-    ));
+    let initial_upload_bytes =
+        forward::compute_upload_bytes(&handshake_packet, login_start_packet.as_ref());
+    counters.add_upload(initial_upload_bytes);
 
-    let relay_stats = relay_bidirectional(client, upstream, config.relay.mode)?;
-    counters.add_upload(relay_stats.upload_bytes);
-    counters.add_download(relay_stats.download_bytes);
-    let traffic = ConnectionTraffic {
-        upload_bytes: forward::compute_upload_bytes(&handshake_packet, login_start_packet.as_ref())
-            + relay_stats.upload_bytes,
+    let relay_stats = relay_bidirectional(client, upstream, counters.clone(), config.relay.mode)?;
+    let connection_traffic = ConnectionTraffic {
+        upload_bytes: initial_upload_bytes + relay_stats.upload_bytes,
         download_bytes: relay_stats.download_bytes,
     };
 
     Ok(ConnectionReport::new(
-        traffic,
+        connection_traffic,
         relay_stats.mode,
         route.target_addr,
         route.rewrite_addr,

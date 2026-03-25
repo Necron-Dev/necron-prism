@@ -4,7 +4,7 @@ use super::super::api::ApiService;
 use super::super::config::Config;
 use super::super::motd::MotdService;
 use super::super::players::PlayerRegistry;
-use super::super::stats::TrafficStats;
+use super::super::stats::{ConnectionStats, ConnectionTotals};
 use super::super::traffic::TrafficReporter;
 
 #[derive(Clone)]
@@ -14,7 +14,8 @@ pub struct AppState {
     pub motd: Arc<MotdService>,
     pub traffic_reporter: Arc<TrafficReporter>,
     pub players: PlayerRegistry,
-    pub stats: TrafficStats,
+    pub connection_stats: ConnectionStats,
+    pub connection_totals: ConnectionTotals,
 }
 
 impl AppState {
@@ -30,7 +31,8 @@ impl AppState {
             motd,
             traffic_reporter,
             players: PlayerRegistry::default(),
-            stats: TrafficStats::default(),
+            connection_stats: ConnectionStats::default(),
+            connection_totals: ConnectionTotals::default(),
         })
     }
 }

@@ -18,7 +18,7 @@ pub struct ConnectionRoute {
 
 #[derive(Clone, Debug)]
 pub struct ConnectionReport {
-    pub traffic: ConnectionTraffic,
+    pub connection_traffic: ConnectionTraffic,
     pub relay_mode: Option<RelayMode>,
     pub target_addr: Arc<str>,
     pub rewrite_addr: Arc<str>,
@@ -26,13 +26,13 @@ pub struct ConnectionReport {
 
 impl ConnectionReport {
     pub fn new(
-        traffic: ConnectionTraffic,
+        connection_traffic: ConnectionTraffic,
         relay_mode: Option<RelayMode>,
         target_addr: Arc<str>,
         rewrite_addr: Arc<str>,
     ) -> Self {
         Self {
-            traffic,
+            connection_traffic,
             relay_mode,
             target_addr,
             rewrite_addr,

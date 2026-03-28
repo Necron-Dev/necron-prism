@@ -1,4 +1,3 @@
-use regex::Regex;
 use serde_json::Value;
 
 use crate::proxy::config::{MotdFaviconMode, MotdProtocolMode};
@@ -15,10 +14,17 @@ pub fn rewrite_json(
         Err(_) => return raw_json.to_string(),
     };
 
+    apply_prism(&mut value);
     apply_protocol(&mut value, protocol_mode, client_protocol);
     apply_favicon(&mut value, favicon_mode, passthrough_favicon_json);
 
     serde_json::to_string(&value).unwrap_or_else(|_| raw_json.to_string())
+}
+
+fn apply_prism(value: &mut Value) {
+    if let Value::Object(map) = value {
+        map.insert("necron-prism".to_owned(), Value::String("meow".to_owned()));
+    }
 }
 
 fn apply_protocol(value: &mut Value, protocol_mode: MotdProtocolMode, client_protocol: i32) {

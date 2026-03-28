@@ -99,17 +99,20 @@ pub struct MockApiFileConfig {
     #[serde(default)]
     pub target_addr: String,
     #[serde(default)]
-    pub kick_reason: Option<String>,
+    pub rewrite_addr: Option<String>,
     #[serde(default)]
     pub connection_id_prefix: String,
+    #[serde(default)]
+    pub kick_reason: Option<String>,
 }
 
 impl Default for MockApiFileConfig {
     fn default() -> Self {
         Self {
             target_addr: DEFAULT_API_TARGET_ADDR.to_string(),
-            kick_reason: None,
+            rewrite_addr: None,
             connection_id_prefix: DEFAULT_CONNECTION_ID_PREFIX.to_string(),
+            kick_reason: None,
         }
     }
 }

@@ -2,8 +2,6 @@ use std::net::Ipv6Addr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use regex::Regex;
-
 use super::schema_types::{
     ApiModeLiteral, ConfigFile, MotdFaviconModeLiteral, MotdProtocolLiteral,
     MotdProtocolNamedLiteral, StatusPingModeLiteral,
@@ -22,6 +20,16 @@ impl ConfigNormalizer {
     }
 
     pub fn normalize(&self, raw: ConfigFile, source_path: PathBuf) -> Result<Config, String> {
+        let mock_target_addr = normalize_addr(&raw.api.mock.target_addr, 25565)?;
+        let mock_rewrite_addr = raw
+            .api
+            .mock
+            .rewrite_addr
+            .as_deref()
+            .map(|value| normalize_addr(value, 25565))
+            .transpose()?
+            .unwrap_or_else(|| mock_target_addr.clone());
+
         Ok(Config {
             inbound: InboundConfig {
                 listen_addr: raw.inbound.listen_addr,
@@ -41,10 +49,7 @@ impl ConfigNormalizer {
                         super::schema_types::MotdModeLiteral::Upstream => MotdMode::Upstream,
                     },
                     local_json: Some(raw.transport.motd.json),
-                    upstream_addr: Some(normalize_target_addr(
-                        &raw.transport.motd.upstream_addr,
-                        25565,
-                    )?),
+                    upstream_addr: Some(normalize_addr(&raw.transport.motd.upstream_addr, 25565)?),
                     protocol_mode: normalize_protocol_mode(raw.transport.motd.protocol),
                     ping_mode: normalize_ping_mode(raw.transport.motd.ping_mode),
                     upstream_ping_timeout: Duration::from_millis(
@@ -73,9 +78,10 @@ impl ConfigNormalizer {
                 timeout: Duration::from_millis(raw.api.timeout_ms),
                 traffic_interval: Duration::from_millis(raw.api.traffic_interval_ms),
                 mock: MockApiConfig {
-                    target_addr: normalize_target_addr(&raw.api.mock.target_addr, 25565)?,
-                    kick_reason: raw.api.mock.kick_reason,
+                    target_addr: mock_target_addr,
+                    rewrite_addr: mock_rewrite_addr,
                     connection_id_prefix: raw.api.mock.connection_id_prefix,
+                    kick_reason: raw.api.mock.kick_reason,
                 },
             },
             stats_log_interval: Some(Duration::from_secs(raw.runtime.stats_log_interval_secs)),
@@ -138,7 +144,7 @@ fn parse_target_port(target_addr: &str, default_port: u16) -> Result<u16, String
     }
 }
 
-fn normalize_target_addr(target_addr: &str, default_port: u16) -> Result<String, String> {
+fn normalize_addr(target_addr: &str, default_port: u16) -> Result<String, String> {
     let port = parse_target_port(target_addr, default_port)?;
 
     if let Some(stripped) = target_addr.strip_prefix('[') {

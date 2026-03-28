@@ -12,6 +12,7 @@
         "mock": {
           "connection_id_prefix": "debug",
           "kick_reason": null,
+          "rewrite_addr": null,
           "target_addr": "mc.hypixel.net:25565"
         },
         "mode": "mock",
@@ -55,7 +56,7 @@
           },
           "json": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}",
           "mode": "local",
-          "ping_mode": "upstream_tcp",
+          "ping_mode": "passthrough",
           "protocol": "client",
           "status_cache_ttl_ms": 1000,
           "upstream_addr": "mc.hypixel.net:25565",
@@ -88,6 +89,7 @@
           "default": {
             "connection_id_prefix": "debug",
             "kick_reason": null,
+            "rewrite_addr": null,
             "target_addr": "mc.hypixel.net:25565"
           }
         },
@@ -157,6 +159,13 @@
           ],
           "default": null
         },
+        "rewrite_addr": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "target_addr": {
           "type": "string",
           "default": ""
@@ -208,7 +217,7 @@
         },
         "ping_mode": {
           "$ref": "#/$defs/StatusPingModeLiteral",
-          "default": "upstream_tcp"
+          "default": "passthrough"
         },
         "protocol": {
           "$ref": "#/$defs/MotdProtocolLiteral",
@@ -346,7 +355,7 @@
             },
             "json": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}",
             "mode": "local",
-            "ping_mode": "upstream_tcp",
+            "ping_mode": "passthrough",
             "protocol": "client",
             "status_cache_ttl_ms": 1000,
             "upstream_addr": "mc.hypixel.net:25565",

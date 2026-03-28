@@ -41,8 +41,9 @@ pub struct ApiConfig {
 #[derive(Clone, Debug)]
 pub struct MockApiConfig {
     pub target_addr: String,
-    pub kick_reason: Option<String>,
+    pub rewrite_addr: String,
     pub connection_id_prefix: String,
+    pub kick_reason: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

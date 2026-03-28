@@ -37,7 +37,59 @@ mod tests {
 
         assert_eq!(config.api.mode, ApiMode::Mock);
         assert_eq!(config.api.mock.target_addr, "backend:25565");
+        assert_eq!(config.api.mock.rewrite_addr, "backend:25565");
         assert_eq!(config.stats_log_interval, Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn parse_mock_api_config_defaults_rewrite_addr_to_target() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert_eq!(config.api.mock.target_addr, "backend:25565");
+        assert_eq!(config.api.mock.rewrite_addr, "backend:25565");
+    }
+
+    #[test]
+    fn parse_mock_api_config_normalizes_explicit_rewrite_addr() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                rewrite_addr = "rewrite-host"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert_eq!(config.api.mock.target_addr, "backend:25565");
+        assert_eq!(config.api.mock.rewrite_addr, "rewrite-host:25565");
     }
 
     #[test]

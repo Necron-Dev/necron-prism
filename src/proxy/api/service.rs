@@ -148,9 +148,9 @@ impl MockApiBackend {
     fn new(config: &MockApiConfig) -> Self {
         Self {
             target_addr: config.target_addr.clone(),
-            rewrite_addr: config.target_addr.clone(),
-            kick_reason: config.kick_reason.clone(),
+            rewrite_addr: config.rewrite_addr.clone(),
             connection_id_prefix: config.connection_id_prefix.clone(),
+            kick_reason: config.kick_reason.clone(),
             counter: AtomicU64::new(0),
         }
     }

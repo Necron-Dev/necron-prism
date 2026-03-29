@@ -8,7 +8,9 @@ use valence_protocol::packets::status::{
     QueryPingC2s, QueryPongS2c, QueryRequestC2s, QueryResponseS2c,
 };
 use valence_protocol::uuid::Uuid;
-use valence_protocol::{packet_id, Decode, Encode, Packet, PacketState, Text, VarInt};
+use valence_protocol::{
+    packet_id, Decode, Encode, Packet, PacketState, Text, VarInt,
+};
 
 use super::constants::{INTENT_LOGIN, INTENT_STATUS, INTENT_TRANSFER};
 use super::error::ProtocolError;
@@ -145,6 +147,8 @@ pub fn login_disconnect_packet(message_json: &str) -> Result<Vec<u8>, ProtocolEr
         reason: Cow::Owned(reason),
     })
 }
+
+pub const PRISM_MAGIC_ID: i32 = 0xDEAD0721u32 as i32;
 
 fn encode_packet<P>(packet: &P) -> Result<Vec<u8>, ProtocolError>
 where

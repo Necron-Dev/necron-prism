@@ -79,11 +79,8 @@ impl ApiClient {
             StatusCode::OK => {
                 let body = response.json::<JoinOkResponse>().await?;
                 Ok(JoinDecision::Allow(JoinTarget {
-                    rewrite_addr: body
-                        .data
-                        .rewrite_addr
-                        .unwrap_or_else(|| body.data.target_addr.clone()),
                     target_addr: body.data.target_addr,
+                    rewrite_addr: body.data.rewrite_addr,
                     connection_id: body.data.connection_id,
                 }))
             }

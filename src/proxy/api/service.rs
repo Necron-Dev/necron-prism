@@ -145,7 +145,7 @@ impl MockApiService {
         let sequence = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(JoinDecision::Allow(JoinTarget {
             target_addr: self.target_addr.to_string(),
-            rewrite_addr: self.rewrite_addr.to_string(),
+            rewrite_addr: Some(self.rewrite_addr.to_string()),
             connection_id: format!("{}-{sequence}", self.connection_id_prefix),
         }))
     }

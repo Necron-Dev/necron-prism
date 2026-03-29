@@ -20,16 +20,16 @@ pub struct ConnectionRoute {
 pub struct ConnectionReport {
     pub connection_traffic: ConnectionTraffic,
     pub relay_mode: Option<RelayMode>,
-    pub target_addr: Arc<str>,
-    pub rewrite_addr: Arc<str>,
+    pub target_addr: Option<Arc<str>>,
+    pub rewrite_addr: Option<Arc<str>>,
 }
 
 impl ConnectionReport {
     pub fn new(
         connection_traffic: ConnectionTraffic,
         relay_mode: Option<RelayMode>,
-        target_addr: Arc<str>,
-        rewrite_addr: Arc<str>,
+        target_addr: Option<Arc<str>>,
+        rewrite_addr: Option<Arc<str>>,
     ) -> Self {
         Self {
             connection_traffic,

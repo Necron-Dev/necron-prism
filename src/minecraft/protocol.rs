@@ -85,12 +85,16 @@ pub fn decode_login_hello(frame: &FramedPacket) -> Result<LoginHelloInfo, Protoc
 }
 
 pub fn encode_raw_frame(frame: &FramedPacket) -> Result<Vec<u8>, ProtocolError> {
-    let id_len = varint_len(frame.frame.id);
+    let id_len = VarInt(frame.frame.id).written_size();
     let packet_len = id_len + frame.frame.body.len();
 
-    let mut output = Vec::with_capacity(varint_len(packet_len as i32) + packet_len);
-    write_varint(&mut output, packet_len as i32)?;
-    write_varint(&mut output, frame.frame.id)?;
+    let mut output = Vec::with_capacity(VarInt(packet_len as i32).written_size() + packet_len);
+    VarInt(packet_len as i32)
+        .encode(&mut output)
+        .map_err(ProtocolError::encode)?;
+    VarInt(frame.frame.id)
+        .encode(&mut output)
+        .map_err(ProtocolError::encode)?;
     output.extend_from_slice(frame.frame.body.as_ref());
     Ok(output)
 }
@@ -206,7 +210,7 @@ fn decode_legacy_login_hello(frame: &FramedPacket) -> Result<LoginHelloInfo, Pro
 }
 
 fn read_mc_string<R: Read>(reader: &mut R, max_len: usize) -> Result<String, ProtocolError> {
-    let len = read_varint(reader)?;
+    let len = VarInt::decode_partial(&mut *reader).map_err(ProtocolError::decode)?;
     if len < 0 {
         return Err(ProtocolError::decode(format!(
             "negative string length {len}"
@@ -229,53 +233,6 @@ fn read_uuid<R: Read>(reader: &mut R) -> Result<Uuid, ProtocolError> {
     let mut bytes = [0_u8; 16];
     reader.read_exact(&mut bytes)?;
     Ok(Uuid::from_bytes(bytes))
-}
-
-fn read_varint<R: Read>(reader: &mut R) -> Result<i32, ProtocolError> {
-    let mut value = 0_i32;
-
-    for shift in 0..5 {
-        let mut byte = [0_u8; 1];
-        reader.read_exact(&mut byte)?;
-        value |= i32::from(byte[0] & 0x7f) << (shift * 7);
-
-        if byte[0] & 0x80 == 0 {
-            return Ok(value);
-        }
-    }
-
-    Err(ProtocolError::decode("VarInt is too long"))
-}
-
-fn write_varint(buffer: &mut Vec<u8>, value: i32) -> Result<(), ProtocolError> {
-    if value < 0 {
-        return Err(ProtocolError::encode(format!(
-            "negative VarInt is unsupported: {value}"
-        )));
-    }
-
-    let mut value = value as u32;
-    loop {
-        let mut byte = (value & 0x7f) as u8;
-        value >>= 7;
-        if value != 0 {
-            byte |= 0x80;
-        }
-        buffer.push(byte);
-        if value == 0 {
-            return Ok(());
-        }
-    }
-}
-
-fn varint_len(value: i32) -> usize {
-    let mut value = value as u32;
-    let mut len = 1;
-    while value >= 0x80 {
-        value >>= 7;
-        len += 1;
-    }
-    len
 }
 
 fn next_state_to_int(state: HandshakeNextStateNew) -> i32 {

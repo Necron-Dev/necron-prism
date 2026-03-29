@@ -1,66 +1,41 @@
+use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
+#[cfg(feature = "http-api")]
 use super::client::ApiClient;
-use super::types::{JoinDecision, JoinTarget, TrafficEntry, TrafficSnapshot};
 use crate::proxy::config::{ApiConfig, ApiMode, MockApiConfig};
+use crate::proxy::routing::{JoinDecision, JoinTarget};
 
-pub struct ApiService {
+pub enum ApiService {
+    #[cfg(feature = "http-api")]
+    Http(HttpApiService),
+    Mock(MockApiService),
+}
+
+#[cfg(feature = "http-api")]
+pub struct HttpApiService {
     runtime: tokio::runtime::Runtime,
-    backend: Box<dyn ApiBackend>,
-}
-
-trait ApiBackend: Send + Sync {
-    fn join(
-        &self,
-        runtime: &tokio::runtime::Runtime,
-        name: Option<&str>,
-        uuid: Option<&str>,
-        addr: Option<&str>,
-        load: i32,
-    ) -> Result<JoinDecision, String>;
-
-    fn traffic_single(
-        &self,
-        runtime: &tokio::runtime::Runtime,
-        connection_id: &str,
-        send_bytes: u64,
-        recv_bytes: u64,
-    ) -> Result<Vec<String>, String>;
-
-    fn closed(
-        &self,
-        runtime: &tokio::runtime::Runtime,
-        cid: &str,
-        send: u64,
-        recv: u64,
-    ) -> Result<(), String>;
-}
-
-struct HttpApiBackend {
     client: ApiClient,
 }
 
-struct MockApiBackend {
-    target_addr: String,
-    rewrite_addr: String,
-    kick_reason: Option<String>,
-    connection_id_prefix: String,
+pub struct MockApiService {
+    target_addr: Arc<str>,
+    rewrite_addr: Arc<str>,
+    kick_reason: Option<Arc<str>>,
+    connection_id_prefix: Arc<str>,
     counter: AtomicU64,
 }
 
 impl ApiService {
-    pub fn new(config: &ApiConfig) -> Result<Self, String> {
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| format!("failed to build api runtime: {error}"))?;
-
-        let backend: Box<dyn ApiBackend> = match config.mode {
-            ApiMode::Http => Box::new(HttpApiBackend::new(config)?),
-            ApiMode::Mock => Box::new(MockApiBackend::new(&config.mock)),
-        };
-
-        Ok(Self { runtime, backend })
+    pub fn new(config: &ApiConfig) -> Result<Self> {
+        match config.mode {
+            #[cfg(feature = "http-api")]
+            ApiMode::Http => Ok(Self::Http(HttpApiService::new(config)?)),
+            #[cfg(not(feature = "http-api"))]
+            ApiMode::Http => Err(anyhow!("http api support is disabled at compile time")),
+            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(&config.mock))),
+        }
     }
 
     pub fn join(
@@ -69,8 +44,12 @@ impl ApiService {
         uuid: Option<&str>,
         addr: Option<&str>,
         load: i32,
-    ) -> Result<JoinDecision, String> {
-        self.backend.join(&self.runtime, name, uuid, addr, load)
+    ) -> Result<JoinDecision> {
+        match self {
+            #[cfg(feature = "http-api")]
+            Self::Http(service) => service.join(name, uuid, addr, load),
+            Self::Mock(service) => service.join(name, uuid, addr, load),
+        }
     }
 
     pub fn traffic_single(
@@ -78,124 +57,109 @@ impl ApiService {
         connection_id: &str,
         send_bytes: u64,
         recv_bytes: u64,
-    ) -> Result<Vec<String>, String> {
-        self.backend
-            .traffic_single(&self.runtime, connection_id, send_bytes, recv_bytes)
+    ) -> Result<Vec<String>> {
+        match self {
+            #[cfg(feature = "http-api")]
+            Self::Http(service) => service.traffic_single(connection_id, send_bytes, recv_bytes),
+            Self::Mock(service) => service.traffic_single(connection_id, send_bytes, recv_bytes),
+        }
     }
 
-    pub fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<(), String> {
-        self.backend.closed(&self.runtime, cid, send, recv)
-    }
-}
-
-impl HttpApiBackend {
-    fn new(config: &ApiConfig) -> Result<Self, String> {
-        Ok(Self {
-            client: ApiClient::new(config)?,
-        })
-    }
-}
-
-impl ApiBackend for HttpApiBackend {
-    fn join(
-        &self,
-        runtime: &tokio::runtime::Runtime,
-        name: Option<&str>,
-        uuid: Option<&str>,
-        addr: Option<&str>,
-        load: i32,
-    ) -> Result<JoinDecision, String> {
-        runtime
-            .block_on(self.client.join(name, uuid, addr, load))
-            .map_err(|error| format!("join api request failed: {error}"))
-    }
-
-    fn traffic_single(
-        &self,
-        runtime: &tokio::runtime::Runtime,
-        connection_id: &str,
-        send_bytes: u64,
-        recv_bytes: u64,
-    ) -> Result<Vec<String>, String> {
-        let mut snapshot = TrafficSnapshot::default();
-        snapshot.entries.insert(
-            connection_id.to_string(),
-            TrafficEntry {
-                send_bytes,
-                recv_bytes,
-            },
-        );
-
-        runtime
-            .block_on(self.client.traffic(&snapshot))
-            .map_err(|error| format!("traffic api request failed: {error}"))
-    }
-
-    fn closed(
-        &self,
-        runtime: &tokio::runtime::Runtime,
-        cid: &str,
-        send: u64,
-        recv: u64,
-    ) -> Result<(), String> {
-        runtime
-            .block_on(self.client.closed(cid, send, recv))
-            .map_err(|error| format!("closed api request failed: {error}"))
-    }
-}
-
-impl MockApiBackend {
-    fn new(config: &MockApiConfig) -> Self {
-        Self {
-            target_addr: config.target_addr.clone(),
-            rewrite_addr: config.rewrite_addr.clone(),
-            connection_id_prefix: config.connection_id_prefix.clone(),
-            kick_reason: config.kick_reason.clone(),
-            counter: AtomicU64::new(0),
+    pub fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
+        match self {
+            #[cfg(feature = "http-api")]
+            Self::Http(service) => service.closed(cid, send, recv),
+            Self::Mock(service) => service.closed(cid, send, recv),
         }
     }
 }
 
-impl ApiBackend for MockApiBackend {
+#[cfg(feature = "http-api")]
+impl HttpApiService {
+    fn new(config: &ApiConfig) -> Result<Self> {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| anyhow!("failed to build api runtime: {error}"))?;
+
+        Ok(Self {
+            runtime,
+            client: ApiClient::new(config)?,
+        })
+    }
+
     fn join(
         &self,
-        _runtime: &tokio::runtime::Runtime,
+        name: Option<&str>,
+        uuid: Option<&str>,
+        addr: Option<&str>,
+        load: i32,
+    ) -> Result<JoinDecision> {
+        self.runtime
+            .block_on(self.client.join(name, uuid, addr, load))
+            .map_err(|error| anyhow!("join api request failed: {error}"))
+    }
+
+    fn traffic_single(
+        &self,
+        connection_id: &str,
+        send_bytes: u64,
+        recv_bytes: u64,
+    ) -> Result<Vec<String>> {
+        self.runtime
+            .block_on(self.client.traffic(connection_id, send_bytes, recv_bytes))
+            .map_err(|error| anyhow!("traffic api request failed: {error}"))
+    }
+
+    fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
+        self.runtime
+            .block_on(self.client.closed(cid, send, recv))
+            .map_err(|error| anyhow!("closed api request failed: {error}"))
+    }
+}
+
+impl MockApiService {
+    fn new(config: &MockApiConfig) -> Self {
+        Self {
+            target_addr: Arc::<str>::from(config.target_addr.as_str()),
+            rewrite_addr: Arc::<str>::from(config.rewrite_addr.as_str()),
+            connection_id_prefix: Arc::<str>::from(config.connection_id_prefix.as_str()),
+            kick_reason: config.kick_reason.as_deref().map(Arc::<str>::from),
+            counter: AtomicU64::new(0),
+        }
+    }
+
+    fn join(
+        &self,
         _name: Option<&str>,
         _uuid: Option<&str>,
         _addr: Option<&str>,
         _load: i32,
-    ) -> Result<JoinDecision, String> {
+    ) -> Result<JoinDecision> {
         if let Some(kick_reason) = &self.kick_reason {
             return Ok(JoinDecision::Deny {
-                kick_reason: kick_reason.clone(),
+                kick_reason: kick_reason.to_string(),
             });
         }
 
         let sequence = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(JoinDecision::Allow(JoinTarget {
-            target_addr: self.target_addr.clone(),
-            rewrite_addr: self.rewrite_addr.clone(),
+            target_addr: self.target_addr.to_string(),
+            rewrite_addr: self.rewrite_addr.to_string(),
             connection_id: format!("{}-{sequence}", self.connection_id_prefix),
         }))
     }
 
     fn traffic_single(
         &self,
-        _runtime: &tokio::runtime::Runtime,
         _connection_id: &str,
         _send_bytes: u64,
         _recv_bytes: u64,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>> {
         Ok(Vec::new())
     }
 
-    fn closed(
-        &self,
-        _runtime: &tokio::runtime::Runtime,
-        _cid: &str,
-        _send: u64,
-        _recv: u64,
-    ) -> Result<(), String> {
+    fn closed(&self, _cid: &str, _send: u64, _recv: u64) -> Result<()> {
         Ok(())
     }
 }

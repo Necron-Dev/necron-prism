@@ -1,22 +1,30 @@
-use std::collections::BTreeMap;
+#![cfg(feature = "http-api")]
 
-use reqwest::StatusCode;
-use serde::{Deserialize, Serialize};
+use reqwest::{StatusCode, Url};
+use serde::Deserialize;
+use anyhow::{anyhow, Result};
 
-use super::types::{JoinDecision, JoinTarget, TrafficSnapshot};
 use crate::proxy::config::ApiConfig;
+use crate::proxy::routing::{JoinDecision, JoinTarget};
+
+use super::types::TrafficBody;
 
 pub struct ApiClient {
     inner: reqwest::Client,
-    base_url: String,
+    join_url: Url,
+    traffic_url: Url,
+    closed_url: Url,
 }
 
 impl ApiClient {
-    pub fn new(config: &ApiConfig) -> Result<Self, String> {
+    pub fn new(config: &ApiConfig) -> Result<Self> {
         let mut headers = reqwest::header::HeaderMap::new();
         if let Some(token) = &config.bearer_token {
-            let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-                .map_err(|error| format!("invalid api.bearer_token header: {error}"))?;
+            let mut bearer = String::with_capacity(token.len() + 7);
+            bearer.push_str("Bearer ");
+            bearer.push_str(token);
+            let mut value = reqwest::header::HeaderValue::from_str(&bearer)
+                .map_err(|error| anyhow!("invalid api.bearer_token header: {error}"))?;
             value.set_sensitive(true);
             headers.insert(reqwest::header::AUTHORIZATION, value);
         }
@@ -25,13 +33,26 @@ impl ApiClient {
             .default_headers(headers)
             .timeout(config.timeout)
             .build()
-            .map_err(|error| format!("build reqwest client: {error}"))?;
+            .map_err(|error| anyhow!("build reqwest client: {error}"))?;
         let base_url = config
             .base_url
-            .clone()
-            .ok_or_else(|| "http api requires api.base_url".to_string())?;
+            .as_deref()
+            .ok_or_else(|| anyhow!("http api requires api.base_url"))?;
+        let base_url = Url::parse(base_url)
+            .map_err(|error| anyhow!("invalid api.base_url: {error}"))?;
 
-        Ok(Self { inner, base_url })
+        Ok(Self {
+            join_url: base_url
+                .join("v1/join")
+                .map_err(|error| anyhow!("invalid join url: {error}"))?,
+            traffic_url: base_url
+                .join("v1/traffic")
+                .map_err(|error| anyhow!("invalid traffic url: {error}"))?,
+            closed_url: base_url
+                .join("v1/closed")
+                .map_err(|error| anyhow!("invalid closed url: {error}"))?,
+            inner,
+        })
     }
 
     pub async fn join(
@@ -40,15 +61,16 @@ impl ApiClient {
         uuid: Option<&str>,
         src: Option<&str>,
         load: i32,
-    ) -> Result<JoinDecision, reqwest::Error> {
+    ) -> Result<JoinDecision> {
+        let load = load.to_string();
         let response = self
             .inner
-            .get(format!("{}/v1/join", self.base_url))
+            .get(self.join_url.as_str())
             .query(&[
                 ("name", name.unwrap_or_default()),
                 ("uuid", uuid.unwrap_or_default()),
                 ("src", src.unwrap_or_default()),
-                ("load", &load.to_string()),
+                ("load", load.as_str()),
             ])
             .send()
             .await?;
@@ -77,25 +99,22 @@ impl ApiClient {
         }
     }
 
-    pub async fn traffic(&self, snapshot: &TrafficSnapshot) -> Result<Vec<String>, reqwest::Error> {
-        let body = snapshot
-            .entries
-            .iter()
-            .map(|(key, value)| {
-                (
-                    key.clone(),
-                    TrafficBody {
-                        send_bytes: value.send_bytes,
-                        recv_bytes: value.recv_bytes,
-                    },
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-
+    pub async fn traffic(
+        &self,
+        connection_id: &str,
+        send_bytes: u64,
+        recv_bytes: u64,
+    ) -> Result<Vec<String>> {
         let response = self
             .inner
-            .post(format!("{}/v1/traffic", self.base_url))
-            .json(&body)
+            .post(self.traffic_url.as_str())
+            .json(&std::collections::BTreeMap::from([(
+                connection_id.to_owned(),
+                TrafficBody {
+                    send_bytes,
+                    recv_bytes,
+                },
+            )]))
             .send()
             .await?;
 
@@ -104,14 +123,13 @@ impl ApiClient {
         Ok(body.data.connections_to_close)
     }
 
-    pub async fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<(), reqwest::Error> {
+    pub async fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
+        let send = send.to_string();
+        let recv = recv.to_string();
+
         self.inner
-            .get(format!("{}/v1/closed", self.base_url))
-            .query(&[
-                ("cid", cid.to_string()),
-                ("send", send.to_string()),
-                ("recv", recv.to_string()),
-            ])
+            .get(self.closed_url.as_str())
+            .query(&[("cid", cid), ("send", send.as_str()), ("recv", recv.as_str())])
             .send()
             .await?
             .error_for_status()?;
@@ -139,12 +157,6 @@ struct JoinDenyResponse {
 #[derive(Debug, Deserialize)]
 struct JoinDenyData {
     kick_reason: String,
-}
-
-#[derive(Debug, Serialize)]
-struct TrafficBody {
-    send_bytes: u64,
-    recv_bytes: u64,
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,5 +1,6 @@
 mod cache;
 mod context;
+mod favicon;
 mod legacy;
 mod rewrite;
 mod service;

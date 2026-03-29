@@ -2,15 +2,16 @@ use std::io::{self, Write};
 use std::net::TcpStream;
 
 use crate::minecraft::HandshakeInfo;
-use crate::proxy::config::TransportConfig;
+use crate::proxy::config::{RelayMode, TransportConfig};
 use crate::proxy::players::{PlayerRegistry, PlayerState};
-use crate::proxy::template;
+use crate::proxy::template::{self, TemplateContext};
 
 use super::rewrite::rewrite_json;
 
 pub fn serve_legacy_ping(
     client: &mut TcpStream,
     transport: &TransportConfig,
+    relay_mode: RelayMode,
     players: &PlayerRegistry,
     connection_id: u64,
 ) -> io::Result<()> {
@@ -23,13 +24,15 @@ pub fn serve_legacy_ping(
                 .motd
                 .local_json
                 .clone()
-                .unwrap_or_else(|| "{}".to_string())
+                .unwrap_or_else(|| "{}".to_owned())
         })
     } else {
+        let template_context = TemplateContext::for_transport(transport, relay_mode, players);
         template::render(
             transport.motd.local_json.as_deref().unwrap_or("{}"),
-            players,
+            &template_context,
         )
+        .into_owned()
     };
 
     let motd_json = rewrite_json(
@@ -37,6 +40,7 @@ pub fn serve_legacy_ping(
         transport.motd.protocol_mode,
         763,
         &transport.motd.favicon,
+        None,
         None,
     );
     let legacy_raw = extract_legacy_text(&motd_json);
@@ -86,12 +90,43 @@ fn encode_legacy_response(value: &str) -> Vec<u8> {
 fn extract_legacy_text(json: &str) -> String {
     serde_json::from_str::<serde_json::Value>(json)
         .ok()
-        .and_then(|value| {
-            value
-                .pointer("/description/text")
-                .and_then(|value| value.as_str().map(ToString::to_string))
-        })
-        .unwrap_or_else(|| json.to_string())
+        .and_then(|value| value.get("description").map(LegacyTextExtractor::extract))
+        .unwrap_or_else(|| json.to_owned())
+}
+
+struct LegacyTextExtractor {
+    text: String,
+}
+
+impl LegacyTextExtractor {
+    fn extract(value: &serde_json::Value) -> String {
+        let mut extractor = Self {
+            text: "".to_owned(),
+        };
+        extractor.push_value(value);
+        extractor.text
+    }
+
+    fn push_value(&mut self, value: &serde_json::Value) {
+        match value {
+            serde_json::Value::String(text) => self.text.push_str(text),
+            serde_json::Value::Array(items) => {
+                for item in items {
+                    self.push_value(item);
+                }
+            }
+            serde_json::Value::Object(map) => {
+                if let Some(content) = map.get("text").and_then(serde_json::Value::as_str) {
+                    self.text.push_str(content);
+                }
+
+                if let Some(extra) = map.get("extra") {
+                    self.push_value(extra);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn extract_port(addr: &str) -> Option<u16> {

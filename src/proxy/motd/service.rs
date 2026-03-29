@@ -2,7 +2,7 @@ use crate::minecraft::{
     decode_status_request, status_response_packet, HandshakeInfo, PacketIo, ProtocolError,
     MAX_STATUS_PACKET_SIZE,
 };
-use crate::proxy::config::TransportConfig;
+use crate::proxy::config::{RelayMode, TransportConfig};
 use crate::proxy::players::{PlayerRegistry, PlayerState};
 use std::io::Write;
 use std::net::TcpStream;
@@ -11,10 +11,12 @@ use tracing::info;
 
 use super::cache::StatusCache;
 use super::context::StatusContext;
+use super::favicon::FaviconCache;
 
 #[derive(Clone, Default)]
 pub struct MotdService {
     cache: StatusCache,
+    favicon_cache: FaviconCache,
 }
 
 impl MotdService {
@@ -23,6 +25,7 @@ impl MotdService {
         packet_io: &mut PacketIo,
         client: &mut TcpStream,
         transport: &TransportConfig,
+        relay_mode: RelayMode,
         handshake: &HandshakeInfo,
         players: &PlayerRegistry,
         connection_id: u64,
@@ -30,7 +33,7 @@ impl MotdService {
         let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE)?;
         decode_status_request(&status_request)?;
 
-        let context = StatusContext::new(transport, handshake, self);
+        let context = StatusContext::new(transport, relay_mode, handshake, self);
         let mut upstream = context.open_upstream()?;
 
         let motd_json = context.build_json(players, upstream.as_mut())?;
@@ -60,11 +63,23 @@ impl MotdService {
         target_addr: &str,
         rewrite_addr: &str,
         ttl: std::time::Duration,
-    ) -> Option<String> {
+    ) -> Option<std::sync::Arc<str>> {
         self.cache.read(target_addr, rewrite_addr, ttl)
     }
 
-    pub fn store_cached_status(&self, target_addr: &str, rewrite_addr: &str, json: &str) {
-        self.cache.write(target_addr, rewrite_addr, json)
+    pub fn store_cached_status_arc(
+        &self,
+        target_addr: &str,
+        rewrite_addr: &str,
+        json: std::sync::Arc<str>,
+    ) {
+        self.cache.write_arc(target_addr, rewrite_addr, json)
+    }
+
+    pub fn read_favicon_data_url(
+        &self,
+        path: &std::path::Path,
+    ) -> anyhow::Result<std::sync::Arc<str>> {
+        self.favicon_cache.read_data_url(path)
     }
 }

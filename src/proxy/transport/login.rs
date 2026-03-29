@@ -89,7 +89,7 @@ fn deny_with_reason(
     Ok(ConnectionReport::new(
         ConnectionTraffic::default(),
         None,
-        Arc::<str>::from(""),
-        Arc::<str>::from(""),
+        None,
+        None,
     ))
 }

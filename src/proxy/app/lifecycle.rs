@@ -56,10 +56,10 @@ fn log_connection_success(
         info!(relay_mode = %mode, "relay completed");
     }
 
-    if !report.target_addr.is_empty() || !report.rewrite_addr.is_empty() {
+    if let (Some(target), Some(rewrite)) = (report.target_addr, report.rewrite_addr) {
         info!(
-            target_addr = %report.target_addr,
-            rewrite_addr = %report.rewrite_addr,
+            target_addr = %target,
+            rewrite_addr = %rewrite,
             "connection routed"
         );
     }

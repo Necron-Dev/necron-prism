@@ -5,8 +5,9 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::minecraft::{decode_login_hello, login_disconnect_packet, FramedPacket};
+use crate::proxy::routing::JoinDecision;
 
-use super::super::api::{ApiService, JoinDecision};
+use super::super::api::ApiService;
 use super::super::players::{PlayerRegistry, PlayerState};
 use super::super::stats::ConnectionTraffic;
 use super::types::{ConnectionReport, ConnectionRoute};
@@ -45,7 +46,10 @@ pub fn resolve_login_route(
         players.current_online_count(),
     ) {
         Ok(JoinDecision::Allow(target)) => {
-            players.update_external_connection_id(connection_id, target.connection_id.clone());
+            players.update_external_connection_id(
+                connection_id,
+                Arc::<str>::from(target.connection_id),
+            );
             Ok(Ok(ConnectionRoute {
                 target_addr: Arc::<str>::from(target.target_addr),
                 rewrite_addr: Arc::<str>::from(target.rewrite_addr),

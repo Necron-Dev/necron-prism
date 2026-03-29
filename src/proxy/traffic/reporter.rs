@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use tracing::warn;
 
 use super::super::api::ApiService;
-use super::super::config::{ApiConfig, ApiMode};
+use super::super::config::ApiConfig;
 use super::super::stats::ConnectionTraffic;
 use super::counters::ConnectionCounters;
 
@@ -13,7 +13,7 @@ use super::counters::ConnectionCounters;
 pub struct TrafficReporter {
     api: Arc<ApiService>,
     sessions: Arc<Mutex<HashMap<u64, TrafficSession>>>,
-    closers: Arc<Mutex<HashMap<String, std::net::TcpStream>>>,
+    closers: Arc<Mutex<HashMap<Arc<str>, std::net::TcpStream>>>,
 }
 
 impl TrafficReporter {
@@ -23,9 +23,7 @@ impl TrafficReporter {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             closers: Arc::new(Mutex::new(HashMap::new())),
         };
-        if matches!(config.mode, ApiMode::Http) {
-            reporter.spawn_loop(config.traffic_interval);
-        }
+        reporter.spawn_loop(config.traffic_interval);
         reporter
     }
 
@@ -36,11 +34,32 @@ impl TrafficReporter {
         counters: ConnectionCounters,
         closer: std::net::TcpStream,
     ) {
+        self.register_internal(connection_id, external_connection_id, counters, closer);
+    }
+
+    pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
+        self.finish_internal(connection_id, totals);
+    }
+
+    pub fn active_totals(&self) -> ConnectionTraffic {
+        self.active_totals_internal()
+    }
+}
+
+impl TrafficReporter {
+    fn register_internal(
+        &self,
+        connection_id: u64,
+        external_connection_id: &str,
+        counters: ConnectionCounters,
+        closer: std::net::TcpStream,
+    ) {
+        let external_connection_id: Arc<str> = external_connection_id.to_owned().into();
         let mut sessions = self.sessions.lock().expect("traffic reporter poisoned");
         sessions.insert(
             connection_id,
             TrafficSession {
-                external_connection_id: external_connection_id.to_string(),
+                external_connection_id: Arc::clone(&external_connection_id),
                 counters,
                 last_sent_upload: 0,
                 last_sent_download: 0,
@@ -50,10 +69,10 @@ impl TrafficReporter {
         self.closers
             .lock()
             .expect("traffic reporter closers poisoned")
-            .insert(external_connection_id.to_string(), closer);
+            .insert(external_connection_id, closer);
     }
 
-    pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
+    fn finish_internal(&self, connection_id: u64, totals: ConnectionTraffic) {
         let session = self
             .sessions
             .lock()
@@ -64,7 +83,7 @@ impl TrafficReporter {
             self.closers
                 .lock()
                 .expect("traffic reporter closers poisoned")
-                .remove(&session.external_connection_id);
+                .remove(session.external_connection_id.as_ref());
 
             if let Err(error) = self.api.closed(
                 &session.external_connection_id,
@@ -81,7 +100,7 @@ impl TrafficReporter {
         }
     }
 
-    pub fn active_totals(&self) -> ConnectionTraffic {
+    fn active_totals_internal(&self) -> ConnectionTraffic {
         let sessions = self.sessions.lock().expect("traffic reporter poisoned");
         let mut totals = ConnectionTraffic::default();
 
@@ -144,12 +163,12 @@ impl TrafficReporter {
 }
 
 fn close_connections(
-    closers: &Arc<Mutex<HashMap<String, std::net::TcpStream>>>,
+    closers: &Arc<Mutex<HashMap<Arc<str>, std::net::TcpStream>>>,
     connections_to_close: &[String],
 ) {
     let mut registered = closers.lock().expect("traffic reporter closers poisoned");
     for close_id in connections_to_close {
-        if let Some(stream) = registered.remove(close_id) {
+        if let Some(stream) = registered.remove(close_id.as_str()) {
             let _ = stream.shutdown(Shutdown::Both);
             warn!(cid = %close_id, "closed connection requested by traffic api");
         }
@@ -157,7 +176,7 @@ fn close_connections(
 }
 
 struct TrafficSession {
-    external_connection_id: String,
+    external_connection_id: Arc<str>,
     counters: ConnectionCounters,
     last_sent_upload: u64,
     last_sent_download: u64,

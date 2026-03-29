@@ -17,8 +17,8 @@ use super::relay::relay_bidirectional;
 use super::stats::ConnectionTraffic;
 use super::traffic::{ConnectionCounters, TrafficReporter};
 use crate::minecraft::{
-    decode_handshake, encode_handshake, PacketIo, INTENT_STATUS,
-    MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    decode_handshake, encode_handshake, PacketIo, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE,
+    MAX_LOGIN_PACKET_SIZE,
 };
 
 pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};
@@ -39,7 +39,13 @@ pub fn handle_client(
     let mut first_byte = [0_u8; 1];
     client.read_exact(&mut first_byte)?;
     if first_byte[0] == 0xFE {
-        serve_legacy_ping(&mut client, &config.transport, players, context.id)?;
+        serve_legacy_ping(
+            &mut client,
+            &config.transport,
+            config.relay.mode,
+            players,
+            context.id,
+        )?;
         return Ok(ConnectionReport::new(
             ConnectionTraffic::default(),
             None,
@@ -52,7 +58,8 @@ pub fn handle_client(
     let handshake_packet = packet_io
         .read_frame(&mut client, MAX_HANDSHAKE_PACKET_SIZE)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let handshake = decode_handshake(&handshake_packet).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let handshake = decode_handshake(&handshake_packet)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     players.update_handshake(context.id, &handshake);
 
     info!(
@@ -70,6 +77,7 @@ pub fn handle_client(
             &mut packet_io,
             &mut client,
             &config.transport,
+            config.relay.mode,
             &handshake,
             players,
             context.id,
@@ -126,9 +134,10 @@ fn proxy_connection(
     handshake
         .rewrite_addr(route.rewrite_addr.as_ref())
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-    players.update_outbound(context.id, route.target_addr.to_string());
+    players.update_outbound(context.id, Arc::clone(&route.target_addr));
 
-    let rewritten_packet = encode_handshake(&handshake).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let rewritten_packet =
+        encode_handshake(&handshake).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     info!(
         rewrite_addr = %route.rewrite_addr,

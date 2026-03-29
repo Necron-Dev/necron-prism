@@ -8,7 +8,7 @@ use rustix::pipe::{pipe_with, splice, PipeFlags, SpliceFlags};
 
 use crate::proxy::traffic::ConnectionCounters;
 
-use super::{shutdown_write, RelayMode, RelayStats};
+use super::{shutdown_write, spawn_relay_worker, RelayMode, RelayStats};
 
 const PIPE_CHUNK_SIZE: usize = 4 * 1024;
 const SPLICE_FLAGS: SpliceFlags = SpliceFlags::MOVE.union(SpliceFlags::NONBLOCK);
@@ -67,7 +67,7 @@ pub fn relay_with_splice(
     let upload_counters = counters.clone();
     let download_counters = counters;
 
-    let upload = thread::spawn(move || -> io::Result<u64> {
+    let upload = spawn_relay_worker("splice-upload", move || {
         let copied = splice_copy(
             &client_read,
             &upstream_write,
@@ -78,27 +78,21 @@ pub fn relay_with_splice(
         )?;
         shutdown_write(&upstream_write);
         Ok(copied)
-    });
+    })?;
 
-    let download = thread::spawn(move || -> io::Result<u64> {
-        let copied = splice_copy(
-            &upstream_read,
-            &client_write,
-            &pipes.download.read_end,
-            &pipes.download.write_end,
-            &download_counters,
-            false,
-        )?;
-        shutdown_write(&client_write);
-        Ok(copied)
-    });
+    let download_bytes = splice_copy(
+        &upstream_read,
+        &client_write,
+        &pipes.download.read_end,
+        &pipes.download.write_end,
+        &download_counters,
+        false,
+    )?;
+    shutdown_write(&client_write);
 
     let upload_bytes = upload
         .join()
         .map_err(|_| io::Error::other("upload splice thread panicked"))??;
-    let download_bytes = download
-        .join()
-        .map_err(|_| io::Error::other("download splice thread panicked"))??;
 
     Ok(RelayStats {
         upload_bytes,

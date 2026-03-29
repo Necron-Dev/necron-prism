@@ -6,6 +6,8 @@ use std::thread;
 use super::config::RelayMode as ConfigRelayMode;
 use super::traffic::ConnectionCounters;
 
+pub(super) const RELAY_THREAD_STACK_SIZE: usize = 128 * 1024;
+
 #[cfg(target_os = "linux")]
 mod linux;
 
@@ -80,34 +82,18 @@ fn relay_with_copy(
     let upload_counters = counters.clone();
     let download_counters = counters;
 
-    let upload = thread::spawn(move || -> io::Result<u64> {
-        let copied = copy_with_counters(
-            &mut client_read,
-            &mut upstream_write,
-            &upload_counters,
-            true,
-        )?;
+    let upload = spawn_relay_worker("relay-upload", move || {
+        let copied =
+            copy_upload_with_counters(&mut client_read, &mut upstream_write, &upload_counters)?;
         let _ = upstream_write.shutdown(Shutdown::Write);
         Ok(copied)
-    });
+    })?;
 
-    let download = thread::spawn(move || -> io::Result<u64> {
-        let copied = copy_with_counters(
-            &mut upstream_read,
-            &mut client_write,
-            &download_counters,
-            false,
-        )?;
-        let _ = client_write.shutdown(Shutdown::Write);
-        Ok(copied)
-    });
+    let download_bytes =
+        copy_download_with_counters(&mut upstream_read, &mut client_write, &download_counters)?;
+    let _ = client_write.shutdown(Shutdown::Write);
 
-    let upload_bytes = upload
-        .join()
-        .map_err(|_| io::Error::other("upload relay thread panicked"))??;
-    let download_bytes = download
-        .join()
-        .map_err(|_| io::Error::other("download relay thread panicked"))??;
+    let upload_bytes = join_copy_direction(upload, "upload")?;
 
     Ok(RelayStats {
         upload_bytes,
@@ -116,11 +102,50 @@ fn relay_with_copy(
     })
 }
 
-fn copy_with_counters(
+fn join_copy_direction(
+    handle: thread::JoinHandle<io::Result<u64>>,
+    direction: &str,
+) -> io::Result<u64> {
+    handle
+        .join()
+        .map_err(|_| io::Error::other(format!("{direction} relay thread panicked")))?
+}
+
+pub(super) fn spawn_relay_worker<F>(
+    name: &str,
+    work: F,
+) -> io::Result<thread::JoinHandle<io::Result<u64>>>
+where
+    F: FnOnce() -> io::Result<u64> + Send + 'static,
+{
+    thread::Builder::new()
+        .name(name.to_string())
+        .stack_size(RELAY_THREAD_STACK_SIZE)
+        .spawn(work)
+        .map_err(|error| io::Error::other(format!("spawn {name} thread: {error}")))
+}
+
+fn copy_upload_with_counters(
     reader: &mut impl io::Read,
     writer: &mut impl io::Write,
     counters: &ConnectionCounters,
-    upload_direction: bool,
+) -> io::Result<u64> {
+    copy_with_counter(reader, writer, counters, ConnectionCounters::add_upload)
+}
+
+fn copy_download_with_counters(
+    reader: &mut impl io::Read,
+    writer: &mut impl io::Write,
+    counters: &ConnectionCounters,
+) -> io::Result<u64> {
+    copy_with_counter(reader, writer, counters, ConnectionCounters::add_download)
+}
+
+fn copy_with_counter(
+    reader: &mut impl io::Read,
+    writer: &mut impl io::Write,
+    counters: &ConnectionCounters,
+    add_bytes: fn(&ConnectionCounters, u64),
 ) -> io::Result<u64> {
     let mut total = 0_u64;
     let mut buf = [0_u8; 16 * 1024];
@@ -135,10 +160,6 @@ fn copy_with_counters(
         let bytes = read as u64;
         total += bytes;
 
-        if upload_direction {
-            counters.add_upload(bytes);
-        } else {
-            counters.add_download(bytes);
-        }
+        add_bytes(counters, bytes);
     }
 }

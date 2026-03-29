@@ -52,7 +52,7 @@ impl PlayerRegistry {
     pub fn update_external_connection_id(
         &self,
         connection_id: u64,
-        external_connection_id: String,
+        external_connection_id: Arc<str>,
     ) {
         self.update(connection_id, |session| {
             session.external_connection_id = Some(external_connection_id);
@@ -70,7 +70,7 @@ impl PlayerRegistry {
             .and_then(|session| session.external_connection_id.as_deref().map(f))
     }
 
-    pub fn update_outbound(&self, connection_id: u64, outbound_name: String) {
+    pub fn update_outbound(&self, connection_id: u64, outbound_name: Arc<str>) {
         self.update(connection_id, |session| {
             session.outbound_name = Some(outbound_name);
             session.state = PlayerState::Proxying;
@@ -112,20 +112,5 @@ impl PlayerRegistry {
         if let Some(session) = sessions.get_mut(&connection_id) {
             update(session);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn registry_tracks_active_sessions() {
-        let registry = PlayerRegistry::default();
-
-        assert_eq!(registry.register_connection(1), 1);
-        assert_eq!(registry.active_count(), 1);
-        assert_eq!(registry.remove_connection(1), 0);
-        assert_eq!(registry.active_count(), 0);
     }
 }

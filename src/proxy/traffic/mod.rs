@@ -1,6 +1,8 @@
 mod counters;
 mod reporter;
 mod stats_logger;
+#[cfg(test)]
+mod test;
 
 pub use counters::ConnectionCounters;
 pub use reporter::TrafficReporter;

@@ -1,0 +1,42 @@
+#:schema ./config.schema.json
+
+[inbound]
+listen_addr = "0.0.0.0:25565"
+first_packet_timeout_ms = 5000
+
+[inbound.socket]
+tcp_nodelay = true
+keepalive_secs = 30
+reuse_port = false
+
+[transport.motd]
+mode = "local"
+json = '{"version":{"name":"&bnecron-prism","protocol":-1},"players":{"max":100,"online":%ONLINE_PLAYER%,"sample":[{"name":"&bping target &8> &f%PING_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000001"},{"name":"&bfavicon target &8> &f%FAVICON_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000002"},{"name":"&bmotd target &8> &f%MOTD_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"&bnecron-prism &8| &frelay %RELAY_MODE% &8| &7online &b%ONLINE_PLAYER%\n&7ping %PING_MODE% &8| &7favicon %FAVICON_MODE% &8| &7upstream %UPSTREAM_ADDR%"}}'
+upstream_addr = "mc.hypixel.net:25565"
+protocol = "client"
+ping_mode = "upstream_tcp"
+upstream_ping_timeout_ms = 1500
+status_cache_ttl_ms = 1000
+
+[transport.motd.ping]
+target_addr = "mc.hypixel.net:25565"
+
+[transport.motd.favicon]
+mode = "json"
+path = "./server-icon.png"
+target_addr = "mc.hypixel.net:25565"
+
+[relay]
+mode = "standard"
+
+[api]
+mode = "mock"
+timeout_ms = 3000
+traffic_interval_ms = 5000
+
+[api.mock]
+target_addr = "mc.hypixel.net:25565"
+connection_id_prefix = "debug"
+
+[runtime]
+stats_log_interval_secs = 10

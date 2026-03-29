@@ -1,11 +1,10 @@
+mod executor;
 mod lifecycle;
 mod state;
 
-use std::thread;
-
 use tracing::{info, warn};
 
-use self::lifecycle::run_connection;
+use self::executor::ConnectionExecutor;
 use self::state::AppState;
 use super::config::ConfigLoader;
 use super::inbound::{bind_listener, prepare_client_stream};
@@ -13,11 +12,12 @@ use super::logging::init_tracing;
 use super::traffic::spawn_stats_logger;
 use super::transport::ConnectionContext;
 
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run() -> anyhow::Result<()> {
     init_tracing();
 
     let state = AppState::new(ConfigLoader::load_default()?)?;
     let listener = bind_listener(&state.config.inbound)?;
+    let executor = ConnectionExecutor::new(state.clone());
 
     if let Some(interval) = state.config.stats_log_interval {
         spawn_stats_logger(
@@ -41,7 +41,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     for incoming in listener.incoming() {
         match incoming {
-            Ok(stream) => handle_incoming_connection(state.clone(), stream),
+            Ok(stream) => handle_incoming_connection(&state, &executor, stream),
             Err(error) => warn!(error = %error, "accept failed"),
         }
     }
@@ -49,7 +49,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn handle_incoming_connection(state: AppState, stream: std::net::TcpStream) {
+fn handle_incoming_connection(
+    state: &AppState,
+    executor: &ConnectionExecutor,
+    stream: std::net::TcpStream,
+) {
     if let Err(error) = prepare_client_stream(&stream, &state.config.inbound) {
         warn!(error = %error, "failed to apply inbound socket options");
     }
@@ -70,5 +74,5 @@ fn handle_incoming_connection(state: AppState, stream: std::net::TcpStream) {
         peer_addr: connection_ip,
     };
 
-    thread::spawn(move || run_connection(state, stream, context));
+    executor.submit(stream, context);
 }

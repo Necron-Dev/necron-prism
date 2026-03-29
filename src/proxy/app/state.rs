@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::sync::Arc;
 
 use super::super::api::ApiService;
@@ -19,7 +20,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: Config) -> Result<Self, String> {
+    pub fn new(config: Config) -> Result<Self> {
         let config = Arc::new(config);
         let api = Arc::new(ApiService::new(&config.api)?);
         let motd = Arc::new(MotdService::default());

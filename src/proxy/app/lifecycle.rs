@@ -24,12 +24,10 @@ pub fn run_connection(state: AppState, stream: std::net::TcpStream, context: Con
         started_at,
     ) {
         Ok(report) => log_connection_success(&state, context, started_at, report),
-        Err(error) if handled_connection(&error).is_some() => {
-            if let Some(report) = handled_connection(&error) {
-                log_connection_success(&state, context, started_at, report.clone())
-            }
-        }
-        Err(error) => log_connection_failure(&state, context, started_at, error),
+        Err(error) => match handled_connection(&error) {
+            Some(report) => log_connection_success(&state, context, started_at, report.clone()),
+            None => log_connection_failure(&state, context, started_at, error),
+        },
     }
 }
 

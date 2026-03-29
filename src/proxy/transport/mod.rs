@@ -18,7 +18,7 @@ use super::stats::ConnectionTraffic;
 use super::traffic::{ConnectionCounters, TrafficReporter};
 use crate::minecraft::{
     decode_handshake, encode_handshake, PacketIo, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE,
-    MAX_LOGIN_PACKET_SIZE,
+    MAX_LOGIN_PACKET_SIZE, PRISM_MAGIC_ID,
 };
 
 pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};
@@ -49,8 +49,8 @@ pub fn handle_client(
         return Ok(ConnectionReport::new(
             ConnectionTraffic::default(),
             None,
-            Arc::<str>::from(""),
-            Arc::<str>::from(""),
+            None,
+            None,
         ));
     }
 
@@ -58,6 +58,18 @@ pub fn handle_client(
     let handshake_packet = packet_io
         .read_frame(&mut client, MAX_HANDSHAKE_PACKET_SIZE)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    if handshake_packet.frame.id == PRISM_MAGIC_ID {
+        client.write_all(&"necron-prism".as_bytes().to_vec())?;
+        client.shutdown(std::net::Shutdown::Both)?;
+        return Ok(ConnectionReport::new(
+            ConnectionTraffic::default(),
+            None,
+            None,
+            None,
+        ));
+    }
+
     let handshake = decode_handshake(&handshake_packet)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     players.update_handshake(context.id, &handshake);
@@ -87,8 +99,8 @@ pub fn handle_client(
         return Ok(ConnectionReport::new(
             ConnectionTraffic::default(),
             None,
-            Arc::<str>::from(""),
-            Arc::<str>::from(""),
+            None,
+            None,
         ));
     }
 
@@ -131,8 +143,9 @@ fn proxy_connection(
     login_start_packet: crate::minecraft::FramedPacket,
     route: ConnectionRoute,
 ) -> io::Result<ConnectionReport> {
+    let rewrite_addr = route.rewrite_addr.as_ref().unwrap_or(&route.target_addr);
     handshake
-        .rewrite_addr(route.rewrite_addr.as_ref())
+        .rewrite_addr(rewrite_addr)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     players.update_outbound(context.id, Arc::clone(&route.target_addr));
 
@@ -140,7 +153,7 @@ fn proxy_connection(
         encode_handshake(&handshake).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     info!(
-        rewrite_addr = %route.rewrite_addr,
+        rewrite_addr = %rewrite_addr,
         rewritten_handshake_bytes = rewritten_packet.len(),
         target_addr = %route.target_addr,
         "rewrote handshake and connecting outbound"
@@ -170,8 +183,8 @@ fn proxy_connection(
             download_bytes: relay_stats.download_bytes,
         },
         relay_stats.mode,
-        route.target_addr,
-        route.rewrite_addr,
+        Some(route.target_addr),
+        Some(route.rewrite_addr),
     ))
 }
 

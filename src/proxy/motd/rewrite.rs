@@ -19,14 +19,6 @@ pub fn rewrite_json(
         !matches!(protocol_mode, MotdProtocolMode::Client) || client_protocol != -1;
 
     if !needs_formatting && !needs_favicon && !needs_protocol {
-        if raw_json.contains("\"necron-prism\"") {
-            return raw_json.to_owned();
-        }
-
-        if let Some(stamped) = try_stamp_prism_without_parse(raw_json) {
-            return stamped;
-        }
-
         return raw_json.to_owned();
     }
 
@@ -38,7 +30,6 @@ pub fn rewrite_json(
     if needs_formatting {
         normalize_minecraft_formatting(&mut value);
     }
-    apply_prism(&mut value);
     if needs_protocol {
         apply_protocol(&mut value, protocol_mode, client_protocol);
     }
@@ -52,33 +43,6 @@ pub fn rewrite_json(
     }
 
     serde_json::to_string(&value).unwrap_or_else(|_| raw_json.to_owned())
-}
-
-fn try_stamp_prism_without_parse(raw_json: &str) -> Option<String> {
-    let trimmed = raw_json.trim_end();
-    if trimmed == "{}" {
-        return Some("{\"necron-prism\":\"meow\"}".to_owned());
-    }
-
-    if !trimmed.ends_with('}') {
-        return None;
-    }
-
-    let insert_at = trimmed.len() - 1;
-    let needs_comma = trimmed[..insert_at]
-        .chars()
-        .rev()
-        .find(|ch| !ch.is_whitespace())
-        .is_some_and(|ch| ch != '{');
-
-    let mut output = String::with_capacity(trimmed.len() + 24);
-    output.push_str(&trimmed[..insert_at]);
-    if needs_comma {
-        output.push(',');
-    }
-    output.push_str("\"necron-prism\":\"meow\"}");
-    output.push_str(&raw_json[trimmed.len()..]);
-    Some(output)
 }
 
 fn normalize_minecraft_formatting(value: &mut Value) {
@@ -127,12 +91,6 @@ fn is_minecraft_format_code(ch: char) -> bool {
         ch,
         '0'..='9' | 'a'..='f' | 'k'..='o' | 'r' | 'A'..='F' | 'K'..='O' | 'R'
     )
-}
-
-fn apply_prism(value: &mut Value) {
-    if let Value::Object(map) = value {
-        map.insert("necron-prism".to_owned(), Value::String("meow".to_owned()));
-    }
 }
 
 fn apply_protocol(value: &mut Value, protocol_mode: MotdProtocolMode, client_protocol: i32) {

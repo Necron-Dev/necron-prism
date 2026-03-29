@@ -1,4 +1,4 @@
-use std::net::Ipv6Addr;
+use anyhow::Context;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -7,9 +7,9 @@ use super::schema_types::{
     MotdProtocolNamedLiteral, StatusPingModeLiteral,
 };
 use super::types::{
-    ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconMode,
-    MotdMode, MotdProtocolMode, RelayConfig, RelayMode, SocketOptions, StatusPingMode,
-    TransportConfig,
+    ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconConfig,
+    MotdFaviconMode, MotdMode, MotdPingConfig, MotdProtocolMode, RelayConfig, RelayMode,
+    SocketOptions, StatusPingMode, TransportConfig,
 };
 
 pub struct ConfigNormalizer;
@@ -19,7 +19,7 @@ impl ConfigNormalizer {
         Self
     }
 
-    pub fn normalize(&self, raw: ConfigFile, source_path: PathBuf) -> Result<Config, String> {
+    pub fn normalize(&self, raw: ConfigFile, source_path: PathBuf) -> anyhow::Result<Config> {
         let mock_target_addr = normalize_addr(&raw.api.mock.target_addr, 25565)?;
         let mock_rewrite_addr = raw
             .api
@@ -49,14 +49,27 @@ impl ConfigNormalizer {
                         super::schema_types::MotdModeLiteral::Upstream => MotdMode::Upstream,
                     },
                     local_json: Some(raw.transport.motd.json),
-                    upstream_addr: Some(normalize_addr(&raw.transport.motd.upstream_addr, 25565)?),
+                    upstream_addr: normalize_optional_addr(
+                        &raw.transport.motd.upstream_addr,
+                        25565,
+                    )?,
                     protocol_mode: normalize_protocol_mode(raw.transport.motd.protocol),
                     ping_mode: normalize_ping_mode(raw.transport.motd.ping_mode),
+                    ping: MotdPingConfig {
+                        target_addr: raw
+                            .transport
+                            .motd
+                            .ping
+                            .target_addr
+                            .as_deref()
+                            .map(|value| normalize_addr(value, 25565))
+                            .transpose()?,
+                    },
                     upstream_ping_timeout: Duration::from_millis(
                         raw.transport.motd.upstream_ping_timeout_ms,
                     ),
                     status_cache_ttl: Duration::from_millis(raw.transport.motd.status_cache_ttl_ms),
-                    favicon: normalize_favicon_mode(raw.transport.motd.favicon),
+                    favicon: normalize_favicon_mode(raw.transport.motd.favicon, &source_path)?,
                 },
             },
             relay: RelayConfig {
@@ -90,11 +103,29 @@ impl ConfigNormalizer {
     }
 }
 
-fn normalize_favicon_mode(raw: super::schema_types::MotdFaviconFileConfig) -> MotdFaviconMode {
-    match raw.mode {
-        MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
-        MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
-    }
+fn normalize_favicon_mode(
+    raw: super::schema_types::MotdFaviconFileConfig,
+    source_path: &std::path::Path,
+) -> anyhow::Result<MotdFaviconConfig> {
+    Ok(MotdFaviconConfig {
+        mode: match raw.mode {
+            MotdFaviconModeLiteral::Json => MotdFaviconMode::Json,
+            MotdFaviconModeLiteral::Path => MotdFaviconMode::Path,
+            MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
+            MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
+        },
+        path: raw.path.map(|value| {
+            source_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .join(value)
+        }),
+        target_addr: raw
+            .target_addr
+            .as_deref()
+            .map(|value| normalize_addr(value, 25565))
+            .transpose()?,
+    })
 }
 
 fn normalize_protocol_mode(value: MotdProtocolLiteral) -> MotdProtocolMode {
@@ -116,61 +147,30 @@ fn normalize_ping_mode(value: StatusPingModeLiteral) -> StatusPingMode {
     }
 }
 
-fn parse_target_port(target_addr: &str, default_port: u16) -> Result<u16, String> {
-    if let Some(stripped) = target_addr.strip_prefix('[') {
-        let (host, port) = stripped
-            .split_once(']')
-            .ok_or_else(|| format!("target address is missing a closing bracket: {target_addr}"))?;
-        if host.is_empty() {
-            return Err(format!("target address is missing a host: {target_addr}"));
-        }
+fn normalize_addr(target_addr: &str, default_port: u16) -> anyhow::Result<String> {
+    use std::net::ToSocketAddrs;
 
-        let port = port.strip_prefix(':').unwrap_or("");
-        if port.is_empty() {
-            return Ok(default_port);
-        }
-        return parse_port(port, "target port");
-    }
+    // 如果地址没有端口，补充默认端口
+    let addr_with_port = if !target_addr.contains(':')
+        || (target_addr.starts_with('[') && target_addr.ends_with(']'))
+    {
+        format!("{target_addr}:{default_port}")
+    } else {
+        target_addr.to_string()
+    };
 
-    if target_addr.parse::<Ipv6Addr>().is_ok() {
-        return Ok(default_port);
-    }
+    // 验证地址格式有效
+    addr_with_port
+        .to_socket_addrs()
+        .with_context(|| format!("invalid target address: {target_addr}"))?;
 
-    match target_addr.rsplit_once(':') {
-        Some((host, port)) if !host.is_empty() && !port.is_empty() => {
-            parse_port(port, "target port")
-        }
-        _ => Ok(default_port),
-    }
+    Ok(addr_with_port)
 }
 
-fn normalize_addr(target_addr: &str, default_port: u16) -> Result<String, String> {
-    let port = parse_target_port(target_addr, default_port)?;
-
-    if let Some(stripped) = target_addr.strip_prefix('[') {
-        let (host, _) = stripped
-            .split_once(']')
-            .ok_or_else(|| format!("target address is missing a closing bracket: {target_addr}"))?;
-        if host.is_empty() {
-            return Err(format!("target address is missing a host: {target_addr}"));
-        }
-        return Ok(format!("[{host}]:{port}"));
+fn normalize_optional_addr(target_addr: &str, default_port: u16) -> anyhow::Result<Option<String>> {
+    if target_addr.trim().is_empty() {
+        return Ok(None);
     }
 
-    if target_addr.parse::<Ipv6Addr>().is_ok() {
-        return Ok(format!("[{target_addr}]:{port}"));
-    }
-
-    match target_addr.rsplit_once(':') {
-        Some((host, existing_port)) if !host.is_empty() && !existing_port.is_empty() => {
-            Ok(target_addr.to_string())
-        }
-        _ => Ok(format!("{target_addr}:{port}")),
-    }
-}
-
-fn parse_port(value: &str, field_name: &str) -> Result<u16, String> {
-    value
-        .parse::<u16>()
-        .map_err(|_| format!("invalid {field_name}: {value}"))
+    normalize_addr(target_addr, default_port).map(Some)
 }

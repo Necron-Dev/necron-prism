@@ -1,3 +1,5 @@
+#![cfg(feature = "schema")]
+
 use std::path::Path;
 
 fn main() {

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use schemars::schema_for;
 
-use super::config_literals::CONFIG_SCHEMA_FILE;
+use super::literals::CONFIG_SCHEMA_FILE;
 use super::schema_types::ConfigFile;
 
 pub fn write_schema_file(root: &Path) -> Result<(), String> {

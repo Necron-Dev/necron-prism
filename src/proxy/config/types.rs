@@ -65,9 +65,15 @@ pub struct MotdConfig {
     pub upstream_addr: Option<String>,
     pub protocol_mode: MotdProtocolMode,
     pub ping_mode: StatusPingMode,
+    pub ping: MotdPingConfig,
     pub upstream_ping_timeout: Duration,
     pub status_cache_ttl: Duration,
-    pub favicon: MotdFaviconMode,
+    pub favicon: MotdFaviconConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct MotdPingConfig {
+    pub target_addr: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,6 +89,16 @@ pub enum MotdProtocolMode {
     Fixed(i32),
 }
 
+impl MotdProtocolMode {
+    pub fn as_placeholder_value(self) -> String {
+        match self {
+            Self::Client => "client".to_owned(),
+            Self::NegativeOne => "-1".to_owned(),
+            Self::Fixed(value) => value.to_string(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StatusPingMode {
     Passthrough,
@@ -91,10 +107,59 @@ pub enum StatusPingMode {
     Disconnect,
 }
 
+impl StatusPingMode {
+    pub fn as_placeholder_value(self) -> &'static str {
+        match self {
+            Self::Passthrough => "passthrough",
+            Self::ZeroMs => "0ms",
+            Self::UpstreamTcp => "upstream_tcp",
+            Self::Disconnect => "disconnect",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
+pub struct MotdFaviconConfig {
+    pub mode: MotdFaviconMode,
+    pub path: Option<PathBuf>,
+    pub target_addr: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MotdFaviconMode {
+    Json,
+    Path,
     Passthrough,
     Remove,
+}
+
+impl MotdFaviconMode {
+    pub fn as_placeholder_value(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Path => "path",
+            Self::Passthrough => "passthrough",
+            Self::Remove => "remove",
+        }
+    }
+}
+
+impl RelayMode {
+    pub fn as_placeholder_value(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::LinuxSplice => "linux_splice",
+        }
+    }
+}
+
+impl MotdMode {
+    pub fn as_placeholder_value(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Upstream => "upstream",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

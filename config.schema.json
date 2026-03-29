@@ -51,11 +51,15 @@
       "default": {
         "motd": {
           "favicon": {
-            "mode": "passthrough",
-            "value": null
+            "mode": "json",
+            "path": null,
+            "target_addr": null
           },
-          "json": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}",
+          "json": "{\"version\":{\"name\":\"&bnecron-prism\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"&bping target &8> &f%PING_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"&bfavicon target &8> &f%FAVICON_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"&bmotd target &8> &f%MOTD_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"&bnecron-prism &8| &frelay %RELAY_MODE% &8| &7online &b%ONLINE_PLAYER%\\n&7ping %PING_MODE% &8| &7favicon %FAVICON_MODE% &8| &7upstream %UPSTREAM_ADDR%\"}}",
           "mode": "local",
+          "ping": {
+            "target_addr": null
+          },
           "ping_mode": "passthrough",
           "protocol": "client",
           "status_cache_ttl_ms": 1000,
@@ -178,9 +182,16 @@
       "properties": {
         "mode": {
           "$ref": "#/$defs/MotdFaviconModeLiteral",
-          "default": "passthrough"
+          "default": "json"
         },
-        "value": {
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "target_addr": {
           "type": [
             "string",
             "null"
@@ -193,6 +204,8 @@
     "MotdFaviconModeLiteral": {
       "type": "string",
       "enum": [
+        "json",
+        "path",
         "passthrough",
         "remove"
       ]
@@ -203,8 +216,9 @@
         "favicon": {
           "$ref": "#/$defs/MotdFaviconFileConfig",
           "default": {
-            "mode": "passthrough",
-            "value": null
+            "mode": "json",
+            "path": null,
+            "target_addr": null
           }
         },
         "json": {
@@ -214,6 +228,12 @@
         "mode": {
           "$ref": "#/$defs/MotdModeLiteral",
           "default": "local"
+        },
+        "ping": {
+          "$ref": "#/$defs/MotdPingFileConfig",
+          "default": {
+            "target_addr": null
+          }
         },
         "ping_mode": {
           "$ref": "#/$defs/StatusPingModeLiteral",
@@ -248,6 +268,19 @@
         "local",
         "upstream"
       ]
+    },
+    "MotdPingFileConfig": {
+      "type": "object",
+      "properties": {
+        "target_addr": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
     },
     "MotdProtocolLiteral": {
       "anyOf": [
@@ -350,11 +383,15 @@
           "$ref": "#/$defs/MotdFileConfig",
           "default": {
             "favicon": {
-              "mode": "passthrough",
-              "value": null
+              "mode": "json",
+              "path": null,
+              "target_addr": null
             },
-            "json": "{\"version\":{\"name\":\"Proxy\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"Welcome to Proxy\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"Online: %ONLINE_PLAYER%\",\"id\":\"00000000-0000-0000-0000-000000000002\"}]},\"description\":{\"text\":\"Hello from proxy\"}}",
+            "json": "{\"version\":{\"name\":\"&bnecron-prism\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"&bping target &8> &f%PING_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"&bfavicon target &8> &f%FAVICON_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"&bmotd target &8> &f%MOTD_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"&bnecron-prism &8| &frelay %RELAY_MODE% &8| &7online &b%ONLINE_PLAYER%\\n&7ping %PING_MODE% &8| &7favicon %FAVICON_MODE% &8| &7upstream %UPSTREAM_ADDR%\"}}",
             "mode": "local",
+            "ping": {
+              "target_addr": null
+            },
             "ping_mode": "passthrough",
             "protocol": "client",
             "status_cache_ttl_ms": 1000,

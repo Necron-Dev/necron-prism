@@ -5,10 +5,9 @@ mod tests {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use crate::proxy::config::checker::ConfigChecker;
-    use crate::proxy::config::default::ConfigDefaults;
     use crate::proxy::config::normalizer::ConfigNormalizer;
-    use crate::proxy::config::schema_types::{ConfigFile, MotdFaviconModeLiteral, MotdModeLiteral};
-    use crate::proxy::config::{ApiMode, ConfigLoader};
+    use crate::proxy::config::schema_types::{ConfigFile, MotdFaviconModeLiteral};
+    use crate::proxy::config::{ApiMode, ConfigLoader, MotdFaviconMode};
 
     #[test]
     fn parse_mock_api_config() {
@@ -125,6 +124,217 @@ mod tests {
     }
 
     #[test]
+    fn parse_upstream_tcp_ping_mode() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [transport.motd]
+                mode = "local"
+                ping_mode = "upstream_tcp"
+                upstream_addr = "status-backend"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert_eq!(
+            config.transport.motd.mode,
+            crate::proxy::config::MotdMode::Local
+        );
+        assert_eq!(
+            config.transport.motd.ping_mode,
+            crate::proxy::config::StatusPingMode::UpstreamTcp
+        );
+        assert_eq!(
+            config.transport.motd.upstream_addr.as_deref(),
+            Some("status-backend:25565")
+        );
+        assert_eq!(config.transport.motd.ping.target_addr.as_deref(), None);
+    }
+
+    #[test]
+    fn local_passthrough_favicon_uses_explicit_target_addr() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [transport.motd]
+                mode = "local"
+                upstream_addr = "status-backend"
+
+                [transport.motd.favicon]
+                mode = "passthrough"
+                target_addr = "icon-backend"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert_eq!(
+            config.transport.motd.upstream_addr.as_deref(),
+            Some("status-backend:25565")
+        );
+        assert!(matches!(
+            config.transport.motd.favicon.mode,
+            MotdFaviconMode::Passthrough
+        ));
+        assert_eq!(
+            config.transport.motd.favicon.target_addr.as_deref(),
+            Some("icon-backend:25565")
+        );
+    }
+
+    #[test]
+    fn parse_ping_target_addr_override() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [transport.motd]
+                mode = "local"
+                ping_mode = "upstream_tcp"
+
+                [transport.motd.ping]
+                target_addr = "ping-backend"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert_eq!(
+            config.transport.motd.ping.target_addr.as_deref(),
+            Some("ping-backend:25565")
+        );
+    }
+
+    #[test]
+    fn loader_writes_default_config_when_missing() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("necron-prism-config-{unique}"));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let config_path = temp_dir.join("config.toml");
+
+        let config = ConfigLoader::load_from_path(&config_path).unwrap();
+        let written = fs::read_to_string(&config_path).unwrap();
+
+        assert!(written.contains("#:schema ./config.schema.json"));
+        assert!(written.contains("mode = \"json\""));
+        assert!(written.contains("[transport.motd.ping]"));
+        assert_eq!(config.inbound.listen_addr, "0.0.0.0:25565");
+        assert!(matches!(
+            config.transport.motd.favicon.mode,
+            MotdFaviconMode::Json
+        ));
+
+        let _ = fs::remove_file(config_path);
+        let _ = fs::remove_dir(temp_dir);
+    }
+
+    #[test]
+    fn default_motd_favicon_mode_is_json() {
+        assert!(matches!(
+            MotdFaviconModeLiteral::default(),
+            MotdFaviconModeLiteral::Json
+        ));
+    }
+
+    #[test]
+    fn checker_requires_favicon_path_for_path_mode() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [transport.motd.favicon]
+                mode = "path"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+        let error = ConfigChecker::new().validate(&config).unwrap_err();
+
+        assert!(error.contains("favicon.path"));
+    }
+
+    #[test]
+    fn normalizes_favicon_path_relative_to_config() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [transport.motd.favicon]
+                mode = "path"
+                path = "assets/icon.png"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "backend"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("nested/config.toml"))
+            .unwrap();
+
+        assert_eq!(
+            config.transport.motd.favicon.path.as_deref(),
+            Some(Path::new("nested").join("assets/icon.png").as_path())
+        );
+    }
+
+    #[test]
     fn loader_requires_http_base_url() {
         let raw = toml::from_str::<ConfigFile>(
             r#"
@@ -142,32 +352,5 @@ mod tests {
             .unwrap();
         let error = ConfigChecker::new().validate(&config).unwrap_err();
         assert!(error.contains("api.base_url"));
-    }
-
-    #[test]
-    fn load_default_path_constant_stays_same() {
-        let path = Path::new("config.toml");
-        assert_eq!(path, Path::new("config.toml"));
-        let _ = ConfigLoader::load_from_path;
-    }
-
-    #[test]
-    fn loader_writes_default_config_when_missing() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let temp_dir = std::env::temp_dir().join(format!("necron-prism-config-{unique}"));
-        fs::create_dir_all(&temp_dir).unwrap();
-        let config_path = temp_dir.join("config.toml");
-
-        let config = ConfigLoader::load_from_path(&config_path).unwrap();
-        let written = fs::read_to_string(&config_path).unwrap();
-
-        assert!(written.contains("#:schema ./config.schema.json"));
-        assert_eq!(config.inbound.listen_addr, "0.0.0.0:25565");
-
-        let _ = fs::remove_file(config_path);
-        let _ = fs::remove_dir(temp_dir);
     }
 }

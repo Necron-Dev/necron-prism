@@ -8,6 +8,7 @@ mod network;
 mod outbound;
 mod players;
 pub mod relay;
+mod routing;
 mod stats;
 mod template;
 mod traffic;

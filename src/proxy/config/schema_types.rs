@@ -1,9 +1,9 @@
 #![cfg_attr(not(test), allow(dead_code))]
 
+#[cfg(feature = "schema")]
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use super::config_literals::CONFIG_SCHEMA_DIRECTIVE;
 use super::default::{
     DEFAULT_API_TARGET_ADDR, DEFAULT_API_TIMEOUT_MS, DEFAULT_API_TRAFFIC_INTERVAL_MS,
     DEFAULT_CONNECTION_ID_PREFIX, DEFAULT_FIRST_PACKET_TIMEOUT_MS, DEFAULT_KEEPALIVE_SECS,
@@ -11,10 +11,13 @@ use super::default::{
     DEFAULT_MOTD_UPSTREAM_ADDR, DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
     DEFAULT_STATS_LOG_INTERVAL_SECS,
 };
+#[cfg(feature = "schema")]
+use super::literals::CONFIG_SCHEMA_DIRECTIVE;
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[schemars(description = CONFIG_SCHEMA_DIRECTIVE)]
+#[cfg_attr(feature = "schema", schemars(description = CONFIG_SCHEMA_DIRECTIVE))]
 pub struct ConfigFile {
     #[serde(default)]
     pub inbound: InboundFileConfig,
@@ -28,7 +31,8 @@ pub struct ConfigFile {
     pub runtime: RuntimeFileConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct InboundFileConfig {
     #[serde(default)]
@@ -49,21 +53,24 @@ impl Default for InboundFileConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct TransportFileConfig {
     #[serde(default)]
     pub motd: MotdFileConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RelayFileConfig {
     #[serde(default)]
     pub mode: RelayModeLiteral,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ApiFileConfig {
     #[serde(default)]
@@ -93,7 +100,8 @@ impl Default for ApiFileConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct MockApiFileConfig {
     #[serde(default)]
@@ -117,7 +125,8 @@ impl Default for MockApiFileConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct MotdFileConfig {
     #[serde(default)]
@@ -130,6 +139,8 @@ pub struct MotdFileConfig {
     pub protocol: MotdProtocolLiteral,
     #[serde(default)]
     pub ping_mode: StatusPingModeLiteral,
+    #[serde(default)]
+    pub ping: MotdPingFileConfig,
     #[serde(default)]
     pub upstream_ping_timeout_ms: u64,
     #[serde(default)]
@@ -146,6 +157,7 @@ impl Default for MotdFileConfig {
             upstream_addr: DEFAULT_MOTD_UPSTREAM_ADDR.to_string(),
             protocol: MotdProtocolLiteral::default(),
             ping_mode: StatusPingModeLiteral::default(),
+            ping: MotdPingFileConfig::default(),
             upstream_ping_timeout_ms: DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
             status_cache_ttl_ms: DEFAULT_MOTD_STATUS_CACHE_TTL_MS,
             favicon: MotdFaviconFileConfig::default(),
@@ -153,25 +165,38 @@ impl Default for MotdFileConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct MotdFaviconFileConfig {
     #[serde(default)]
     pub mode: MotdFaviconModeLiteral,
     #[serde(default)]
-    pub value: Option<String>,
+    pub path: Option<String>,
+    #[serde(default)]
+    pub target_addr: Option<String>,
 }
 
 impl Default for MotdFaviconFileConfig {
     fn default() -> Self {
         Self {
-            mode: MotdFaviconModeLiteral::default(),
-            value: None,
+            mode: MotdFaviconModeLiteral::Json,
+            path: None,
+            target_addr: None,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MotdPingFileConfig {
+    #[serde(default)]
+    pub target_addr: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeFileConfig {
     #[serde(default)]
@@ -186,7 +211,8 @@ impl Default for RuntimeFileConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct SocketOptionsFileConfig {
     #[serde(default)]
@@ -213,7 +239,8 @@ impl Default for SocketOptionsFileConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ApiModeLiteral {
     Http,
@@ -221,7 +248,8 @@ pub enum ApiModeLiteral {
     Mock,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RelayModeLiteral {
     #[default]
@@ -229,7 +257,8 @@ pub enum RelayModeLiteral {
     LinuxSplice,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum MotdModeLiteral {
     #[default]
@@ -237,7 +266,8 @@ pub enum MotdModeLiteral {
     Upstream,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum MotdProtocolLiteral {
     Named(MotdProtocolNamedLiteral),
@@ -250,7 +280,8 @@ impl Default for MotdProtocolLiteral {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum MotdProtocolNamedLiteral {
     #[serde(rename = "client")]
     Client,
@@ -258,7 +289,8 @@ pub enum MotdProtocolNamedLiteral {
     NegativeOne,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum StatusPingModeLiteral {
     #[serde(rename = "passthrough")]
     Passthrough,
@@ -276,8 +308,13 @@ impl Default for StatusPingModeLiteral {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum MotdFaviconModeLiteral {
+    #[serde(rename = "json")]
+    Json,
+    #[serde(rename = "path")]
+    Path,
     #[serde(rename = "passthrough")]
     Passthrough,
     #[serde(rename = "remove")]
@@ -286,6 +323,6 @@ pub enum MotdFaviconModeLiteral {
 
 impl Default for MotdFaviconModeLiteral {
     fn default() -> Self {
-        Self::Passthrough
+        Self::Json
     }
 }

@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 
@@ -10,17 +11,17 @@ use super::types::Config;
 pub struct ConfigLoader;
 
 impl ConfigLoader {
-    pub fn load_default() -> Result<Config, String> {
+    pub fn load_default() -> Result<Config> {
         Self::load_from_path(Path::new("config.toml"))
     }
 
-    pub fn load_from_path(path: &Path) -> Result<Config, String> {
+    pub fn load_from_path(path: &Path) -> Result<Config> {
         ConfigDefaults::write_if_missing(path)?;
 
         let content = fs::read_to_string(path)
-            .map_err(|error| format!("failed to read config {}: {error}", path.display()))?;
+            .with_context(|| format!("failed to read config {}", path.display()))?;
         let raw = toml::from_str::<ConfigFile>(&content)
-            .map_err(|error| format!("failed to parse TOML config {}: {error}", path.display()))?;
+            .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
 
         let config = ConfigNormalizer::new().normalize(raw, path.to_path_buf())?;
         ConfigChecker::new().validate(&config)?;

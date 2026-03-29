@@ -300,7 +300,7 @@ mod tests {
             .unwrap();
         let error = ConfigChecker::new().validate(&config).unwrap_err();
 
-        assert!(error.contains("favicon.path"));
+        assert!(error.to_string().contains("favicon.path"));
     }
 
     #[test]
@@ -351,6 +351,6 @@ mod tests {
             .normalize(raw, PathBuf::from("config.toml"))
             .unwrap();
         let error = ConfigChecker::new().validate(&config).unwrap_err();
-        assert!(error.contains("api.base_url"));
+        assert!(error.to_string().contains("api.base_url"));
     }
 }

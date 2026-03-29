@@ -2,6 +2,10 @@ use anyhow::Context;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use super::default::{
+    DEFAULT_API_TARGET_ADDR, DEFAULT_CONNECTION_ID_PREFIX, DEFAULT_FIRST_PACKET_TIMEOUT_MS,
+    DEFAULT_LISTEN_ADDR,
+};
 use super::schema_types::{
     ApiModeLiteral, ConfigFile, MotdFaviconModeLiteral, MotdProtocolLiteral,
     MotdProtocolNamedLiteral, StatusPingModeLiteral,
@@ -20,7 +24,14 @@ impl ConfigNormalizer {
     }
 
     pub fn normalize(&self, raw: ConfigFile, source_path: PathBuf) -> anyhow::Result<Config> {
-        let mock_target_addr = normalize_addr(&raw.api.mock.target_addr, 25565)?;
+        let mock_target_addr = normalize_addr(
+            raw.api
+                .mock
+                .target_addr
+                .as_deref()
+                .unwrap_or(DEFAULT_API_TARGET_ADDR),
+            25565,
+        )?;
         let mock_rewrite_addr = raw
             .api
             .mock
@@ -32,8 +43,18 @@ impl ConfigNormalizer {
 
         Ok(Config {
             inbound: InboundConfig {
-                listen_addr: raw.inbound.listen_addr,
-                first_packet_timeout: Duration::from_millis(raw.inbound.first_packet_timeout_ms),
+                listen_addr: normalize_addr(
+                    raw.inbound
+                        .listen_addr
+                        .as_deref()
+                        .unwrap_or(DEFAULT_LISTEN_ADDR),
+                    25565,
+                )?,
+                first_packet_timeout: Duration::from_millis(
+                    raw.inbound
+                        .first_packet_timeout_ms
+                        .unwrap_or(DEFAULT_FIRST_PACKET_TIMEOUT_MS),
+                ),
                 socket_options: SocketOptions {
                     tcp_nodelay: raw.inbound.socket.tcp_nodelay,
                     keepalive: Some(Duration::from_secs(raw.inbound.socket.keepalive_secs)),
@@ -48,11 +69,14 @@ impl ConfigNormalizer {
                         super::schema_types::MotdModeLiteral::Local => MotdMode::Local,
                         super::schema_types::MotdModeLiteral::Upstream => MotdMode::Upstream,
                     },
-                    local_json: Some(raw.transport.motd.json),
-                    upstream_addr: normalize_optional_addr(
-                        &raw.transport.motd.upstream_addr,
-                        25565,
-                    )?,
+                    local_json: raw.transport.motd.json,
+                    upstream_addr: raw
+                        .transport
+                        .motd
+                        .upstream_addr
+                        .as_deref()
+                        .map(|value| normalize_addr(value, 25565))
+                        .transpose()?,
                     protocol_mode: normalize_protocol_mode(raw.transport.motd.protocol),
                     ping_mode: normalize_ping_mode(raw.transport.motd.ping_mode),
                     ping: MotdPingConfig {
@@ -65,7 +89,7 @@ impl ConfigNormalizer {
                             .map(|value| normalize_addr(value, 25565))
                             .transpose()?,
                     },
-                    upstream_ping_timeout: Duration::from_millis(
+                    upstream_ping_timeout_ms: Duration::from_millis(
                         raw.transport.motd.upstream_ping_timeout_ms,
                     ),
                     status_cache_ttl: Duration::from_millis(raw.transport.motd.status_cache_ttl_ms),
@@ -93,11 +117,15 @@ impl ConfigNormalizer {
                 mock: MockApiConfig {
                     target_addr: mock_target_addr,
                     rewrite_addr: mock_rewrite_addr,
-                    connection_id_prefix: raw.api.mock.connection_id_prefix,
+                    connection_id_prefix: raw
+                        .api
+                        .mock
+                        .connection_id_prefix
+                        .unwrap_or_else(|| DEFAULT_CONNECTION_ID_PREFIX.to_string()),
                     kick_reason: raw.api.mock.kick_reason,
                 },
             },
-            stats_log_interval: Some(Duration::from_secs(raw.runtime.stats_log_interval_secs)),
+            stats_log_interval: raw.runtime.stats_log_interval_secs.map(Duration::from_secs),
             source_path,
         })
     }
@@ -165,12 +193,4 @@ fn normalize_addr(target_addr: &str, default_port: u16) -> anyhow::Result<String
         .with_context(|| format!("invalid target address: {target_addr}"))?;
 
     Ok(addr_with_port)
-}
-
-fn normalize_optional_addr(target_addr: &str, default_port: u16) -> anyhow::Result<Option<String>> {
-    if target_addr.trim().is_empty() {
-        return Ok(None);
-    }
-
-    normalize_addr(target_addr, default_port).map(Some)
 }

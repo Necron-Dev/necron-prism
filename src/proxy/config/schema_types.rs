@@ -36,9 +36,9 @@ pub struct ConfigFile {
 #[serde(deny_unknown_fields)]
 pub struct InboundFileConfig {
     #[serde(default)]
-    pub listen_addr: String,
+    pub listen_addr: Option<String>,
     #[serde(default)]
-    pub first_packet_timeout_ms: u64,
+    pub first_packet_timeout_ms: Option<u64>,
     #[serde(default)]
     pub socket: SocketOptionsFileConfig,
 }
@@ -46,8 +46,8 @@ pub struct InboundFileConfig {
 impl Default for InboundFileConfig {
     fn default() -> Self {
         Self {
-            listen_addr: DEFAULT_LISTEN_ADDR.to_string(),
-            first_packet_timeout_ms: DEFAULT_FIRST_PACKET_TIMEOUT_MS,
+            listen_addr: Some(DEFAULT_LISTEN_ADDR.to_string()),
+            first_packet_timeout_ms: Some(DEFAULT_FIRST_PACKET_TIMEOUT_MS),
             socket: SocketOptionsFileConfig::default(),
         }
     }
@@ -105,11 +105,11 @@ impl Default for ApiFileConfig {
 #[serde(deny_unknown_fields)]
 pub struct MockApiFileConfig {
     #[serde(default)]
-    pub target_addr: String,
+    pub target_addr: Option<String>,
     #[serde(default)]
     pub rewrite_addr: Option<String>,
     #[serde(default)]
-    pub connection_id_prefix: String,
+    pub connection_id_prefix: Option<String>,
     #[serde(default)]
     pub kick_reason: Option<String>,
 }
@@ -117,9 +117,9 @@ pub struct MockApiFileConfig {
 impl Default for MockApiFileConfig {
     fn default() -> Self {
         Self {
-            target_addr: DEFAULT_API_TARGET_ADDR.to_string(),
+            target_addr: Some(DEFAULT_API_TARGET_ADDR.to_string()),
             rewrite_addr: None,
-            connection_id_prefix: DEFAULT_CONNECTION_ID_PREFIX.to_string(),
+            connection_id_prefix: Some(DEFAULT_CONNECTION_ID_PREFIX.to_string()),
             kick_reason: None,
         }
     }
@@ -132,9 +132,9 @@ pub struct MotdFileConfig {
     #[serde(default)]
     pub mode: MotdModeLiteral,
     #[serde(default)]
-    pub json: String,
+    pub json: Option<String>,
     #[serde(default)]
-    pub upstream_addr: String,
+    pub upstream_addr: Option<String>,
     #[serde(default)]
     pub protocol: MotdProtocolLiteral,
     #[serde(default)]
@@ -153,8 +153,8 @@ impl Default for MotdFileConfig {
     fn default() -> Self {
         Self {
             mode: MotdModeLiteral::default(),
-            json: DEFAULT_LOCAL_MOTD_JSON.to_string(),
-            upstream_addr: DEFAULT_MOTD_UPSTREAM_ADDR.to_string(),
+            json: Some(DEFAULT_LOCAL_MOTD_JSON.to_string()),
+            upstream_addr: Some(DEFAULT_MOTD_UPSTREAM_ADDR.to_string()),
             protocol: MotdProtocolLiteral::default(),
             ping_mode: StatusPingModeLiteral::default(),
             ping: MotdPingFileConfig::default(),
@@ -200,13 +200,13 @@ pub struct MotdPingFileConfig {
 #[serde(deny_unknown_fields)]
 pub struct RuntimeFileConfig {
     #[serde(default)]
-    pub stats_log_interval_secs: u64,
+    pub stats_log_interval_secs: Option<u64>,
 }
 
 impl Default for RuntimeFileConfig {
     fn default() -> Self {
         Self {
-            stats_log_interval_secs: DEFAULT_STATS_LOG_INTERVAL_SECS,
+            stats_log_interval_secs: Some(DEFAULT_STATS_LOG_INTERVAL_SECS),
         }
     }
 }

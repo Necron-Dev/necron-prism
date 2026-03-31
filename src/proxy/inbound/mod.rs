@@ -1,9 +1,8 @@
 use socket2::{Domain, Protocol, Socket, Type};
 use std::io;
-use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
 
 use super::config::InboundConfig;
-use super::network::apply_stream_options;
 
 pub fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
     let address = resolve_first_address(&config.listen_addr)?;
@@ -30,10 +29,6 @@ pub fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
     socket.bind(&address.into())?;
     socket.listen(1024)?;
     Ok(socket.into())
-}
-
-pub fn prepare_client_stream(stream: &TcpStream, config: &InboundConfig) -> io::Result<()> {
-    apply_stream_options(stream, &config.socket_options)
 }
 
 fn resolve_first_address(input: &str) -> io::Result<SocketAddr> {

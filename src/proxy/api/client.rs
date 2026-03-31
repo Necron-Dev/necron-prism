@@ -143,7 +143,7 @@ struct JoinOkResponse {
 struct JoinOkData {
     target_addr: String,
     rewrite_addr: Option<String>,
-    connection_id: String,
+    connection_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

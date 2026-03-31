@@ -1,4 +1,3 @@
-use std::io;
 use std::time::Instant;
 
 use tracing::{info, info_span, warn};
@@ -8,7 +7,7 @@ use crate::proxy::transport::{
     handle_client, ConnectionContext, ConnectionReport, HandledConnection,
 };
 
-pub fn run_connection(state: AppState, stream: std::net::TcpStream, context: ConnectionContext) {
+pub async fn run_connection(state: AppState, stream: tokio::net::TcpStream, context: ConnectionContext) {
     let span = info_span!("connection", connection_id = context.id, peer_addr = ?context.peer_addr);
     let _guard = span.enter();
     let started_at = Instant::now();
@@ -22,7 +21,7 @@ pub fn run_connection(state: AppState, stream: std::net::TcpStream, context: Con
         &state.players,
         context,
         started_at,
-    ) {
+    ).await {
         Ok(report) => log_connection_success(&state, context, started_at, report),
         Err(error) => match handled_connection(&error) {
             Some(report) => log_connection_success(&state, context, started_at, report.clone()),
@@ -31,11 +30,8 @@ pub fn run_connection(state: AppState, stream: std::net::TcpStream, context: Con
     }
 }
 
-fn handled_connection(error: &io::Error) -> Option<&ConnectionReport> {
-    error
-        .get_ref()
-        .and_then(|inner| inner.downcast_ref::<HandledConnection>())
-        .map(|handled| &handled.0)
+fn handled_connection(error: &anyhow::Error) -> Option<&ConnectionReport> {
+    error.downcast_ref::<HandledConnection>().map(|handled| &handled.0)
 }
 
 fn log_connection_success(
@@ -84,7 +80,7 @@ fn log_connection_failure(
     state: &AppState,
     context: ConnectionContext,
     started_at: Instant,
-    error: io::Error,
+    error: anyhow::Error,
 ) {
     let active_remaining = state.players.remove_connection(context.id);
     warn!(

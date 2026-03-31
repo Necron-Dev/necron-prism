@@ -11,7 +11,7 @@ pub mod relay;
 mod routing;
 mod stats;
 mod template;
-mod traffic;
+pub mod traffic;
 mod transport;
 
 pub use app::run;

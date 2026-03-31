@@ -21,7 +21,7 @@ pub struct HttpApiService {
 
 pub struct MockApiService {
     target_addr: Arc<str>,
-    rewrite_addr: Arc<str>,
+    rewrite_addr: Option<Arc<str>>,
     kick_reason: Option<Arc<str>>,
     connection_id_prefix: Arc<str>,
     counter: AtomicU64,
@@ -122,7 +122,7 @@ impl MockApiService {
     fn new(config: &MockApiConfig) -> Self {
         Self {
             target_addr: Arc::<str>::from(config.target_addr.as_str()),
-            rewrite_addr: Arc::<str>::from(config.rewrite_addr.as_str()),
+            rewrite_addr: config.rewrite_addr.as_deref().map(Arc::<str>::from),
             connection_id_prefix: Arc::<str>::from(config.connection_id_prefix.as_str()),
             kick_reason: config.kick_reason.as_deref().map(Arc::<str>::from),
             counter: AtomicU64::new(0),
@@ -145,8 +145,8 @@ impl MockApiService {
         let sequence = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(JoinDecision::Allow(JoinTarget {
             target_addr: self.target_addr.to_string(),
-            rewrite_addr: Some(self.rewrite_addr.to_string()),
-            connection_id: format!("{}-{sequence}", self.connection_id_prefix),
+            rewrite_addr: self.rewrite_addr.as_ref().map(|a| a.to_string()),
+            connection_id: Some(format!("{}-{sequence}", self.connection_id_prefix)),
         }))
     }
 

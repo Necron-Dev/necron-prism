@@ -2,7 +2,7 @@
 pub struct JoinTarget {
     pub target_addr: String,
     pub rewrite_addr: Option<String>,
-    pub connection_id: String,
+    pub connection_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]

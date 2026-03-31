@@ -1,4 +1,4 @@
-use std::io::Read;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 use valence_protocol::decode::{PacketDecoder, PacketFrame};
 use valence_protocol::var_int::VarInt;
@@ -27,7 +27,7 @@ impl PacketIo {
         self.decoder.queue_slice(bytes);
     }
 
-    pub fn read_frame<R: Read>(
+    pub async fn read_frame<R: AsyncRead + Unpin>(
         &mut self,
         reader: &mut R,
         max_wire_size: usize,
@@ -51,7 +51,7 @@ impl PacketIo {
                 return Ok(FramedPacket { wire_len, frame });
             }
 
-            let read = reader.read(&mut self.read_buf)?;
+            let read = reader.read(&mut self.read_buf).await?;
             if read == 0 {
                 return Err(ProtocolError::UnexpectedEof);
             }

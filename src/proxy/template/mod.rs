@@ -1,4 +1,3 @@
-use minijinja::context;
 use std::borrow::Cow;
 
 use super::config::{RelayMode, TransportConfig};
@@ -32,6 +31,8 @@ pub fn render<'a>(value: &'a str, context: &TemplateContext<'_>) -> Cow<'a, str>
         return Cow::Borrowed(value);
     }
 
+    let mut rendered = value.to_owned();
+
     let ping_target_addr = context
         .transport
         .motd
@@ -50,22 +51,27 @@ pub fn render<'a>(value: &'a str, context: &TemplateContext<'_>) -> Cow<'a, str>
         .or_else(|| context.transport.motd.upstream_addr.clone())
         .unwrap_or_default();
 
-    let mut env = minijinja::Environment::new();
-    env.add_template("tpl", value).unwrap();
-    let tpl = env.get_template("tpl").unwrap();
+    let upstream_addr = context
+        .transport
+        .motd
+        .upstream_addr
+        .clone()
+        .unwrap_or_default();
 
-    let rendered = tpl
-        .render(context! {
-            ONLINE_PLAYER => context.online_players,
-            MOTD_TARGET_ADDR => context.transport.motd.upstream_addr.clone().unwrap_or_default(),
-            PING_TARGET_ADDR => ping_target_addr,
-            FAVICON_TARGET_ADDR => favicon_target_addr,
-            RELAY_MODE => context.relay_mode.as_placeholder_value(),
-            PING_MODE => context.transport.motd.ping_mode.as_placeholder_value(),
-            FAVICON_MODE => context.transport.motd.favicon.mode.as_placeholder_value(),
-            UPSTREAM_ADDR => context.transport.motd.upstream_addr.clone().unwrap_or_default(),
-        })
-        .unwrap();
+    rendered = rendered.replace("%ONLINE_PLAYER%", &context.online_players.to_string());
+    rendered = rendered.replace("%MOTD_TARGET_ADDR%", &upstream_addr);
+    rendered = rendered.replace("%PING_TARGET_ADDR%", &ping_target_addr);
+    rendered = rendered.replace("%FAVICON_TARGET_ADDR%", &favicon_target_addr);
+    rendered = rendered.replace("%RELAY_MODE%", context.relay_mode.as_placeholder_value());
+    rendered = rendered.replace(
+        "%PING_MODE%",
+        context.transport.motd.ping_mode.as_placeholder_value(),
+    );
+    rendered = rendered.replace(
+        "%FAVICON_MODE%",
+        context.transport.motd.favicon.mode.as_placeholder_value(),
+    );
+    rendered = rendered.replace("%UPSTREAM_ADDR%", &upstream_addr);
 
     Cow::Owned(rendered)
 }

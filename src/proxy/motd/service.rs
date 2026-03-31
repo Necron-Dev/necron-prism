@@ -1,12 +1,9 @@
 use crate::minecraft::{
-    decode_status_request, status_response_packet, HandshakeInfo, PacketIo, ProtocolError,
-    MAX_STATUS_PACKET_SIZE,
+    decode_status_request, status_response_packet, HandshakeInfo, PacketIo, MAX_STATUS_PACKET_SIZE,
 };
 use crate::proxy::config::{RelayMode, TransportConfig};
 use crate::proxy::players::{PlayerRegistry, PlayerState};
-use std::io::Write;
-use std::net::TcpStream;
-
+use tokio::io::AsyncWriteExt;
 use tracing::info;
 
 use super::cache::StatusCache;
@@ -20,27 +17,27 @@ pub struct MotdService {
 }
 
 impl MotdService {
-    pub fn serve(
+    pub async fn serve(
         &self,
         packet_io: &mut PacketIo,
-        client: &mut TcpStream,
+        client: &mut tokio::net::TcpStream,
         transport: &TransportConfig,
         relay_mode: RelayMode,
         handshake: &HandshakeInfo,
         players: &PlayerRegistry,
         connection_id: u64,
-    ) -> Result<(), ProtocolError> {
-        let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE)?;
-        decode_status_request(&status_request)?;
+    ) -> anyhow::Result<()> {
+        let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
+        decode_status_request(&status_request).map_err(anyhow::Error::from)?;
 
         let context = StatusContext::new(transport, relay_mode, handshake, self);
-        let mut upstream = context.open_upstream()?;
+        let mut upstream = context.open_upstream().await?;
 
-        let motd_json = context.build_json(players, upstream.as_mut())?;
-        let status_response = status_response_packet(&motd_json)?;
-        client.write_all(&status_response)?;
+        let motd_json = context.build_json(players, upstream.as_mut()).await?;
+        let status_response = status_response_packet(&motd_json).map_err(anyhow::Error::from)?;
+        client.write_all(&status_response).await?;
 
-        let outcome = context.finish(packet_io, client, upstream.as_mut())?;
+        let outcome = context.finish(packet_io, client, upstream.as_mut()).await?;
         players.set_state(connection_id, PlayerState::StatusServedLocally);
 
         info!(

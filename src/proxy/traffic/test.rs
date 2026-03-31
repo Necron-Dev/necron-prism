@@ -18,7 +18,7 @@ fn mock_mode_keeps_active_traffic_totals() {
         traffic_interval: Duration::from_secs(60),
         mock: MockApiConfig {
             target_addr: "backend:25565".to_owned(),
-            rewrite_addr: "backend:25565".to_owned(),
+            rewrite_addr: Some("backend:25565".to_owned()),
             connection_id_prefix: "mock".to_owned(),
             kick_reason: None,
         },

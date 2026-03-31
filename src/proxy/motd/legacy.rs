@@ -1,38 +1,28 @@
-use std::io::{self, Write};
-use std::net::TcpStream;
-
 use crate::minecraft::HandshakeInfo;
 use crate::proxy::config::{RelayMode, TransportConfig};
 use crate::proxy::players::{PlayerRegistry, PlayerState};
 use crate::proxy::template::{self, TemplateContext};
+use tokio::io::AsyncWriteExt;
 
 use super::rewrite::rewrite_json;
 
-pub fn serve_legacy_ping(
-    client: &mut TcpStream,
+pub async fn serve_legacy_ping(
+    client: &mut tokio::net::TcpStream,
     transport: &TransportConfig,
     relay_mode: RelayMode,
     players: &PlayerRegistry,
     connection_id: u64,
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     let upstream_json = if matches!(
         transport.motd.mode,
         crate::proxy::config::MotdMode::Upstream
     ) {
-        fetch_upstream_status_json(transport).unwrap_or_else(|_| {
-            transport
-                .motd
-                .local_json
-                .clone()
-                .unwrap_or_else(|| "{}".to_owned())
-        })
+        fetch_upstream_status_json(transport)
+            .await
+            .unwrap_or_else(|_| transport.motd.local_json.clone())
     } else {
         let template_context = TemplateContext::for_transport(transport, relay_mode, players);
-        template::render(
-            transport.motd.local_json.as_deref().unwrap_or("{}"),
-            &template_context,
-        )
-        .into_owned()
+        template::render(&transport.motd.local_json, &template_context).into_owned()
     };
 
     let motd_json = rewrite_json(
@@ -45,19 +35,20 @@ pub fn serve_legacy_ping(
     );
     let legacy_raw = extract_legacy_text(&motd_json);
     let response = encode_legacy_response(&legacy_raw);
-    client.write_all(&response)?;
+    client.write_all(&response).await?;
 
     players.set_state(connection_id, PlayerState::StatusServedLocally);
 
     Ok(())
 }
 
-fn fetch_upstream_status_json(transport: &TransportConfig) -> io::Result<String> {
-    let address = transport.motd.upstream_addr.as_deref().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "missing MOTD upstream address")
-    })?;
-    let mut stream = TcpStream::connect(address)?;
-    stream.set_read_timeout(Some(transport.motd.upstream_ping_timeout))?;
+async fn fetch_upstream_status_json(transport: &TransportConfig) -> anyhow::Result<String> {
+    let address = transport
+        .motd
+        .upstream_addr
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("missing MOTD upstream address"))?;
+    let mut stream = tokio::net::TcpStream::connect(address).await?;
 
     let handshake = HandshakeInfo {
         protocol_version: 763,
@@ -65,15 +56,13 @@ fn fetch_upstream_status_json(transport: &TransportConfig) -> io::Result<String>
         server_port: extract_port(address).unwrap_or(25565),
         next_state: 1,
     };
-    let mut request = crate::minecraft::encode_handshake(&handshake).map_err(io::Error::other)?;
+    let mut request = crate::minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
     request.extend_from_slice(&[1, 0]);
-    stream.write_all(&request)?;
+    stream.write_all(&request).await?;
 
     let mut packet_io = crate::minecraft::PacketIo::new();
-    let frame = packet_io
-        .read_frame(&mut stream, 64 * 1024)
-        .map_err(io::Error::other)?;
-    crate::minecraft::decode_status_response(&frame).map_err(io::Error::other)
+    let frame = packet_io.read_frame(&mut stream, 64 * 1024).await?;
+    crate::minecraft::decode_status_response(&frame).map_err(anyhow::Error::from)
 }
 
 fn encode_legacy_response(value: &str) -> Vec<u8> {

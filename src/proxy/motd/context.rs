@@ -1,10 +1,9 @@
-use std::io::Write;
-use std::net::{Shutdown, TcpStream};
 use std::sync::Arc;
 
+use tokio::io::AsyncWriteExt;
+
 use crate::minecraft::{
-    decode_ping_request, ping_response_packet, HandshakeInfo, PacketIo, ProtocolError,
-    MAX_STATUS_PACKET_SIZE,
+    decode_ping_request, ping_response_packet, HandshakeInfo, PacketIo, MAX_STATUS_PACKET_SIZE,
 };
 
 use super::rewrite::rewrite_json;
@@ -36,7 +35,7 @@ impl<'a> StatusContext<'a> {
         }
     }
 
-    pub fn open_upstream(&self) -> Result<Option<UpstreamStatusSession>, ProtocolError> {
+    pub async fn open_upstream(&self) -> anyhow::Result<Option<UpstreamStatusSession>> {
         let Some(target_addr) = self.upstream_target_addr() else {
             return Ok(None);
         };
@@ -56,36 +55,36 @@ impl<'a> StatusContext<'a> {
             plan.needs_status_json,
             plan.needs_ping,
         )
+        .await
         .map(Some)
     }
 
-    pub fn build_json(
+    pub async fn build_json(
         &self,
         players: &PlayerRegistry,
         mut upstream: Option<&mut UpstreamStatusSession>,
-    ) -> Result<String, ProtocolError> {
+    ) -> anyhow::Result<String> {
         let explicit_favicon = self.load_explicit_favicon_data_url()?;
         let template_context =
             TemplateContext::for_transport(self.transport, self.relay_mode, players);
 
         let base_json = match self.transport.motd.mode {
-            MotdMode::Local => template::render(
-                self.transport.motd.local_json.as_deref().unwrap_or("{}"),
-                &template_context,
-            )
-            .into_owned(),
+            MotdMode::Local => {
+                template::render(&self.transport.motd.local_json, &template_context).into_owned()
+            }
             MotdMode::Upstream => upstream
                 .as_deref_mut()
-                .ok_or_else(|| ProtocolError::decode("missing upstream MOTD session"))?
-                .read_status_json()?
+                .ok_or_else(|| anyhow::anyhow!("missing upstream MOTD session"))?
+                .read_status_json()
+                .await?
                 .to_owned(),
         };
 
         let favicon_source = if self.should_passthrough_favicon() {
-            upstream
-                .as_deref_mut()
-                .map(UpstreamStatusSession::read_status_json)
-                .transpose()?
+            match upstream.as_deref_mut() {
+                Some(session) => Some(session.read_status_json().await?),
+                None => None,
+            }
         } else {
             None
         };
@@ -100,32 +99,32 @@ impl<'a> StatusContext<'a> {
         ))
     }
 
-    pub fn finish(
+    pub async fn finish(
         &self,
         packet_io: &mut PacketIo,
-        client: &mut TcpStream,
+        client: &mut tokio::net::TcpStream,
         mut upstream: Option<&mut UpstreamStatusSession>,
-    ) -> Result<StatusOutcome, ProtocolError> {
+    ) -> anyhow::Result<StatusOutcome> {
         match self.transport.motd.ping_mode {
             StatusPingMode::Disconnect => {
-                client.shutdown(Shutdown::Both)?;
+                client.shutdown().await?;
                 Ok(StatusOutcome::default())
             }
-            StatusPingMode::ZeroMs => send_pong(client, 0, 0, None),
+            StatusPingMode::ZeroMs => send_pong(client, 0, 0, None).await,
             StatusPingMode::Passthrough => {
-                let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE)?;
-                let payload = decode_ping_request(&ping_request)?;
-                send_pong(client, payload, ping_request.wire_len, None)
+                let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
+                let payload = decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
+                send_pong(client, payload, ping_request.wire_len, None).await
             }
             StatusPingMode::UpstreamTcp => {
-                let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE)?;
-                let client_payload = decode_ping_request(&ping_request)?;
+                let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
+                let client_payload = decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
                 let (payload, measured_ms) = match upstream.as_deref_mut() {
-                    Some(session) => session.ping(client_payload),
+                    Some(session) => session.ping(client_payload).await,
                     None => {
-                        let target_addr = self.ping_target_addr().ok_or_else(|| {
-                            ProtocolError::decode("missing MOTD ping target address")
-                        })?;
+                        let target_addr = self
+                            .ping_target_addr()
+                            .ok_or_else(|| anyhow::anyhow!("missing MOTD ping target address"))?;
                         UpstreamStatusSession::connect(
                             target_addr,
                             self.rewrite_addr(target_addr),
@@ -135,11 +134,13 @@ impl<'a> StatusContext<'a> {
                             None,
                             true,
                             true,
-                        )?
+                        )
+                        .await?
                         .ping(client_payload)
+                        .await
                     }
                 }?;
-                send_pong(client, payload, ping_request.wire_len, Some(measured_ms))
+                send_pong(client, payload, ping_request.wire_len, Some(measured_ms)).await
             }
         }
     }
@@ -185,7 +186,7 @@ impl<'a> StatusContext<'a> {
             && self.favicon_target_addr().is_some()
     }
 
-    fn load_explicit_favicon_data_url(&self) -> Result<Option<Arc<str>>, ProtocolError> {
+    fn load_explicit_favicon_data_url(&self) -> anyhow::Result<Option<Arc<str>>> {
         match self.transport.motd.favicon.mode {
             MotdFaviconMode::Path => {
                 let path = self
@@ -194,11 +195,8 @@ impl<'a> StatusContext<'a> {
                     .favicon
                     .path
                     .as_deref()
-                    .ok_or_else(|| ProtocolError::decode("missing MOTD favicon path"))?;
-                self.service
-                    .read_favicon_data_url(path)
-                    .map(Some)
-                    .map_err(ProtocolError::decode)
+                    .ok_or_else(|| anyhow::anyhow!("missing MOTD favicon path"))?;
+                self.service.read_favicon_data_url(path).map(Some)
             }
             _ => Ok(None),
         }
@@ -248,14 +246,14 @@ pub struct StatusOutcome {
     pub upstream_ping_ms: Option<u32>,
 }
 
-fn send_pong(
-    client: &mut TcpStream,
+async fn send_pong(
+    client: &mut tokio::net::TcpStream,
     payload: u64,
     ping_request_bytes: usize,
     upstream_ping_ms: Option<u32>,
-) -> Result<StatusOutcome, ProtocolError> {
-    let pong = ping_response_packet(payload)?;
-    client.write_all(&pong)?;
+) -> anyhow::Result<StatusOutcome> {
+    let pong = ping_response_packet(payload).map_err(anyhow::Error::from)?;
+    client.write_all(&pong).await?;
 
     Ok(StatusOutcome {
         ping_request_bytes,

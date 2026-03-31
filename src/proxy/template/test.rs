@@ -17,7 +17,7 @@ fn render_replaces_all_supported_placeholders() {
     let transport = TransportConfig {
         motd: MotdConfig {
             mode: MotdMode::Local,
-            local_json: None,
+            local_json: "%ONLINE_PLAYER%|%MOTD_TARGET_ADDR%|%PING_TARGET_ADDR%|%FAVICON_TARGET_ADDR%|%RELAY_MODE%|%PING_MODE%|%FAVICON_MODE%|%UPSTREAM_ADDR%".to_owned(),
             upstream_addr: Some("motd.example:25565".to_owned()),
             protocol_mode: MotdProtocolMode::Client,
             ping_mode: StatusPingMode::UpstreamTcp,
@@ -35,10 +35,7 @@ fn render_replaces_all_supported_placeholders() {
     };
     let context = TemplateContext::for_transport(&transport, RelayMode::Standard, &players);
 
-    let rendered = render(
-        "%ONLINE_PLAYER%|%MOTD_TARGET_ADDR%|%PING_TARGET_ADDR%|%FAVICON_TARGET_ADDR%|%RELAY_MODE%|%PING_MODE%|%FAVICON_MODE%|%UPSTREAM_ADDR%",
-        &context,
-    );
+    let rendered = render(&transport.motd.local_json, &context);
 
     assert_eq!(
         rendered,

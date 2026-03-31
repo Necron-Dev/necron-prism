@@ -1,151 +1,94 @@
 #!/usr/bin/env python3
-import argparse
-import os
-import platform
-import shutil
-import subprocess
-import sys
-from pathlib import Path
+from common import (
+    PROFILES,
+    TARGETS,
+    TOOLCHAINS,
+    build_command,
+    current_os_name,
+    deploy_main_artifact,
+    ensure_runner_available,
+    normalize_toolchain,
+    parse_key_value_arg,
+    print_banner,
+    prompt_cpu_level,
+    run_command,
+    select_menu,
+)
 
-# 平台和架构映射 (与之前保持一致)
-TARGETS = {
-    "windows": {"amd64": "x86_64-pc-windows-gnu", "v8a": "aarch64-pc-windows-gnullvm"},
-    "linux": {
-        "amd64": "x86_64-unknown-linux-gnu",
-        "armv7": "armv7-unknown-linux-gnueabihf",
-        "v8a": "aarch64-unknown-linux-gnu",
-        "musl-amd64": "x86_64-unknown-linux-musl",
-        "musl-v8a": "aarch64-unknown-linux-musl",
-    },
-    "macos": {"amd64": "x86_64-apple-darwin", "v8a": "aarch64-apple-darwin"},
-    "android": {
-        "amd64": "x86_64-linux-android",
-        "v8a": "aarch64-linux-android",
-        "armv7": "armv7-linux-androideabi",
-    },
-}
 
-AMD64_LEVELS = ["v1", "v2", "v3", "v4", "native"]
-PROFILES = ["release", "dev"]
-TOOLCHAINS = ["stable", "beta", "nightly", "none"]
-
-def select_menu(prompt, options, default_index=0):
-    """纯标准库实现的编号选择菜单"""
-    print(f"\n[?] {prompt}")
-    for i, opt in enumerate(options):
-        mark = "*" if i == default_index else " "
-        print(f"  {i+1}) {opt} {mark}")
-    
-    while True:
-        try:
-            choice = input(f"Select (1-{len(options)}) [default: {default_index+1}]: ").strip()
-            if not choice:
-                return options[default_index]
-            idx = int(choice) - 1
-            if 0 <= idx < len(options):
-                return options[idx]
-        except ValueError:
-            pass
-        print(f"Invalid input. Please enter a number between 1 and {len(options)}.")
-
-def get_interactive_config():
-    """使用标准输入实现的配置向导"""
-    print("\n" + "="*30)
-    print(" Necron-Prism Build Wizard")
-    print("="*30)
-    
-    os_name = select_menu("Target Operating System:", list(TARGETS.keys()))
-    
-    arch_choices = list(TARGETS[os_name].keys())
-    arch = select_menu("Target Architecture:", arch_choices)
-    
-    level = "native"
-    if "amd64" in arch:
-        level = select_menu("CPU Optimization Level (amd64 only):", AMD64_LEVELS, default_index=2)
-
+def interactive_config():
+    print_banner("Necron-Prism Build Wizard")
+    target_os = select_menu("Target Operating System:", list(TARGETS.keys()))
+    arch = select_menu("Target Architecture:", list(TARGETS[target_os].keys()))
     profile = select_menu("Build Profile:", PROFILES)
-    
-    toolchain = select_menu("Rust Toolchain:", TOOLCHAINS)
-    toolchain = None if toolchain == "none" else toolchain
+    toolchain = normalize_toolchain(select_menu("Rust Toolchain:", TOOLCHAINS))
 
-    print(f"\n[?] Features (e.g. 'http-api')")
-    features = input("Enter features (default: 'default'): ").strip()
-    features = features if features else "default"
-    
+    print("\n[?] Features (e.g. 'http-api')")
+    features = input("Enter features (default: 'default'): ").strip() or "default"
+
+    default_runner = "cross" if target_os != current_os_name() else "cargo"
+    runner_options = [default_runner] + [runner for runner in ["cargo", "cross"] if runner != default_runner]
+    runner = select_menu("Build tool:", runner_options, default_index=0)
+
     return {
-        "os": os_name, "arch": arch, "level": level, "profile": profile,
-        "toolchain": toolchain, "features": features
+        "target_os": target_os,
+        "arch": arch,
+        "profile": profile,
+        "toolchain": toolchain,
+        "features": features,
+        "runner": runner,
+        "cpu": prompt_cpu_level(arch),
     }
 
-def run_build(config):
-    """执行构建逻辑"""
-    target = TARGETS[config["os"]][config["arch"]]
-    
-    # 确定 CPU 优化参数
-    level_map = {"v1": "x86-64", "v2": "x86-64-v2", "v3": "x86-64-v3", "v4": "x86-64-v4", "native": "native"}
-    cpu = level_map.get(config["level"], "native") if "amd64" in config["arch"] else "generic"
-    
-    # 自动检测是否需要交叉编译工具 (cargo-zigbuild)
-    current_os = sys.platform.replace("win32", "windows").replace("darwin", "macos")
-    if "linux" in sys.platform: current_os = "linux"
-    
-    is_cross = config["os"] != current_os
-    cargo_bin = "cargo-zigbuild" if (is_cross and shutil.which("cargo-zigbuild")) else "cargo"
-    subcmd = "zigbuild" if "zigbuild" in cargo_bin else "build"
 
-    cmd = [cargo_bin]
-    if config["toolchain"]:
-        cmd.append(f"+{config['toolchain']}")
-    cmd.extend([subcmd, "--target", target])
-    
+def cli_config(args):
+    target_os = parse_key_value_arg(args, "--os", current_os_name())
+    if target_os not in TARGETS:
+        print(f"Unknown os: {target_os}")
+        raise SystemExit(1)
+
+    arch = parse_key_value_arg(args, "--arch", "amd64")
+    if arch not in TARGETS[target_os]:
+        print(f"Unknown arch for {target_os}: {arch}")
+        raise SystemExit(1)
+
+    return {
+        "target_os": target_os,
+        "arch": arch,
+        "profile": parse_key_value_arg(args, "--profile", "release"),
+        "toolchain": normalize_toolchain(parse_key_value_arg(args, "--toolchain", "stable")),
+        "features": parse_key_value_arg(args, "--features", "default"),
+        "runner": parse_key_value_arg(args, "--runner", "cross" if target_os != current_os_name() else "cargo"),
+        "cpu": parse_key_value_arg(args, "--cpu", "x86-64-v3" if "amd64" in arch else "generic"),
+    }
+
+
+def run_build(config):
+    ensure_runner_available(config["runner"])
+    target = TARGETS[config["target_os"]][config["arch"]]
+    cmd = build_command(config["runner"], config["toolchain"])
+    cmd.extend(["build", "--target", target])
+
     if config["profile"] == "release":
         cmd.append("--release")
-        
-    if config["features"] and config["features"] != "default":
+
+    if config["features"] != "default":
         cmd.extend(["--features", config["features"]])
 
-    # 设置环境变量
-    env = os.environ.copy()
-    env["RUSTFLAGS"] = f"-C target-cpu={cpu} {env.get('RUSTFLAGS', '')}".strip()
+    run_command("Build", cmd, config["cpu"])
+    print("\nBuild Successful!")
+    deploy_main_artifact(target, config["profile"], config["target_os"])
 
-    print(f"\n[Build] Target: {target} | CPU: {cpu} | Tool: {cargo_bin}")
-    print(f"$ RUSTFLAGS='{env['RUSTFLAGS']}' {' '.join(cmd)}\n")
-    
-    try:
-        subprocess.run(cmd, env=env, check=True)
-        print("\nBuild Successful! ✅")
-        
-        # 自动归档到 dist
-        profile_dir = "release" if config["profile"] == "release" else "debug"
-        bin_ext = ".exe" if config["os"] == "windows" else ""
-        artifact = Path(f"target/{target}/{profile_dir}/necron-prism{bin_ext}")
-        
-        if artifact.exists():
-            dist_path = Path(f"dist/{target}/necron-prism{bin_ext}")
-            dist_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(artifact, dist_path)
-            print(f"Artifact deployed to: {dist_path}")
-            
-    except subprocess.CalledProcessError:
-        print("\nBuild Failed! ❌")
-        sys.exit(1)
 
 def main():
-    # 只有在交互式终端且没传参数时才开启向导
-    if sys.stdin.isatty() and len(sys.argv) == 1:
-        config = get_interactive_config()
-    else:
-        # 非交互模式下的默认值 (或者你可以继续解析 sys.argv 传参)
-        config = {
-            "os": "linux", "arch": "amd64", "level": "v3", 
-            "profile": "release", "toolchain": "stable", "features": "default"
-        }
-
+    args = __import__("sys").argv[1:]
+    config = interactive_config() if not args else cli_config(args)
     run_build(config)
+
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\nAborted.")
-        sys.exit(0)
+        raise SystemExit(0)

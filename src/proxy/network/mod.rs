@@ -1,3 +1,3 @@
 mod socket;
 
-pub use socket::apply_stream_options;
+pub use socket::apply_sockref_options;

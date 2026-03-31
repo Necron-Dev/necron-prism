@@ -13,7 +13,7 @@ pub struct ConnectionContext {
 #[derive(Clone, Debug)]
 pub struct ConnectionRoute {
     pub target_addr: Arc<str>,
-    pub rewrite_addr: Arc<str>,
+    pub rewrite_addr: Option<Arc<str>>,
 }
 
 #[derive(Clone, Debug)]

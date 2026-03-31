@@ -1,15 +1,13 @@
-use std::io::{self, Write};
+use tokio::io::AsyncWriteExt;
 
 use crate::minecraft::{encode_raw_frame, FramedPacket};
 
-pub fn forward_login_start(
-    upstream: &mut std::net::TcpStream,
+pub async fn forward_login_start(
+    upstream: &mut tokio::net::TcpStream,
     login_start_packet: &FramedPacket,
-) -> io::Result<()> {
-    let encoded_login_start = encode_raw_frame(login_start_packet)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    upstream.write_all(&encoded_login_start)?;
-
+) -> anyhow::Result<()> {
+    let encoded_login_start = encode_raw_frame(login_start_packet).map_err(anyhow::Error::from)?;
+    upstream.write_all(&encoded_login_start).await?;
     Ok(())
 }
 

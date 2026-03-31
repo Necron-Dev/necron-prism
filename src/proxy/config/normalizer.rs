@@ -1,10 +1,8 @@
-use anyhow::Context;
-use std::path::PathBuf;
-use std::time::Duration;
-
 use super::default::{
-    DEFAULT_API_TARGET_ADDR, DEFAULT_CONNECTION_ID_PREFIX, DEFAULT_FIRST_PACKET_TIMEOUT_MS,
-    DEFAULT_LISTEN_ADDR,
+    DEFAULT_API_TARGET_ADDR, DEFAULT_API_TIMEOUT_MS, DEFAULT_API_TRAFFIC_INTERVAL_MS,
+    DEFAULT_CONNECTION_ID_PREFIX, DEFAULT_FIRST_PACKET_TIMEOUT_MS, DEFAULT_KEEPALIVE_SECS,
+    DEFAULT_LISTEN_ADDR, DEFAULT_LOCAL_MOTD_JSON, DEFAULT_MOTD_STATUS_CACHE_TTL_MS,
+    DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
 };
 use super::schema_types::{
     ApiModeLiteral, ConfigFile, MotdFaviconModeLiteral, MotdProtocolLiteral,
@@ -15,6 +13,9 @@ use super::types::{
     MotdFaviconMode, MotdMode, MotdPingConfig, MotdProtocolMode, RelayConfig, RelayMode,
     SocketOptions, StatusPingMode, TransportConfig,
 };
+use http::uri::Authority;
+use std::path::PathBuf;
+use std::time::Duration;
 
 pub struct ConfigNormalizer;
 
@@ -32,14 +33,6 @@ impl ConfigNormalizer {
                 .unwrap_or(DEFAULT_API_TARGET_ADDR),
             25565,
         )?;
-        let mock_rewrite_addr = raw
-            .api
-            .mock
-            .rewrite_addr
-            .as_deref()
-            .map(|value| normalize_addr(value, 25565))
-            .transpose()?
-            .unwrap_or_else(|| mock_target_addr.clone());
 
         Ok(Config {
             inbound: InboundConfig {
@@ -57,7 +50,12 @@ impl ConfigNormalizer {
                 ),
                 socket_options: SocketOptions {
                     tcp_nodelay: raw.inbound.socket.tcp_nodelay,
-                    keepalive: Some(Duration::from_secs(raw.inbound.socket.keepalive_secs)),
+                    keepalive: Duration::from_secs(
+                        raw.inbound
+                            .socket
+                            .keepalive_secs
+                            .unwrap_or(DEFAULT_KEEPALIVE_SECS),
+                    ),
                     recv_buffer_size: raw.inbound.socket.recv_buffer_size,
                     send_buffer_size: raw.inbound.socket.send_buffer_size,
                     reuse_port: raw.inbound.socket.reuse_port,
@@ -69,7 +67,11 @@ impl ConfigNormalizer {
                         super::schema_types::MotdModeLiteral::Local => MotdMode::Local,
                         super::schema_types::MotdModeLiteral::Upstream => MotdMode::Upstream,
                     },
-                    local_json: raw.transport.motd.json,
+                    local_json: raw
+                        .transport
+                        .motd
+                        .json
+                        .unwrap_or_else(|| DEFAULT_LOCAL_MOTD_JSON.to_string()),
                     upstream_addr: raw
                         .transport
                         .motd
@@ -89,10 +91,18 @@ impl ConfigNormalizer {
                             .map(|value| normalize_addr(value, 25565))
                             .transpose()?,
                     },
-                    upstream_ping_timeout_ms: Duration::from_millis(
-                        raw.transport.motd.upstream_ping_timeout_ms,
+                    upstream_ping_timeout: Duration::from_millis(
+                        raw.transport
+                            .motd
+                            .upstream_ping_timeout_ms
+                            .unwrap_or(DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS),
                     ),
-                    status_cache_ttl: Duration::from_millis(raw.transport.motd.status_cache_ttl_ms),
+                    status_cache_ttl: Duration::from_millis(
+                        raw.transport
+                            .motd
+                            .status_cache_ttl_ms
+                            .unwrap_or(DEFAULT_MOTD_STATUS_CACHE_TTL_MS),
+                    ),
                     favicon: normalize_favicon_mode(raw.transport.motd.favicon, &source_path)?,
                 },
             },
@@ -112,11 +122,23 @@ impl ConfigNormalizer {
                     .base_url
                     .map(|value| value.trim_end_matches('/').to_string()),
                 bearer_token: raw.api.bearer_token,
-                timeout: Duration::from_millis(raw.api.timeout_ms),
-                traffic_interval: Duration::from_millis(raw.api.traffic_interval_ms),
+                timeout: Duration::from_millis(
+                    raw.api.timeout_ms.unwrap_or(DEFAULT_API_TIMEOUT_MS),
+                ),
+                traffic_interval: Duration::from_millis(
+                    raw.api
+                        .traffic_interval_ms
+                        .unwrap_or(DEFAULT_API_TRAFFIC_INTERVAL_MS),
+                ),
                 mock: MockApiConfig {
                     target_addr: mock_target_addr,
-                    rewrite_addr: mock_rewrite_addr,
+                    rewrite_addr: raw
+                        .api
+                        .mock
+                        .rewrite_addr
+                        .as_deref()
+                        .map(|value| normalize_addr(value, 25565))
+                        .transpose()?,
                     connection_id_prefix: raw
                         .api
                         .mock
@@ -176,21 +198,15 @@ fn normalize_ping_mode(value: StatusPingModeLiteral) -> StatusPingMode {
 }
 
 fn normalize_addr(target_addr: &str, default_port: u16) -> anyhow::Result<String> {
-    use std::net::ToSocketAddrs;
+    let authority = target_addr.parse::<Authority>()
+        .map_err(|_| anyhow::anyhow!("invalid address"))?;
 
-    // 如果地址没有端口，补充默认端口
-    let addr_with_port = if !target_addr.contains(':')
-        || (target_addr.starts_with('[') && target_addr.ends_with(']'))
-    {
-        format!("{target_addr}:{default_port}")
+    let host = authority.host();
+    let port = authority.port_u16().unwrap_or(default_port);
+
+    if host.contains(':') && !host.starts_with('[') {
+        Ok(format!("[{}]:{}", host, port))
     } else {
-        target_addr.to_string()
-    };
-
-    // 验证地址格式有效
-    addr_with_port
-        .to_socket_addrs()
-        .with_context(|| format!("invalid target address: {target_addr}"))?;
-
-    Ok(addr_with_port)
+        Ok(format!("{}:{}", host, port))
+    }
 }

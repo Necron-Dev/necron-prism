@@ -102,15 +102,21 @@
           "default": "mock"
         },
         "timeout_ms": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         },
         "traffic_interval_ms": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         }
       },
@@ -127,14 +133,20 @@
       "type": "object",
       "properties": {
         "first_packet_timeout_ms": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         },
         "listen_addr": {
-          "type": "string",
-          "default": ""
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "socket": {
           "$ref": "#/$defs/SocketOptionsFileConfig",
@@ -153,8 +165,11 @@
       "type": "object",
       "properties": {
         "connection_id_prefix": {
-          "type": "string",
-          "default": ""
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "kick_reason": {
           "type": [
@@ -171,8 +186,11 @@
           "default": null
         },
         "target_addr": {
-          "type": "string",
-          "default": ""
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -222,8 +240,11 @@
           }
         },
         "json": {
-          "type": "string",
-          "default": ""
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "mode": {
           "$ref": "#/$defs/MotdModeLiteral",
@@ -244,19 +265,28 @@
           "default": "client"
         },
         "status_cache_ttl_ms": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         },
         "upstream_addr": {
-          "type": "string",
-          "default": ""
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "upstream_ping_timeout_ms": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         }
       },
@@ -321,9 +351,12 @@
       "type": "object",
       "properties": {
         "stats_log_interval_secs": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         }
       },
@@ -333,9 +366,12 @@
       "type": "object",
       "properties": {
         "keepalive_secs": {
-          "type": "integer",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint64",
-          "default": 0,
+          "default": null,
           "minimum": 0
         },
         "recv_buffer_size": {

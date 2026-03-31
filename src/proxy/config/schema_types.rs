@@ -80,9 +80,9 @@ pub struct ApiFileConfig {
     #[serde(default)]
     pub bearer_token: Option<String>,
     #[serde(default)]
-    pub timeout_ms: u64,
+    pub timeout_ms: Option<u64>,
     #[serde(default)]
-    pub traffic_interval_ms: u64,
+    pub traffic_interval_ms: Option<u64>,
     #[serde(default)]
     pub mock: MockApiFileConfig,
 }
@@ -93,8 +93,8 @@ impl Default for ApiFileConfig {
             mode: ApiModeLiteral::default(),
             base_url: None,
             bearer_token: None,
-            timeout_ms: DEFAULT_API_TIMEOUT_MS,
-            traffic_interval_ms: DEFAULT_API_TRAFFIC_INTERVAL_MS,
+            timeout_ms: Some(DEFAULT_API_TIMEOUT_MS),
+            traffic_interval_ms: Some(DEFAULT_API_TRAFFIC_INTERVAL_MS),
             mock: MockApiFileConfig::default(),
         }
     }
@@ -142,9 +142,9 @@ pub struct MotdFileConfig {
     #[serde(default)]
     pub ping: MotdPingFileConfig,
     #[serde(default)]
-    pub upstream_ping_timeout_ms: u64,
+    pub upstream_ping_timeout_ms: Option<u64>,
     #[serde(default)]
-    pub status_cache_ttl_ms: u64,
+    pub status_cache_ttl_ms: Option<u64>,
     #[serde(default)]
     pub favicon: MotdFaviconFileConfig,
 }
@@ -158,8 +158,8 @@ impl Default for MotdFileConfig {
             protocol: MotdProtocolLiteral::default(),
             ping_mode: StatusPingModeLiteral::default(),
             ping: MotdPingFileConfig::default(),
-            upstream_ping_timeout_ms: DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
-            status_cache_ttl_ms: DEFAULT_MOTD_STATUS_CACHE_TTL_MS,
+            upstream_ping_timeout_ms: Some(DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS),
+            status_cache_ttl_ms: Some(DEFAULT_MOTD_STATUS_CACHE_TTL_MS),
             favicon: MotdFaviconFileConfig::default(),
         }
     }
@@ -218,7 +218,7 @@ pub struct SocketOptionsFileConfig {
     #[serde(default)]
     pub tcp_nodelay: bool,
     #[serde(default)]
-    pub keepalive_secs: u64,
+    pub keepalive_secs: Option<u64>,
     #[serde(default)]
     pub recv_buffer_size: Option<usize>,
     #[serde(default)]
@@ -231,7 +231,7 @@ impl Default for SocketOptionsFileConfig {
     fn default() -> Self {
         Self {
             tcp_nodelay: true,
-            keepalive_secs: DEFAULT_KEEPALIVE_SECS,
+            keepalive_secs: Some(DEFAULT_KEEPALIVE_SECS),
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_port: false,

@@ -20,7 +20,7 @@ mod tests {
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
 
                 [runtime]
@@ -35,8 +35,8 @@ mod tests {
         ConfigChecker::new().validate(&config).unwrap();
 
         assert_eq!(config.api.mode, ApiMode::Mock);
-        assert_eq!(config.api.mock.target_addr, "backend:25565");
-        assert_eq!(config.api.mock.rewrite_addr, "backend:25565");
+        assert_eq!(config.api.mock.target_addr, "127.0.0.1:25565");
+        assert_eq!(config.api.mock.rewrite_addr.as_deref(), None);
         assert_eq!(config.stats_log_interval, Some(Duration::from_secs(5)));
     }
 
@@ -51,7 +51,7 @@ mod tests {
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -61,8 +61,8 @@ mod tests {
             .normalize(raw, PathBuf::from("config.toml"))
             .unwrap();
 
-        assert_eq!(config.api.mock.target_addr, "backend:25565");
-        assert_eq!(config.api.mock.rewrite_addr, "backend:25565");
+        assert_eq!(config.api.mock.target_addr, "127.0.0.1:25565");
+        assert_eq!(config.api.mock.rewrite_addr.as_deref(), None);
     }
 
     #[test]
@@ -76,8 +76,8 @@ mod tests {
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
-                rewrite_addr = "rewrite-host"
+                target_addr = "127.0.0.1"
+                rewrite_addr = "127.0.0.2"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -87,8 +87,11 @@ mod tests {
             .normalize(raw, PathBuf::from("config.toml"))
             .unwrap();
 
-        assert_eq!(config.api.mock.target_addr, "backend:25565");
-        assert_eq!(config.api.mock.rewrite_addr, "rewrite-host:25565");
+        assert_eq!(config.api.mock.target_addr, "127.0.0.1:25565");
+        assert_eq!(
+            config.api.mock.rewrite_addr.as_deref(),
+            Some("127.0.0.2:25565")
+        );
     }
 
     #[test]
@@ -100,13 +103,13 @@ mod tests {
 
                 [transport.motd]
                 mode = "upstream"
-                upstream_addr = "status-backend"
+                upstream_addr = "127.0.0.1"
 
                 [api]
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -119,7 +122,7 @@ mod tests {
 
         assert_eq!(
             config.transport.motd.upstream_addr.as_deref(),
-            Some("status-backend:25565")
+            Some("127.0.0.1:25565")
         );
     }
 
@@ -133,13 +136,13 @@ mod tests {
                 [transport.motd]
                 mode = "local"
                 ping_mode = "upstream_tcp"
-                upstream_addr = "status-backend"
+                upstream_addr = "127.0.0.1"
 
                 [api]
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -159,7 +162,7 @@ mod tests {
         );
         assert_eq!(
             config.transport.motd.upstream_addr.as_deref(),
-            Some("status-backend:25565")
+            Some("127.0.0.1:25565")
         );
         assert_eq!(config.transport.motd.ping.target_addr.as_deref(), None);
     }
@@ -173,17 +176,17 @@ mod tests {
 
                 [transport.motd]
                 mode = "local"
-                upstream_addr = "status-backend"
+                upstream_addr = "127.0.0.1"
 
                 [transport.motd.favicon]
                 mode = "passthrough"
-                target_addr = "icon-backend"
+                target_addr = "127.0.0.2"
 
                 [api]
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -195,7 +198,7 @@ mod tests {
 
         assert_eq!(
             config.transport.motd.upstream_addr.as_deref(),
-            Some("status-backend:25565")
+            Some("127.0.0.1:25565")
         );
         assert!(matches!(
             config.transport.motd.favicon.mode,
@@ -203,7 +206,7 @@ mod tests {
         ));
         assert_eq!(
             config.transport.motd.favicon.target_addr.as_deref(),
-            Some("icon-backend:25565")
+            Some("127.0.0.2:25565")
         );
     }
 
@@ -219,13 +222,13 @@ mod tests {
                 ping_mode = "upstream_tcp"
 
                 [transport.motd.ping]
-                target_addr = "ping-backend"
+                target_addr = "127.0.0.1"
 
                 [api]
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -237,7 +240,7 @@ mod tests {
 
         assert_eq!(
             config.transport.motd.ping.target_addr.as_deref(),
-            Some("ping-backend:25565")
+            Some("127.0.0.1:25565")
         );
     }
 
@@ -289,7 +292,7 @@ mod tests {
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )
@@ -318,7 +321,7 @@ mod tests {
                 mode = "mock"
 
                 [api.mock]
-                target_addr = "backend"
+                target_addr = "127.0.0.1"
                 connection_id_prefix = "mock"
             "#,
         )

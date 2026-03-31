@@ -41,7 +41,7 @@ pub struct ApiConfig {
 #[derive(Clone, Debug)]
 pub struct MockApiConfig {
     pub target_addr: String,
-    pub rewrite_addr: String,
+    pub rewrite_addr: Option<String>,
     pub connection_id_prefix: String,
     pub kick_reason: Option<String>,
 }
@@ -61,7 +61,7 @@ pub enum RelayMode {
 #[derive(Clone, Debug)]
 pub struct MotdConfig {
     pub mode: MotdMode,
-    pub local_json: Option<String>,
+    pub local_json: String,
     pub upstream_addr: Option<String>,
     pub protocol_mode: MotdProtocolMode,
     pub ping_mode: StatusPingMode,
@@ -165,7 +165,7 @@ impl MotdMode {
 #[derive(Clone, Debug)]
 pub struct SocketOptions {
     pub tcp_nodelay: bool,
-    pub keepalive: Option<Duration>,
+    pub keepalive: Duration,
     pub recv_buffer_size: Option<usize>,
     pub send_buffer_size: Option<usize>,
     pub reuse_port: bool,
@@ -175,7 +175,7 @@ impl Default for SocketOptions {
     fn default() -> Self {
         Self {
             tcp_nodelay: true,
-            keepalive: Some(Duration::from_secs(30)),
+            keepalive: Duration::from_secs(30),
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_port: false,

@@ -43,6 +43,11 @@
     "runtime": {
       "$ref": "#/$defs/RuntimeFileConfig",
       "default": {
+        "logging": {
+          "async_enabled": true,
+          "format": "pretty",
+          "level": "info"
+        },
         "stats_log_interval_secs": 10
       }
     },
@@ -157,6 +162,42 @@
             "send_buffer_size": null,
             "tcp_nodelay": true
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "LogFormatLiteral": {
+      "type": "string",
+      "enum": [
+        "pretty",
+        "compact",
+        "json"
+      ]
+    },
+    "LogLevelLiteral": {
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "LoggingFileConfig": {
+      "type": "object",
+      "properties": {
+        "async_enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "format": {
+          "$ref": "#/$defs/LogFormatLiteral",
+          "default": "pretty"
+        },
+        "level": {
+          "$ref": "#/$defs/LogLevelLiteral",
+          "default": "info"
         }
       },
       "additionalProperties": false
@@ -350,6 +391,14 @@
     "RuntimeFileConfig": {
       "type": "object",
       "properties": {
+        "logging": {
+          "$ref": "#/$defs/LoggingFileConfig",
+          "default": {
+            "async_enabled": true,
+            "format": "pretty",
+            "level": "info"
+          }
+        },
         "stats_log_interval_secs": {
           "type": [
             "integer",

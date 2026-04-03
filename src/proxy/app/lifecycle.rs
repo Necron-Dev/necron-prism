@@ -23,15 +23,20 @@ pub async fn run_connection(state: AppState, stream: tokio::net::TcpStream, cont
         started_at,
     ).await {
         Ok(report) => log_connection_success(&state, context, started_at, report),
-        Err(error) => match handled_connection(&error) {
-            Some(report) => log_connection_success(&state, context, started_at, report.clone()),
-            None => log_connection_failure(&state, context, started_at, error),
-        },
+        Err(error) => {
+            if let Some(report) = error.downcast_ref::<HandledConnection>().map(|handled| &handled.0) {
+                log_connection_success(&state, context, started_at, report.clone());
+            } else {
+                let active_remaining = state.players.remove_connection(context.id);
+                warn!(
+                    error = %error,
+                    elapsed_ms = started_at.elapsed().as_millis() as u64,
+                    active_connections = active_remaining,
+                    "connection failed"
+                );
+            }
+        }
     }
-}
-
-fn handled_connection(error: &anyhow::Error) -> Option<&ConnectionReport> {
-    error.downcast_ref::<HandledConnection>().map(|handled| &handled.0)
 }
 
 fn log_connection_success(
@@ -73,20 +78,5 @@ fn log_connection_success(
         current_online_players = state.players.current_online_count(),
         observed_connection_total_mb = settled_totals.total_bytes() as f64 / 1_000_000.0,
         "connection finished"
-    );
-}
-
-fn log_connection_failure(
-    state: &AppState,
-    context: ConnectionContext,
-    started_at: Instant,
-    error: anyhow::Error,
-) {
-    let active_remaining = state.players.remove_connection(context.id);
-    warn!(
-        error = %error,
-        elapsed_ms = started_at.elapsed().as_millis() as u64,
-        active_connections = active_remaining,
-        "connection failed"
     );
 }

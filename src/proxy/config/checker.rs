@@ -32,12 +32,12 @@ impl ConfigChecker {
 
         if matches!(
             config.transport.motd.ping_mode,
-            super::types::StatusPingMode::UpstreamTcp
+            super::types::StatusPingMode::Passthrough
         ) && config.transport.motd.ping.target_addr.is_none()
             && config.transport.motd.upstream_addr.is_none()
         {
             return Err(anyhow!(
-                "{CONFIG_SCHEMA_DIRECTIVE}\ntransport.motd.ping_mode=upstream_tcp requires transport.motd.ping.target_addr or transport.motd.upstream_addr"
+                "{CONFIG_SCHEMA_DIRECTIVE}\ntransport.motd.ping_mode=passthrough requires transport.motd.ping.target_addr or transport.motd.upstream_addr"
             ));
         }
 

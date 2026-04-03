@@ -7,8 +7,49 @@ pub struct Config {
     pub transport: TransportConfig,
     pub relay: RelayConfig,
     pub api: ApiConfig,
-    pub stats_log_interval: Option<Duration>,
+    pub runtime: RuntimeConfig,
     pub source_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeConfig {
+    pub stats_log_interval: Option<Duration>,
+    pub logging: LoggingConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct LoggingConfig {
+    pub level: LogLevel,
+    pub format: LogFormat,
+    pub async_enabled: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl LogLevel {
+    pub fn as_filter_directive(self) -> &'static str {
+        match self {
+            Self::Trace => "trace",
+            Self::Debug => "debug",
+            Self::Info => "info",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LogFormat {
+    Pretty,
+    Compact,
+    Json,
 }
 
 #[derive(Clone, Debug)]
@@ -101,18 +142,18 @@ impl MotdProtocolMode {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StatusPingMode {
-    Passthrough,
+    Local,
     ZeroMs,
-    UpstreamTcp,
+    Passthrough,
     Disconnect,
 }
 
 impl StatusPingMode {
     pub fn as_placeholder_value(self) -> &'static str {
         match self {
-            Self::Passthrough => "passthrough",
+            Self::Local => "local",
             Self::ZeroMs => "0ms",
-            Self::UpstreamTcp => "upstream_tcp",
+            Self::Passthrough => "passthrough",
             Self::Disconnect => "disconnect",
         }
     }

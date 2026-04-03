@@ -20,7 +20,7 @@ fn render_replaces_all_supported_placeholders() {
             local_json: "%ONLINE_PLAYER%|%MOTD_TARGET_ADDR%|%PING_TARGET_ADDR%|%FAVICON_TARGET_ADDR%|%RELAY_MODE%|%PING_MODE%|%FAVICON_MODE%|%UPSTREAM_ADDR%".to_owned(),
             upstream_addr: Some("motd.example:25565".to_owned()),
             protocol_mode: MotdProtocolMode::Client,
-            ping_mode: StatusPingMode::UpstreamTcp,
+            ping_mode: StatusPingMode::Passthrough,
             ping: MotdPingConfig {
                 target_addr: Some("ping.example:25565".to_owned()),
             },
@@ -39,6 +39,6 @@ fn render_replaces_all_supported_placeholders() {
 
     assert_eq!(
         rendered,
-        "1|motd.example:25565|ping.example:25565|icon.example:25565|standard|upstream_tcp|passthrough|motd.example:25565"
+        "1|motd.example:25565|ping.example:25565|icon.example:25565|standard|passthrough|passthrough|motd.example:25565"
     );
 }

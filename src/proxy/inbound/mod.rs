@@ -1,11 +1,22 @@
 use socket2::{Domain, Protocol, Socket, Type};
 use std::io;
-use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
+use std::net::TcpListener;
+
+use tokio::net::lookup_host;
 
 use super::config::InboundConfig;
 
-pub fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
-    let address = resolve_first_address(&config.listen_addr)?;
+pub async fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
+    let address = lookup_host(&config.listen_addr)
+        .await?
+        .next()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::AddrNotAvailable,
+                "no socket address resolved",
+            )
+        })?;
+    
     let socket = Socket::new(
         Domain::for_address(address),
         Type::STREAM,
@@ -29,13 +40,4 @@ pub fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
     socket.bind(&address.into())?;
     socket.listen(1024)?;
     Ok(socket.into())
-}
-
-fn resolve_first_address(input: &str) -> io::Result<SocketAddr> {
-    input.to_socket_addrs()?.next().ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::AddrNotAvailable,
-            "no socket address resolved",
-        )
-    })
 }

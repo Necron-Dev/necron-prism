@@ -23,7 +23,7 @@ impl AppState {
     pub fn new(config: Config) -> Result<Self> {
         let config = Arc::new(config);
         let api = Arc::new(ApiService::new(&config.api)?);
-        let motd = Arc::new(MotdService::default());
+        let motd = Arc::new(MotdService::new(&config.transport, config.relay.mode)?);
         let traffic_reporter = Arc::new(TrafficReporter::new(Arc::clone(&api), &config.api));
 
         Ok(Self {

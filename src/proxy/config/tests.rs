@@ -6,8 +6,10 @@ mod tests {
 
     use crate::proxy::config::checker::ConfigChecker;
     use crate::proxy::config::normalizer::ConfigNormalizer;
-    use crate::proxy::config::schema_types::{ConfigFile, MotdFaviconModeLiteral};
-    use crate::proxy::config::{ApiMode, ConfigLoader, MotdFaviconMode};
+    use crate::proxy::config::schema_types::{
+        ConfigFile, LogFormatLiteral, LogLevelLiteral, MotdFaviconModeLiteral, RuntimeFileConfig,
+    };
+    use crate::proxy::config::{ApiMode, ConfigLoader, LogFormat, LogLevel, MotdFaviconMode};
 
     #[test]
     fn parse_mock_api_config() {
@@ -37,7 +39,10 @@ mod tests {
         assert_eq!(config.api.mode, ApiMode::Mock);
         assert_eq!(config.api.mock.target_addr, "127.0.0.1:25565");
         assert_eq!(config.api.mock.rewrite_addr.as_deref(), None);
-        assert_eq!(config.stats_log_interval, Some(Duration::from_secs(5)));
+        assert_eq!(
+            config.runtime.stats_log_interval,
+            Some(Duration::from_secs(5))
+        );
     }
 
     #[test]
@@ -127,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_upstream_tcp_ping_mode() {
+    fn parse_passthrough_ping_mode() {
         let raw = toml::from_str::<ConfigFile>(
             r#"
                 [inbound]
@@ -135,7 +140,7 @@ mod tests {
 
                 [transport.motd]
                 mode = "local"
-                ping_mode = "upstream_tcp"
+                ping_mode = "passthrough"
                 upstream_addr = "127.0.0.1"
 
                 [api]
@@ -158,13 +163,44 @@ mod tests {
         );
         assert_eq!(
             config.transport.motd.ping_mode,
-            crate::proxy::config::StatusPingMode::UpstreamTcp
+            crate::proxy::config::StatusPingMode::Passthrough
         );
         assert_eq!(
             config.transport.motd.upstream_addr.as_deref(),
             Some("127.0.0.1:25565")
         );
         assert_eq!(config.transport.motd.ping.target_addr.as_deref(), None);
+    }
+
+    #[test]
+    fn parse_local_ping_mode_alias() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [transport.motd]
+                mode = "local"
+                ping_mode = "local"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "127.0.0.1"
+                connection_id_prefix = "mock"
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert_eq!(
+            config.transport.motd.ping_mode,
+            crate::proxy::config::StatusPingMode::Local
+        );
     }
 
     #[test]
@@ -219,7 +255,7 @@ mod tests {
 
                 [transport.motd]
                 mode = "local"
-                ping_mode = "upstream_tcp"
+                ping_mode = "passthrough"
 
                 [transport.motd.ping]
                 target_addr = "127.0.0.1"
@@ -258,6 +294,10 @@ mod tests {
         let written = fs::read_to_string(&config_path).unwrap();
 
         assert!(written.contains("#:schema ./config.schema.json"));
+        assert!(written.contains("[runtime.logging]"));
+        assert!(written.contains("level = \"info\""));
+        assert!(written.contains("format = \"pretty\""));
+        assert!(written.contains("async_enabled = true"));
         assert!(written.contains("mode = \"json\""));
         assert!(written.contains("[transport.motd.ping]"));
         assert_eq!(config.inbound.listen_addr, "0.0.0.0:25565");
@@ -276,6 +316,46 @@ mod tests {
             MotdFaviconModeLiteral::default(),
             MotdFaviconModeLiteral::Json
         ));
+    }
+
+    #[test]
+    fn runtime_logging_defaults_are_readable_and_async() {
+        let runtime = RuntimeFileConfig::default();
+
+        assert!(matches!(runtime.logging.level, LogLevelLiteral::Info));
+        assert!(matches!(runtime.logging.format, LogFormatLiteral::Pretty));
+        assert!(runtime.logging.async_enabled);
+    }
+
+    #[test]
+    fn parse_runtime_logging_config() {
+        let raw = toml::from_str::<ConfigFile>(
+            r#"
+                [inbound]
+                listen_addr = "0.0.0.0:25565"
+
+                [api]
+                mode = "mock"
+
+                [api.mock]
+                target_addr = "127.0.0.1"
+                connection_id_prefix = "mock"
+
+                [runtime.logging]
+                level = "debug"
+                format = "compact"
+                async_enabled = false
+            "#,
+        )
+        .unwrap();
+
+        let config = ConfigNormalizer::new()
+            .normalize(raw, PathBuf::from("config.toml"))
+            .unwrap();
+
+        assert!(matches!(config.runtime.logging.level, LogLevel::Debug));
+        assert!(matches!(config.runtime.logging.format, LogFormat::Compact));
+        assert!(!config.runtime.logging.async_enabled);
     }
 
     #[test]

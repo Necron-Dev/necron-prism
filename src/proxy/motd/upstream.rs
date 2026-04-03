@@ -1,9 +1,9 @@
-use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use tokio::io::AsyncWriteExt;
+use tokio::net::lookup_host;
 use tokio::time::timeout;
 use tracing::info;
 
@@ -33,7 +33,11 @@ impl UpstreamStatusSession {
         needs_status_json: bool,
         needs_ping: bool,
     ) -> anyhow::Result<Self> {
-        let address = resolve_target_addr(target_addr)?;
+        let address = lookup_host(target_addr)
+            .await
+            .map_err(|error| anyhow::anyhow!("resolve target address {target_addr}: {error}"))?
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("resolved no socket address for {target_addr}"))?;
         let mut stream = timeout(timeout_limit, tokio::net::TcpStream::connect(address))
             .await
             .with_context(|| format!("connect upstream status {address} timed out"))??;
@@ -122,12 +126,4 @@ impl UpstreamStatusSession {
 
         Ok((payload, measured_ms))
     }
-}
-
-fn resolve_target_addr(target_addr: &str) -> anyhow::Result<std::net::SocketAddr> {
-    target_addr
-        .to_socket_addrs()
-        .map_err(|error| anyhow::anyhow!("resolve target address {target_addr}: {error}"))?
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("resolved no socket address for {target_addr}"))
 }

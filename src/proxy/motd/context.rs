@@ -64,7 +64,14 @@ impl<'a> StatusContext<'a> {
         players: &PlayerRegistry,
         mut upstream: Option<&mut UpstreamStatusSession>,
     ) -> anyhow::Result<String> {
-        let explicit_favicon = self.load_explicit_favicon_data_url()?;
+        if let Some(json) = self
+            .service
+            .render_local_json(self.transport, self.handshake, players)
+        {
+            return Ok(json.as_ref().to_owned());
+        }
+
+        let explicit_favicon = self.load_explicit_favicon_data_url().await?;
         let template_context =
             TemplateContext::for_transport(self.transport, self.relay_mode, players);
 
@@ -111,12 +118,12 @@ impl<'a> StatusContext<'a> {
                 Ok(StatusOutcome::default())
             }
             StatusPingMode::ZeroMs => send_pong(client, 0, 0, None).await,
-            StatusPingMode::Passthrough => {
+            StatusPingMode::Local => {
                 let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
                 let payload = decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
                 send_pong(client, payload, ping_request.wire_len, None).await
             }
-            StatusPingMode::UpstreamTcp => {
+            StatusPingMode::Passthrough => {
                 let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
                 let client_payload = decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
                 let (payload, measured_ms) = match upstream.as_deref_mut() {
@@ -166,7 +173,7 @@ impl<'a> StatusContext<'a> {
             self.transport.motd.upstream_addr.as_deref()
         } else if self.should_passthrough_favicon() {
             self.favicon_target_addr()
-        } else if self.transport.motd.ping_mode == StatusPingMode::UpstreamTcp {
+        } else if self.transport.motd.ping_mode == StatusPingMode::Passthrough {
             self.ping_target_addr()
         } else {
             None
@@ -186,7 +193,7 @@ impl<'a> StatusContext<'a> {
             && self.favicon_target_addr().is_some()
     }
 
-    fn load_explicit_favicon_data_url(&self) -> anyhow::Result<Option<Arc<str>>> {
+    async fn load_explicit_favicon_data_url(&self) -> anyhow::Result<Option<Arc<str>>> {
         match self.transport.motd.favicon.mode {
             MotdFaviconMode::Path => {
                 let path = self
@@ -196,16 +203,15 @@ impl<'a> StatusContext<'a> {
                     .path
                     .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("missing MOTD favicon path"))?;
-                self.service.read_favicon_data_url(path).map(Some)
+                self.service.read_favicon_data_url(path).await.map(Some)
             }
             _ => Ok(None),
         }
     }
 
     fn upstream_plan(&self) -> UpstreamPlan {
-        let needs_status_json =
-            self.transport.motd.mode == MotdMode::Upstream || self.should_passthrough_favicon();
-        let needs_ping = self.transport.motd.ping_mode == StatusPingMode::UpstreamTcp;
+        let needs_status_json = self.status_response_needs_upstream();
+        let needs_ping = self.transport.motd.ping_mode == StatusPingMode::Passthrough;
         let cached_status_json = if needs_status_json {
             self.upstream_target_addr().and_then(|target_addr| {
                 self.service.read_cached_status(
@@ -223,6 +229,10 @@ impl<'a> StatusContext<'a> {
             needs_status_json,
             needs_ping,
         }
+    }
+
+    fn status_response_needs_upstream(&self) -> bool {
+        self.transport.motd.mode == MotdMode::Upstream || self.should_passthrough_favicon()
     }
 }
 

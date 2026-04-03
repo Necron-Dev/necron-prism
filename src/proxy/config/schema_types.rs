@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::default::{
     DEFAULT_API_TARGET_ADDR, DEFAULT_API_TIMEOUT_MS, DEFAULT_API_TRAFFIC_INTERVAL_MS,
     DEFAULT_CONNECTION_ID_PREFIX, DEFAULT_FIRST_PACKET_TIMEOUT_MS, DEFAULT_KEEPALIVE_SECS,
-    DEFAULT_LISTEN_ADDR, DEFAULT_LOCAL_MOTD_JSON, DEFAULT_MOTD_STATUS_CACHE_TTL_MS,
-    DEFAULT_MOTD_UPSTREAM_ADDR, DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
-    DEFAULT_STATS_LOG_INTERVAL_SECS,
+    DEFAULT_LISTEN_ADDR, DEFAULT_LOCAL_MOTD_JSON, DEFAULT_LOG_ASYNC_ENABLED,
+    DEFAULT_MOTD_STATUS_CACHE_TTL_MS, DEFAULT_MOTD_UPSTREAM_ADDR,
+    DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS, DEFAULT_STATS_LOG_INTERVAL_SECS,
 };
 #[cfg(feature = "schema")]
 use super::literals::CONFIG_SCHEMA_DIRECTIVE;
@@ -201,14 +201,43 @@ pub struct MotdPingFileConfig {
 pub struct RuntimeFileConfig {
     #[serde(default)]
     pub stats_log_interval_secs: Option<u64>,
+    #[serde(default)]
+    pub logging: LoggingFileConfig,
 }
 
 impl Default for RuntimeFileConfig {
     fn default() -> Self {
         Self {
             stats_log_interval_secs: Some(DEFAULT_STATS_LOG_INTERVAL_SECS),
+            logging: LoggingFileConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct LoggingFileConfig {
+    #[serde(default)]
+    pub level: LogLevelLiteral,
+    #[serde(default)]
+    pub format: LogFormatLiteral,
+    #[serde(default = "default_log_async_enabled")]
+    pub async_enabled: bool,
+}
+
+impl Default for LoggingFileConfig {
+    fn default() -> Self {
+        Self {
+            level: LogLevelLiteral::default(),
+            format: LogFormatLiteral::default(),
+            async_enabled: default_log_async_enabled(),
+        }
+    }
+}
+
+fn default_log_async_enabled() -> bool {
+    DEFAULT_LOG_ASYNC_ENABLED
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -292,19 +321,19 @@ pub enum MotdProtocolNamedLiteral {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum StatusPingModeLiteral {
-    #[serde(rename = "passthrough")]
-    Passthrough,
+    #[serde(rename = "local")]
+    Local,
     #[serde(rename = "0ms")]
     ZeroMs,
-    #[serde(rename = "upstream_tcp")]
-    UpstreamTcp,
+    #[serde(rename = "passthrough")]
+    Passthrough,
     #[serde(rename = "disconnect")]
     Disconnect,
 }
 
 impl Default for StatusPingModeLiteral {
     fn default() -> Self {
-        Self::Passthrough
+        Self::Local
     }
 }
 
@@ -325,4 +354,26 @@ impl Default for MotdFaviconModeLiteral {
     fn default() -> Self {
         Self::Json
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LogLevelLiteral {
+    Trace,
+    Debug,
+    #[default]
+    Info,
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum LogFormatLiteral {
+    #[default]
+    Pretty,
+    Compact,
+    Json,
 }

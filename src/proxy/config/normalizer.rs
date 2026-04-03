@@ -5,13 +5,13 @@ use super::default::{
     DEFAULT_MOTD_UPSTREAM_PING_TIMEOUT_MS,
 };
 use super::schema_types::{
-    ApiModeLiteral, ConfigFile, MotdFaviconModeLiteral, MotdProtocolLiteral,
-    MotdProtocolNamedLiteral, StatusPingModeLiteral,
+    ApiModeLiteral, ConfigFile, LogFormatLiteral, LogLevelLiteral, MotdFaviconModeLiteral,
+    MotdProtocolLiteral, MotdProtocolNamedLiteral, StatusPingModeLiteral,
 };
 use super::types::{
-    ApiConfig, ApiMode, Config, InboundConfig, MockApiConfig, MotdConfig, MotdFaviconConfig,
-    MotdFaviconMode, MotdMode, MotdPingConfig, MotdProtocolMode, RelayConfig, RelayMode,
-    SocketOptions, StatusPingMode, TransportConfig,
+    ApiConfig, ApiMode, Config, InboundConfig, LogFormat, LogLevel, LoggingConfig, MockApiConfig,
+    MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdPingConfig, MotdProtocolMode,
+    RelayConfig, RelayMode, RuntimeConfig, SocketOptions, StatusPingMode, TransportConfig,
 };
 use http::uri::Authority;
 use std::path::PathBuf;
@@ -79,8 +79,21 @@ impl ConfigNormalizer {
                         .as_deref()
                         .map(|value| normalize_addr(value, 25565))
                         .transpose()?,
-                    protocol_mode: normalize_protocol_mode(raw.transport.motd.protocol),
-                    ping_mode: normalize_ping_mode(raw.transport.motd.ping_mode),
+                    protocol_mode: match raw.transport.motd.protocol {
+                        MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::Client) => {
+                            MotdProtocolMode::Client
+                        }
+                        MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::NegativeOne) => {
+                            MotdProtocolMode::NegativeOne
+                        }
+                        MotdProtocolLiteral::Fixed(value) => MotdProtocolMode::Fixed(value),
+                    },
+                    ping_mode: match raw.transport.motd.ping_mode {
+                        StatusPingModeLiteral::Local => StatusPingMode::Local,
+                        StatusPingModeLiteral::ZeroMs => StatusPingMode::ZeroMs,
+                        StatusPingModeLiteral::Passthrough => StatusPingMode::Passthrough,
+                        StatusPingModeLiteral::Disconnect => StatusPingMode::Disconnect,
+                    },
                     ping: MotdPingConfig {
                         target_addr: raw
                             .transport
@@ -103,7 +116,28 @@ impl ConfigNormalizer {
                             .status_cache_ttl_ms
                             .unwrap_or(DEFAULT_MOTD_STATUS_CACHE_TTL_MS),
                     ),
-                    favicon: normalize_favicon_mode(raw.transport.motd.favicon, &source_path)?,
+                    favicon: MotdFaviconConfig {
+                        mode: match raw.transport.motd.favicon.mode {
+                            MotdFaviconModeLiteral::Json => MotdFaviconMode::Json,
+                            MotdFaviconModeLiteral::Path => MotdFaviconMode::Path,
+                            MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
+                            MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
+                        },
+                        path: raw.transport.motd.favicon.path.map(|value| {
+                            source_path
+                                .parent()
+                                .unwrap_or_else(|| std::path::Path::new("."))
+                                .join(value)
+                        }),
+                        target_addr: raw
+                            .transport
+                            .motd
+                            .favicon
+                            .target_addr
+                            .as_deref()
+                            .map(|value| normalize_addr(value, 25565))
+                            .transpose()?,
+                    },
                 },
             },
             relay: RelayConfig {
@@ -147,58 +181,32 @@ impl ConfigNormalizer {
                     kick_reason: raw.api.mock.kick_reason,
                 },
             },
-            stats_log_interval: raw.runtime.stats_log_interval_secs.map(Duration::from_secs),
+            runtime: RuntimeConfig {
+                stats_log_interval: raw.runtime.stats_log_interval_secs.map(Duration::from_secs),
+                logging: LoggingConfig {
+                    level: match raw.runtime.logging.level {
+                        LogLevelLiteral::Trace => LogLevel::Trace,
+                        LogLevelLiteral::Debug => LogLevel::Debug,
+                        LogLevelLiteral::Info => LogLevel::Info,
+                        LogLevelLiteral::Warn => LogLevel::Warn,
+                        LogLevelLiteral::Error => LogLevel::Error,
+                    },
+                    format: match raw.runtime.logging.format {
+                        LogFormatLiteral::Pretty => LogFormat::Pretty,
+                        LogFormatLiteral::Compact => LogFormat::Compact,
+                        LogFormatLiteral::Json => LogFormat::Json,
+                    },
+                    async_enabled: raw.runtime.logging.async_enabled,
+                },
+            },
             source_path,
         })
     }
 }
 
-fn normalize_favicon_mode(
-    raw: super::schema_types::MotdFaviconFileConfig,
-    source_path: &std::path::Path,
-) -> anyhow::Result<MotdFaviconConfig> {
-    Ok(MotdFaviconConfig {
-        mode: match raw.mode {
-            MotdFaviconModeLiteral::Json => MotdFaviconMode::Json,
-            MotdFaviconModeLiteral::Path => MotdFaviconMode::Path,
-            MotdFaviconModeLiteral::Passthrough => MotdFaviconMode::Passthrough,
-            MotdFaviconModeLiteral::Remove => MotdFaviconMode::Remove,
-        },
-        path: raw.path.map(|value| {
-            source_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .join(value)
-        }),
-        target_addr: raw
-            .target_addr
-            .as_deref()
-            .map(|value| normalize_addr(value, 25565))
-            .transpose()?,
-    })
-}
-
-fn normalize_protocol_mode(value: MotdProtocolLiteral) -> MotdProtocolMode {
-    match value {
-        MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::Client) => MotdProtocolMode::Client,
-        MotdProtocolLiteral::Named(MotdProtocolNamedLiteral::NegativeOne) => {
-            MotdProtocolMode::NegativeOne
-        }
-        MotdProtocolLiteral::Fixed(value) => MotdProtocolMode::Fixed(value),
-    }
-}
-
-fn normalize_ping_mode(value: StatusPingModeLiteral) -> StatusPingMode {
-    match value {
-        StatusPingModeLiteral::Passthrough => StatusPingMode::Passthrough,
-        StatusPingModeLiteral::ZeroMs => StatusPingMode::ZeroMs,
-        StatusPingModeLiteral::UpstreamTcp => StatusPingMode::UpstreamTcp,
-        StatusPingModeLiteral::Disconnect => StatusPingMode::Disconnect,
-    }
-}
-
 fn normalize_addr(target_addr: &str, default_port: u16) -> anyhow::Result<String> {
-    let authority = target_addr.parse::<Authority>()
+    let authority = target_addr
+        .parse::<Authority>()
         .map_err(|_| anyhow::anyhow!("invalid address"))?;
 
     let host = authority.host();

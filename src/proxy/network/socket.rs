@@ -1,12 +1,10 @@
-use std::io;
-use libc::printf;
 use socket2::{SockRef, TcpKeepalive};
+use std::io;
 
 use super::super::config::SocketOptions;
 
 pub fn apply_sockref_options(socket: SockRef<'_>, options: &SocketOptions) -> io::Result<()> {
     socket.set_tcp_nodelay(options.tcp_nodelay)?;
-    println!("FUCK!");
     socket.set_keepalive(true)?;
     socket.set_tcp_keepalive(&TcpKeepalive::new().with_time(options.keepalive))?;
 

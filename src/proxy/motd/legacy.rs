@@ -34,7 +34,15 @@ pub async fn serve_legacy_ping(
         None,
     );
     let legacy_raw = extract_legacy_text(&motd_json);
-    let response = encode_legacy_response(&legacy_raw);
+    
+    let utf16: Vec<u16> = legacy_raw.encode_utf16().collect();
+    let mut response = Vec::with_capacity(3 + utf16.len() * 2);
+    response.push(0xFF);
+    response.extend_from_slice(&(utf16.len() as u16).to_be_bytes());
+    for word in utf16 {
+        response.extend_from_slice(&word.to_be_bytes());
+    }
+    
     client.write_all(&response).await?;
 
     players.set_state(connection_id, PlayerState::StatusServedLocally);
@@ -50,10 +58,21 @@ async fn fetch_upstream_status_json(transport: &TransportConfig) -> anyhow::Resu
         .ok_or_else(|| anyhow::anyhow!("missing MOTD upstream address"))?;
     let mut stream = tokio::net::TcpStream::connect(address).await?;
 
+    let server_port = if let Some(stripped) = address.strip_prefix('[') {
+        let (_, port) = stripped.split_once(']').ok_or_else(|| anyhow::anyhow!("invalid IPv6 address"))?;
+        port.strip_prefix(':')
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(25565)
+    } else {
+        address.rsplit_once(':')
+            .and_then(|(_, port)| port.parse().ok())
+            .unwrap_or(25565)
+    };
+
     let handshake = HandshakeInfo {
         protocol_version: 763,
         server_address: address.to_string(),
-        server_port: extract_port(address).unwrap_or(25565),
+        server_port,
         next_state: 1,
     };
     let mut request = crate::minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
@@ -63,17 +82,6 @@ async fn fetch_upstream_status_json(transport: &TransportConfig) -> anyhow::Resu
     let mut packet_io = crate::minecraft::PacketIo::new();
     let frame = packet_io.read_frame(&mut stream, 64 * 1024).await?;
     crate::minecraft::decode_status_response(&frame).map_err(anyhow::Error::from)
-}
-
-fn encode_legacy_response(value: &str) -> Vec<u8> {
-    let utf16: Vec<u16> = value.encode_utf16().collect();
-    let mut response = Vec::with_capacity(3 + utf16.len() * 2);
-    response.push(0xFF);
-    response.extend_from_slice(&(utf16.len() as u16).to_be_bytes());
-    for word in utf16 {
-        response.extend_from_slice(&word.to_be_bytes());
-    }
-    response
 }
 
 fn extract_legacy_text(json: &str) -> String {
@@ -116,14 +124,4 @@ impl LegacyTextExtractor {
             _ => {}
         }
     }
-}
-
-fn extract_port(addr: &str) -> Option<u16> {
-    if let Some(stripped) = addr.strip_prefix('[') {
-        let (_, port) = stripped.split_once(']')?;
-        return port.strip_prefix(':')?.parse().ok();
-    }
-
-    let (_, port) = addr.rsplit_once(':')?;
-    port.parse().ok()
 }

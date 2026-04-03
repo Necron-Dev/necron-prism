@@ -11,10 +11,10 @@ reuse_port = false
 
 [transport.motd]
 mode = "local"
-json = '{"version":{"name":"&bnecron-prism","protocol":-1},"players":{"max":100,"online":%ONLINE_PLAYER%,"sample":[{"name":"&bping target &8> &f%PING_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000001"},{"name":"&bfavicon target &8> &f%FAVICON_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000002"},{"name":"&bmotd target &8> &f%MOTD_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"&bnecron-prism &8| &frelay %RELAY_MODE% &8| &7online &b%ONLINE_PLAYER%\n&7ping %PING_MODE% &8| &7favicon %FAVICON_MODE% &8| &7upstream %UPSTREAM_ADDR%"}}'
+json = '{"version":{"name":"§bnecron-prism §7status","protocol":-1},"players":{"max":100,"online":%ONLINE_PLAYER%,"sample":[{"name":"§7mode §8> §f%RELAY_MODE%","id":"00000000-0000-0000-0000-000000000001"},{"name":"§7ping §8> §b%PING_MODE%","id":"00000000-0000-0000-0000-000000000002"},{"name":"§7target §8> §f%MOTD_TARGET_ADDR%","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"§bnecron-prism §8» §fclean minecraft relay\n§7online §f%ONLINE_PLAYER% §8| §7favicon §f%FAVICON_MODE% §8| §7ping §b%PING_MODE%"}}'
 upstream_addr = "mc.hypixel.net:25565"
 protocol = "client"
-ping_mode = "passthrough"
+ping_mode = "0ms"
 upstream_ping_timeout_ms = 1500
 status_cache_ttl_ms = 1000
 
@@ -39,3 +39,8 @@ connection_id_prefix = "debug"
 
 [runtime]
 stats_log_interval_secs = 10
+
+[runtime.logging]
+level = "info"
+format = "pretty"
+async_enabled = true

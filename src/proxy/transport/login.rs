@@ -46,7 +46,7 @@ pub async fn resolve_login_route(
             .as_deref(),
         peer_addr.as_ref().map(ToString::to_string).as_deref(),
         players.current_online_count(),
-    ) {
+    ).await {
         Ok(JoinDecision::Allow(target)) => {
             if let Some(cid) = target.connection_id {
                 players.update_external_connection_id(connection_id, Arc::<str>::from(cid));
@@ -56,43 +56,27 @@ pub async fn resolve_login_route(
                 rewrite_addr: target.rewrite_addr.map(Arc::<str>::from),
             }))
         }
-        Ok(JoinDecision::Deny { kick_reason }) => deny_with_reason(
-            client,
-            &kick_reason,
-            players,
-            connection_id,
-            login_start_packet,
-        )
-        .await
-        .map(Err),
+        Ok(JoinDecision::Deny { kick_reason }) => {
+            let kick_packet = login_disconnect_packet(&kick_reason)
+                .map_err(anyhow::Error::from)
+                .context("build disconnect packet")?;
+            client.write_all(&kick_packet).await?;
+            client.shutdown().await?;
+            players.set_state(connection_id, PlayerState::LoginRejectedLocally);
+
+            info!(
+                login_start_bytes = login_start_packet.wire_len,
+                kick_packet_bytes = kick_packet.len(),
+                "rejected login with api kick packet"
+            );
+
+            Ok(Err(ConnectionReport::new(
+                ConnectionTraffic::default(),
+                None,
+                None,
+                None,
+            )))
+        }
         Err(error) => Err(error.into()),
     }
-}
-
-async fn deny_with_reason(
-    client: &mut tokio::net::TcpStream,
-    reason: &str,
-    players: &PlayerRegistry,
-    connection_id: u64,
-    login_start_packet: &FramedPacket,
-) -> anyhow::Result<ConnectionReport> {
-    let kick_packet = login_disconnect_packet(reason)
-        .map_err(anyhow::Error::from)
-        .context("build disconnect packet")?;
-    client.write_all(&kick_packet).await?;
-    client.shutdown().await?;
-    players.set_state(connection_id, PlayerState::LoginRejectedLocally);
-
-    info!(
-        login_start_bytes = login_start_packet.wire_len,
-        kick_packet_bytes = kick_packet.len(),
-        "rejected login with api kick packet"
-    );
-
-    Ok(ConnectionReport::new(
-        ConnectionTraffic::default(),
-        None,
-        None,
-        None,
-    ))
 }

@@ -15,7 +15,6 @@ pub enum ApiService {
 
 #[cfg(feature = "http-api")]
 pub struct HttpApiService {
-    runtime: tokio::runtime::Runtime,
     client: ApiClient,
 }
 
@@ -38,7 +37,7 @@ impl ApiService {
         }
     }
 
-    pub fn join(
+    pub async fn join(
         &self,
         name: Option<&str>,
         uuid: Option<&str>,
@@ -47,12 +46,12 @@ impl ApiService {
     ) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => service.join(name, uuid, addr, load),
-            Self::Mock(service) => service.join(name, uuid, addr, load),
+            Self::Http(service) => service.join(name, uuid, addr, load).await,
+            Self::Mock(service) => service.join(name, uuid, addr, load).await,
         }
     }
 
-    pub fn traffic_single(
+    pub async fn traffic_single(
         &self,
         connection_id: &str,
         send_bytes: u64,
@@ -60,16 +59,16 @@ impl ApiService {
     ) -> Result<Vec<String>> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => service.traffic_single(connection_id, send_bytes, recv_bytes),
-            Self::Mock(service) => service.traffic_single(connection_id, send_bytes, recv_bytes),
+            Self::Http(service) => service.traffic_single(connection_id, send_bytes, recv_bytes).await,
+            Self::Mock(service) => service.traffic_single(connection_id, send_bytes, recv_bytes).await,
         }
     }
 
-    pub fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
+    pub async fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => service.closed(cid, send, recv),
-            Self::Mock(service) => service.closed(cid, send, recv),
+            Self::Http(service) => service.closed(cid, send, recv).await,
+            Self::Mock(service) => service.closed(cid, send, recv).await,
         }
     }
 }
@@ -77,43 +76,34 @@ impl ApiService {
 #[cfg(feature = "http-api")]
 impl HttpApiService {
     fn new(config: &ApiConfig) -> Result<Self> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .map_err(|error| anyhow!("failed to build api runtime: {error}"))?;
-
         Ok(Self {
-            runtime,
             client: ApiClient::new(config)?,
         })
     }
 
-    fn join(
+    async fn join(
         &self,
         name: Option<&str>,
         uuid: Option<&str>,
         addr: Option<&str>,
         load: i32,
     ) -> Result<JoinDecision> {
-        self.runtime
-            .block_on(self.client.join(name, uuid, addr, load))
+        self.client.join(name, uuid, addr, load).await
             .map_err(|error| anyhow!("join api request failed: {error}"))
     }
 
-    fn traffic_single(
+    async fn traffic_single(
         &self,
         connection_id: &str,
         send_bytes: u64,
         recv_bytes: u64,
     ) -> Result<Vec<String>> {
-        self.runtime
-            .block_on(self.client.traffic(connection_id, send_bytes, recv_bytes))
+        self.client.traffic(connection_id, send_bytes, recv_bytes).await
             .map_err(|error| anyhow!("traffic api request failed: {error}"))
     }
 
-    fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
-        self.runtime
-            .block_on(self.client.closed(cid, send, recv))
+    async fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
+        self.client.closed(cid, send, recv).await
             .map_err(|error| anyhow!("closed api request failed: {error}"))
     }
 }
@@ -129,7 +119,7 @@ impl MockApiService {
         }
     }
 
-    fn join(
+    async fn join(
         &self,
         _name: Option<&str>,
         _uuid: Option<&str>,
@@ -150,7 +140,7 @@ impl MockApiService {
         }))
     }
 
-    fn traffic_single(
+    async fn traffic_single(
         &self,
         _connection_id: &str,
         _send_bytes: u64,
@@ -159,7 +149,7 @@ impl MockApiService {
         Ok(Vec::new())
     }
 
-    fn closed(&self, _cid: &str, _send: u64, _recv: u64) -> Result<()> {
+    async fn closed(&self, _cid: &str, _send: u64, _recv: u64) -> Result<()> {
         Ok(())
     }
 }

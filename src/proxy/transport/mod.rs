@@ -30,11 +30,18 @@ pub async fn handle_client(
     config: &Config,
     api: &ApiService,
     motd: &MotdService,
-    _traffic_reporter: &TrafficReporter,
+    traffic_reporter: &TrafficReporter,
     players: &PlayerRegistry,
     context: ConnectionContext,
     started_at: Instant,
 ) -> anyhow::Result<ConnectionReport> {
+    info!(
+        connection_id = context.id,
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        phase = "start_handle_client",
+        "starting client handling"
+    );
+
     let mut packet_io = PacketIo::new();
     let mut first_byte = [0_u8; 1];
     timeout(
@@ -49,6 +56,14 @@ pub async fn handle_client(
         )
     })?
     .context("read first byte")?;
+
+    info!(
+        connection_id = context.id,
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        phase = "first_byte_read",
+        first_byte = first_byte[0],
+        "read first byte"
+    );
 
     if first_byte[0] == 0xFE {
         serve_legacy_ping(
@@ -102,12 +117,14 @@ pub async fn handle_client(
     players.update_handshake(context.id, &handshake);
 
     info!(
+        connection_id = context.id,
         protocol_version = handshake.protocol_version,
         next_state = handshake.next_state,
         original_host = %handshake.server_address,
         original_port = handshake.server_port,
         handshake_wire_bytes = handshake_packet.wire_len,
         elapsed_ms = started_at.elapsed().as_millis() as u64,
+        phase = "handshake_decoded",
         "parsed client handshake"
     );
 
@@ -138,6 +155,13 @@ pub async fn handle_client(
         .await
         .context("read login start packet")?;
 
+    info!(
+        connection_id = context.id,
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        phase = "login_start_read",
+        "read login start packet"
+    );
+
     let route = match login::resolve_login_route(
         &mut client,
         api,
@@ -151,15 +175,20 @@ pub async fn handle_client(
         Err(report) => return Err(anyhow::Error::new(HandledConnection(report))),
     };
 
+    let counters = super::traffic::ConnectionCounters::default();
+
     proxy_connection(
         client,
         config,
+        traffic_reporter,
         players,
         context,
         handshake,
         handshake_packet,
         login_start_packet,
         route,
+        started_at,
+        counters.clone(),
     )
     .await
 }
@@ -167,12 +196,15 @@ pub async fn handle_client(
 async fn proxy_connection(
     client: tokio::net::TcpStream,
     config: &Config,
+    traffic_reporter: &TrafficReporter,
     players: &PlayerRegistry,
     context: ConnectionContext,
     mut handshake: crate::minecraft::HandshakeInfo,
-    handshake_packet: crate::minecraft::FramedPacket,
+    _handshake_packet: crate::minecraft::FramedPacket,
     login_start_packet: crate::minecraft::FramedPacket,
     route: ConnectionRoute,
+    started_at: Instant,
+    counters: super::traffic::ConnectionCounters,
 ) -> anyhow::Result<ConnectionReport> {
     let rewrite_addr = route
         .rewrite_addr
@@ -193,12 +225,25 @@ async fn proxy_connection(
         rewrite_addr = %rewrite_addr,
         rewritten_handshake_bytes = rewritten_packet.len(),
         target_addr = %route.target_addr,
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        phase = "before_upstream_connect",
         "rewrote handshake and connecting outbound"
     );
 
     let mut upstream = connect_outbound_addr(route.target_addr.as_ref(), &config.inbound.socket_options)
         .await
         .context("connect upstream")?;
+
+    if let Some(external_connection_id) =
+        players.with_external_connection_id(context.id, |cid| cid.to_owned())
+    {
+        traffic_reporter.register(
+            context.id,
+            &external_connection_id,
+            counters.clone(),
+            None,
+        );
+    }
 
     upstream
         .write_all(&rewritten_packet)
@@ -208,23 +253,23 @@ async fn proxy_connection(
         .await
         .context("forward login start")?;
 
-    let initial_upload_bytes =
-        forward::compute_upload_bytes(&handshake_packet, &login_start_packet);
-
     let relay_stats = relay_bidirectional(
         client,
         upstream,
-        super::traffic::ConnectionCounters::default(),
+        counters.clone(),
         &config.inbound.socket_options,
         config.relay.mode,
     )
     .await
     .context("relay bidirectional")?;
 
+    let upload_bytes = counters.upload();
+    let download_bytes = counters.download();
+
     Ok(ConnectionReport::new(
         ConnectionTraffic {
-            upload_bytes: initial_upload_bytes + relay_stats.upload_bytes,
-            download_bytes: relay_stats.download_bytes,
+            upload_bytes,
+            download_bytes,
         },
         relay_stats.mode,
         Some(route.target_addr),

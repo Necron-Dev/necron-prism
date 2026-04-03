@@ -1,6 +1,7 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::Arc;
 
+use dashmap::DashMap;
 use valence_protocol::uuid::Uuid;
 
 use crate::minecraft::{HandshakeInfo, INTENT_LOGIN, INTENT_STATUS};
@@ -9,13 +10,13 @@ use super::types::{PlayerSession, PlayerState};
 
 #[derive(Clone, Default)]
 pub struct PlayerRegistry {
-    sessions: Arc<RwLock<HashMap<u64, PlayerSession>>>,
+    sessions: Arc<DashMap<u64, PlayerSession>>,
+    online_count: Arc<AtomicI32>,
 }
 
 impl PlayerRegistry {
     pub fn register_connection(&self, connection_id: u64) -> usize {
-        let mut sessions = self.sessions.write().expect("player registry poisoned");
-        sessions.insert(
+        self.sessions.insert(
             connection_id,
             PlayerSession {
                 external_connection_id: None,
@@ -27,7 +28,7 @@ impl PlayerRegistry {
                 state: PlayerState::Connected,
             },
         );
-        sessions.len()
+        self.sessions.len()
     }
 
     pub fn update_handshake(&self, connection_id: u64, handshake: &HandshakeInfo) {
@@ -64,53 +65,74 @@ impl PlayerRegistry {
         F: FnOnce(&str) -> R,
     {
         self.sessions
-            .read()
-            .expect("player registry poisoned")
             .get(&connection_id)
             .and_then(|session| session.external_connection_id.as_deref().map(f))
     }
 
     pub fn update_outbound(&self, connection_id: u64, outbound_name: Arc<str>) {
+        let was_proxying = self
+            .sessions
+            .get(&connection_id)
+            .map(|s| s.state == PlayerState::Proxying)
+            .unwrap_or(false);
+
         self.update(connection_id, |session| {
             session.outbound_name = Some(outbound_name);
             session.state = PlayerState::Proxying;
         });
+
+        if !was_proxying {
+            self.online_count.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub fn set_state(&self, connection_id: u64, state: PlayerState) {
+        let was_proxying = self
+            .sessions
+            .get(&connection_id)
+            .map(|s| s.state == PlayerState::Proxying)
+            .unwrap_or(false);
+
+        let will_be_proxying = state == PlayerState::Proxying;
+
         self.update(connection_id, |session| {
             session.state = state;
         });
+
+        match (was_proxying, will_be_proxying) {
+            (false, true) => {
+                self.online_count.fetch_add(1, Ordering::Relaxed);
+            }
+            (true, false) => {
+                self.online_count.fetch_sub(1, Ordering::Relaxed);
+            }
+            _ => {}
+        }
     }
 
     pub fn current_online_count(&self) -> i32 {
-        let sessions = self.sessions.read().expect("player registry poisoned");
-        sessions
-            .values()
-            .filter(|session| matches!(session.state, PlayerState::Proxying))
-            .count() as i32
+        self.online_count.load(Ordering::Relaxed)
     }
 
     pub fn remove_connection(&self, connection_id: u64) -> usize {
-        let mut sessions = self.sessions.write().expect("player registry poisoned");
-        sessions.remove(&connection_id);
-        sessions.len()
+        if let Some((_, session)) = self.sessions.remove(&connection_id) {
+            if session.state == PlayerState::Proxying {
+                self.online_count.fetch_sub(1, Ordering::Relaxed);
+            }
+        }
+        self.sessions.len()
     }
 
     pub fn active_count(&self) -> usize {
-        self.sessions
-            .read()
-            .expect("player registry poisoned")
-            .len()
+        self.sessions.len()
     }
 
     fn update<F>(&self, connection_id: u64, update: F)
     where
         F: FnOnce(&mut PlayerSession),
     {
-        let mut sessions = self.sessions.write().expect("player registry poisoned");
-        if let Some(session) = sessions.get_mut(&connection_id) {
-            update(session);
+        if let Some(mut session) = self.sessions.get_mut(&connection_id) {
+            update(&mut session);
         }
     }
 }

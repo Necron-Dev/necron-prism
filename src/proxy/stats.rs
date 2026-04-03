@@ -47,7 +47,7 @@ impl ConnectionTotals {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ConnectionTraffic {
     pub upload_bytes: u64,
     pub download_bytes: u64,

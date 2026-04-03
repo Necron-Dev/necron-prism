@@ -1,6 +1,8 @@
+use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::Shutdown;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tracing::warn;
 
@@ -32,13 +34,16 @@ impl TrafficReporter {
         connection_id: u64,
         external_connection_id: &str,
         counters: ConnectionCounters,
-        closer: std::net::TcpStream,
+        closer: Option<std::net::TcpStream>,
     ) {
         self.register_internal(connection_id, external_connection_id, counters, closer);
     }
 
     pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
-        self.finish_internal(connection_id, totals);
+        let reporter = self.clone();
+        spawn_background(async move {
+            reporter.finish_internal(connection_id, totals).await;
+        });
     }
 
     pub fn active_totals(&self) -> ConnectionTraffic {
@@ -52,10 +57,10 @@ impl TrafficReporter {
         connection_id: u64,
         external_connection_id: &str,
         counters: ConnectionCounters,
-        closer: std::net::TcpStream,
+        closer: Option<std::net::TcpStream>,
     ) {
         let external_connection_id: Arc<str> = external_connection_id.to_owned().into();
-        let mut sessions = self.sessions.lock().expect("traffic reporter poisoned");
+        let mut sessions = self.sessions.lock();
         sessions.insert(
             connection_id,
             TrafficSession {
@@ -66,30 +71,27 @@ impl TrafficReporter {
             },
         );
 
-        self.closers
-            .lock()
-            .expect("traffic reporter closers poisoned")
-            .insert(external_connection_id, closer);
+        if let Some(closer) = closer {
+            self.closers.lock().insert(external_connection_id, closer);
+        }
     }
 
-    fn finish_internal(&self, connection_id: u64, totals: ConnectionTraffic) {
+    async fn finish_internal(&self, connection_id: u64, totals: ConnectionTraffic) {
         let session = self
             .sessions
             .lock()
-            .expect("traffic reporter poisoned")
             .remove(&connection_id);
 
         if let Some(session) = session {
             self.closers
                 .lock()
-                .expect("traffic reporter closers poisoned")
                 .remove(session.external_connection_id.as_ref());
 
             if let Err(error) = self.api.closed(
                 &session.external_connection_id,
                 totals.upload_bytes,
                 totals.download_bytes,
-            ) {
+            ).await {
                 warn!(
                     error = %error,
                     cid = %session.external_connection_id,
@@ -101,7 +103,7 @@ impl TrafficReporter {
     }
 
     fn active_totals_internal(&self) -> ConnectionTraffic {
-        let sessions = self.sessions.lock().expect("traffic reporter poisoned");
+        let sessions = self.sessions.lock();
         let mut totals = ConnectionTraffic::default();
 
         for session in sessions.values() {
@@ -115,16 +117,14 @@ impl TrafficReporter {
     }
 
     fn spawn_loop(&self, interval: std::time::Duration) {
-        let api = Arc::clone(&self.api);
-        let sessions = Arc::clone(&self.sessions);
-        let closers = Arc::clone(&self.closers);
+        let reporter = self.clone();
 
-        std::thread::spawn(move || {
+        spawn_background(async move {
             loop {
-                std::thread::sleep(interval);
+                tokio::time::sleep(interval).await;
 
                 let snapshot = {
-                    let mut sessions = sessions.lock().expect("traffic reporter poisoned");
+                    let mut sessions = reporter.sessions.lock();
                     let mut snapshot = Vec::new();
                     for session in sessions.values_mut() {
                         let upload = session.counters.upload();
@@ -147,10 +147,10 @@ impl TrafficReporter {
                 };
 
                 for (cid, send_bytes, recv_bytes) in snapshot {
-                    match api.traffic_single(&cid, send_bytes, recv_bytes) {
+                    match reporter.api.traffic_single(&cid, send_bytes, recv_bytes).await {
                         Ok(connections_to_close) => {
                             if !connections_to_close.is_empty() {
-                                close_connections(&closers, &connections_to_close);
+                                close_connections(&reporter.closers, &connections_to_close);
                                 warn!(cid = %cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
                             }
                         }
@@ -164,11 +164,26 @@ impl TrafficReporter {
     }
 }
 
+fn spawn_background<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+        return;
+    }
+
+    std::thread::spawn(move || match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+        Ok(runtime) => runtime.block_on(future),
+        Err(error) => warn!(error = %error, "failed to build fallback runtime for traffic reporter"),
+    });
+}
+
 fn close_connections(
     closers: &Arc<Mutex<HashMap<Arc<str>, std::net::TcpStream>>>,
     connections_to_close: &[String],
 ) {
-    let mut registered = closers.lock().expect("traffic reporter closers poisoned");
+    let mut registered = closers.lock();
     for close_id in connections_to_close {
         if let Some(stream) = registered.remove(close_id.as_str()) {
             let _ = stream.shutdown(Shutdown::Both);

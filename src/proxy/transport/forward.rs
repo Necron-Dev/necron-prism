@@ -10,10 +10,3 @@ pub async fn forward_login_start(
     upstream.write_all(&encoded_login_start).await?;
     Ok(())
 }
-
-pub fn compute_upload_bytes(
-    handshake_packet: &FramedPacket,
-    login_start_packet: &FramedPacket,
-) -> u64 {
-    handshake_packet.wire_len as u64 + login_start_packet.wire_len as u64
-}

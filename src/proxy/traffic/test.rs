@@ -28,7 +28,7 @@ fn mock_mode_keeps_active_traffic_totals() {
     let counters = ConnectionCounters::default();
     let closer = connected_stream();
 
-    reporter.register(1, "mock-1", counters.clone(), closer);
+    reporter.register(1, "mock-1", counters.clone(), Some(closer));
     counters.add_upload(128);
     counters.add_download(256);
 

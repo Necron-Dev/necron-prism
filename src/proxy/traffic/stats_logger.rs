@@ -9,14 +9,18 @@ pub fn spawn_stats_logger(
     traffic_reporter: TrafficReporter,
     interval: std::time::Duration,
 ) {
-    std::thread::spawn(move || {
+    tokio::spawn(async move {
         let mut previous_combined = ConnectionTraffic::default();
+        let mut previous_active_connections = 0_usize;
+        let mut previous_total_connections = 0_u64;
 
         loop {
-            std::thread::sleep(interval);
+            tokio::time::sleep(interval).await;
             let settled = connection_totals.settled_totals();
             let active = traffic_reporter.active_totals();
             let combined = settled.combined_with(active);
+            let active_connections = players.active_count();
+            let total_connections = connection_stats.total_connections();
             let interval_upload_bytes = combined
                 .upload_bytes
                 .saturating_sub(previous_combined.upload_bytes);
@@ -36,11 +40,22 @@ pub fn spawn_stats_logger(
             let connection_upload_mbps = megabits_per_second(interval_upload_bytes, interval_secs);
             let connection_download_mbps =
                 megabits_per_second(interval_download_bytes, interval_secs);
+
+            let changed = combined != previous_combined
+                || active_connections != previous_active_connections
+                || total_connections != previous_total_connections;
+
             previous_combined = combined;
+            previous_active_connections = active_connections;
+            previous_total_connections = total_connections;
+
+            if !changed {
+                continue;
+            }
 
             tracing::info!(
-                active_connections = players.active_count(),
-                total_connections = connection_stats.total_connections(),
+                active_connections,
+                total_connections,
                 settled_connection_upload_mb,
                 settled_connection_download_mb,
                 active_connection_upload_mb,

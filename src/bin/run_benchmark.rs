@@ -6,9 +6,11 @@ use necron_prism::benchmark::{
 };
 use std::env;
 
+const BENCHMARK_NAME_ENV: &str = "NECRON_BENCHMARK";
+
 fn main() {
     let benchmark = parse_benchmark_name();
-    let mut criterion = Criterion::default();
+    let mut criterion = Criterion::default().configure_from_args();
 
     match benchmark.as_str() {
         "mc" | "mc_bench" => register_mc_benchmark(&mut criterion),
@@ -24,6 +26,13 @@ fn main() {
 }
 
 fn parse_benchmark_name() -> String {
+    if let Ok(value) = env::var(BENCHMARK_NAME_ENV) {
+        let value = value.trim();
+        if !value.is_empty() {
+            return value.to_string();
+        }
+    }
+
     let mut args = env::args().skip(1);
 
     while let Some(arg) = args.next() {
@@ -36,6 +45,8 @@ fn parse_benchmark_name() -> String {
         }
     }
 
-    eprintln!("error: missing required --benchmark <mc|kernel|compare> argument");
+    eprintln!(
+        "error: missing benchmark selection. Set {BENCHMARK_NAME_ENV}=<mc|kernel|compare> or pass --benchmark <mc|kernel|compare>"
+    );
     std::process::exit(2);
 }

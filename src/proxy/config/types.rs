@@ -13,6 +13,7 @@ use validator::Validate;
 pub struct Config {
     #[validate(length(min = 1, message = "listen_addr cannot be empty"))]
     pub listen_addr: String,
+    pub multipath_tcp: bool,
     pub first_packet_timeout_ms: u64,
     pub tcp_nodelay: bool,
     pub keepalive_secs: u64,
@@ -40,6 +41,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             listen_addr: "0.0.0.0:25565".to_string(),
+            multipath_tcp: false,
             first_packet_timeout_ms: 5_000,
             tcp_nodelay: true,
             keepalive_secs: 30,
@@ -57,7 +59,9 @@ impl Default for Config {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-    pub struct MotdConfig {
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
+pub struct MotdConfig {
     pub mode: MotdMode,
     #[validate(length(min = 1, message = "local_json cannot be empty"))]
     pub local_json: String,
@@ -88,6 +92,8 @@ impl Default for MotdConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct ApiConfig {
     pub mode: ApiMode,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -122,6 +128,8 @@ impl Default for ApiConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct LoggingConfig {
     pub level: LogLevel,
     pub format: LogFormat,
@@ -132,6 +140,8 @@ pub struct LoggingConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct LogFileConfig {
     pub path: PathBuf,
     pub mode: LogRotation,
@@ -170,6 +180,8 @@ impl Default for LogFileConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct MotdFaviconConfig {
     pub mode: MotdFaviconMode,
     #[serde(skip_serializing_if = "Option::is_none")]

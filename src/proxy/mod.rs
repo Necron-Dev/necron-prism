@@ -1,5 +1,5 @@
 mod api;
-mod config;
+pub mod config;
 mod context;
 mod inbound;
 mod lifecycle;

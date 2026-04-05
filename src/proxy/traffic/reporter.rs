@@ -1,32 +1,38 @@
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::future::Future;
 use std::net::Shutdown;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
-use tracing::warn;
+use tracing::{debug, warn};
 
 use super::super::api::ApiService;
 use super::super::config::ApiConfig;
-use super::super::stats::ConnectionTraffic;
-use super::counters::ConnectionCounters;
+use super::super::stats::{ConnectionCounters, ConnectionTraffic};
 
 #[derive(Clone)]
 pub struct TrafficReporter {
     api: Arc<ApiService>,
     sessions: Arc<Mutex<HashMap<u64, TrafficSession>>>,
     closers: Arc<Mutex<HashMap<Arc<str>, std::net::TcpStream>>>,
+    cancel_token: CancellationToken,
 }
 
 impl TrafficReporter {
     pub fn new(api: Arc<ApiService>, config: &ApiConfig) -> Self {
+        let cancel_token = CancellationToken::new();
         let reporter = Self {
             api,
             sessions: Arc::new(Mutex::new(HashMap::new())),
             closers: Arc::new(Mutex::new(HashMap::new())),
+            cancel_token,
         };
-        reporter.spawn_loop(config.traffic_interval);
+        reporter.spawn_loop(std::time::Duration::from_millis(config.traffic_interval_ms));
         reporter
+    }
+
+    pub fn shutdown(&self) {
+        self.cancel_token.cancel();
     }
 
     pub fn register(
@@ -41,7 +47,7 @@ impl TrafficReporter {
 
     pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
         let reporter = self.clone();
-        spawn_background(async move {
+        tokio::spawn(async move {
             reporter.finish_internal(connection_id, totals).await;
         });
     }
@@ -118,45 +124,51 @@ impl TrafficReporter {
 
     fn spawn_loop(&self, interval: std::time::Duration) {
         let reporter = self.clone();
-
-        spawn_background(async move {
+        let cancel_token = self.cancel_token.clone();
+        tokio::spawn(async move {
             loop {
-                tokio::time::sleep(interval).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(interval) => {
+                        let snapshot = {
+                            let mut sessions = reporter.sessions.lock();
+                            let mut snapshot = Vec::new();
+                            for session in sessions.values_mut() {
+                                let upload = session.counters.upload();
+                                let download = session.counters.download();
+                                let delta_upload = upload.saturating_sub(session.last_sent_upload);
+                                let delta_download = download.saturating_sub(session.last_sent_download);
+                                if delta_upload == 0 && delta_download == 0 {
+                                    continue;
+                                }
 
-                let snapshot = {
-                    let mut sessions = reporter.sessions.lock();
-                    let mut snapshot = Vec::new();
-                    for session in sessions.values_mut() {
-                        let upload = session.counters.upload();
-                        let download = session.counters.download();
-                        let delta_upload = upload.saturating_sub(session.last_sent_upload);
-                        let delta_download = download.saturating_sub(session.last_sent_download);
-                        if delta_upload == 0 && delta_download == 0 {
-                            continue;
-                        }
+                                session.last_sent_upload = upload;
+                                session.last_sent_download = download;
+                                snapshot.push((
+                                    session.external_connection_id.clone(),
+                                    delta_upload,
+                                    delta_download,
+                                ));
+                            }
+                            snapshot
+                        };
 
-                        session.last_sent_upload = upload;
-                        session.last_sent_download = download;
-                        snapshot.push((
-                            session.external_connection_id.clone(),
-                            delta_upload,
-                            delta_download,
-                        ));
-                    }
-                    snapshot
-                };
-
-                for (cid, send_bytes, recv_bytes) in snapshot {
-                    match reporter.api.traffic_single(&cid, send_bytes, recv_bytes).await {
-                        Ok(connections_to_close) => {
-                            if !connections_to_close.is_empty() {
-                                close_connections(&reporter.closers, &connections_to_close);
-                                warn!(cid = %cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
+                        for (cid, send_bytes, recv_bytes) in snapshot {
+                            match reporter.api.traffic_single(&cid, send_bytes, recv_bytes).await {
+                                Ok(connections_to_close) => {
+                                    if !connections_to_close.is_empty() {
+                                        close_connections(&reporter.closers, &connections_to_close);
+                                        warn!(cid = %cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
+                                    }
+                                }
+                                Err(error) => {
+                                    warn!(error = %error, cid = %cid, "failed to report traffic api event")
+                                }
                             }
                         }
-                        Err(error) => {
-                            warn!(error = %error, cid = %cid, "failed to report traffic api event")
-                        }
+                    }
+                    _ = cancel_token.cancelled() => {
+                        debug!("traffic reporter loop received shutdown signal, exiting");
+                        break;
                     }
                 }
             }
@@ -164,20 +176,6 @@ impl TrafficReporter {
     }
 }
 
-fn spawn_background<F>(future: F)
-where
-    F: Future<Output = ()> + Send + 'static,
-{
-    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        handle.spawn(future);
-        return;
-    }
-
-    std::thread::spawn(move || match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-        Ok(runtime) => runtime.block_on(future),
-        Err(error) => warn!(error = %error, "failed to build fallback runtime for traffic reporter"),
-    });
-}
 
 fn close_connections(
     closers: &Arc<Mutex<HashMap<Arc<str>, std::net::TcpStream>>>,

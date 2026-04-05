@@ -1,10 +1,9 @@
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
 
 use crate::proxy::api::ApiService;
-use crate::proxy::config::{ApiConfig, ApiMode, MockApiConfig};
+use crate::proxy::config::{ApiConfig, ApiMode};
 
 use super::{ConnectionCounters, TrafficReporter};
 
@@ -14,16 +13,15 @@ fn mock_mode_keeps_active_traffic_totals() {
         mode: ApiMode::Mock,
         base_url: None,
         bearer_token: None,
-        timeout: Duration::from_secs(1),
-        traffic_interval: Duration::from_secs(60),
-        mock: MockApiConfig {
-            target_addr: "backend:25565".to_owned(),
-            rewrite_addr: Some("backend:25565".to_owned()),
-            connection_id_prefix: "mock".to_owned(),
-            kick_reason: None,
-        },
+        timeout_ms: 1000,
+        traffic_interval_ms: 60000,
+        mock_target_addr: "backend:25565".to_owned(),
+        mock_rewrite_addr: Some("backend:25565".to_owned()),
+        mock_connection_id_prefix: "mock".to_owned(),
+        mock_kick_reason: None,
     };
-    let api = Arc::new(ApiService::new(&config).expect("mock api should build"));
+    let mock_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let api = Arc::new(ApiService::new(&config, mock_counter).expect("mock api should build"));
     let reporter = TrafficReporter::new(api, &config);
     let counters = ConnectionCounters::default();
     let closer = connected_stream();

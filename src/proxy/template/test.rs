@@ -1,9 +1,6 @@
-use std::time::Duration;
-
 use super::*;
 use crate::proxy::config::{
-    MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdPingConfig, MotdProtocolMode,
-    StatusPingMode, TransportConfig,
+    MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdProtocol, StatusPingMode,
 };
 use crate::proxy::players::PlayerRegistry;
 
@@ -14,28 +11,23 @@ fn render_replaces_all_supported_placeholders() {
     players.register_connection(2);
     players.update_outbound(1, "alpha:25565".into());
 
-    let transport = TransportConfig {
-        motd: MotdConfig {
-            mode: MotdMode::Local,
-            local_json: "%ONLINE_PLAYER%|%MOTD_TARGET_ADDR%|%PING_TARGET_ADDR%|%FAVICON_TARGET_ADDR%|%RELAY_MODE%|%PING_MODE%|%FAVICON_MODE%|%UPSTREAM_ADDR%".to_owned(),
-            upstream_addr: Some("motd.example:25565".to_owned()),
-            protocol_mode: MotdProtocolMode::Client,
-            ping_mode: StatusPingMode::Passthrough,
-            ping: MotdPingConfig {
-                target_addr: Some("ping.example:25565".to_owned()),
-            },
-            upstream_ping_timeout: Duration::from_secs(1),
-            status_cache_ttl: Duration::from_secs(1),
-            favicon: MotdFaviconConfig {
-                mode: MotdFaviconMode::Passthrough,
-                path: None,
-                target_addr: Some("icon.example:25565".to_owned()),
-            },
+    let config = MotdConfig {
+        mode: MotdMode::Local,
+        local_json: "{online_player}|{motd_target_addr}|{ping_target_addr}|{favicon_target_addr}|{relay_mode}|{ping_mode}|{favicon_mode}|{upstream_addr}".to_owned(),
+        upstream_addr: "motd.example:25565".to_owned(),
+        protocol: MotdProtocol::Client,
+        ping_mode: StatusPingMode::Passthrough,
+        ping_target_addr: Some("ping.example:25565".to_owned()),
+        upstream_ping_timeout_ms: 1000,
+        favicon: MotdFaviconConfig {
+            mode: MotdFaviconMode::Passthrough,
+            path: None,
+            target_addr: Some("icon.example:25565".to_owned()),
         },
     };
-    let context = TemplateContext::for_transport(&transport, RelayMode::Standard, &players);
+    let context = TemplateContext::for_transport(&config, RelayMode::Standard, &players);
 
-    let rendered = render(&transport.motd.local_json, &context);
+    let rendered = render(&config.local_json, &context);
 
     assert_eq!(
         rendered,

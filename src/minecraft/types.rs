@@ -1,3 +1,10 @@
+use std::sync::LazyLock;
+use regex::Regex;
+
+static ADDR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?:\[(?P<ipv6>.+?)\]|(?P<host>.+?)):(?P<port>\d+)$").unwrap()
+});
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HandshakeInfo {
     pub protocol_version: i32,
@@ -8,37 +15,23 @@ pub struct HandshakeInfo {
 
 impl HandshakeInfo {
     pub fn rewrite_addr(&mut self, addr: &str) -> Result<(), String> {
-        let (host, port) = if let Some(stripped) = addr.strip_prefix('[') {
-            let (host, port) = stripped
-                .split_once(']')
-                .ok_or_else(|| format!("rewrite address is missing a closing bracket: {addr}"))?;
-            let port = port
-                .strip_prefix(':')
-                .ok_or_else(|| format!("rewrite address is missing a port: {addr}"))?
-                .parse::<u16>()
-                .map_err(|_| format!("invalid rewrite address port: {addr}"))?;
-            (host, port)
-        } else {
-            let (host, port) = addr
-                .rsplit_once(':')
-                .ok_or_else(|| format!("rewrite address is missing a port: {addr}"))?;
-            let port = port
-                .parse::<u16>()
-                .map_err(|_| format!("invalid rewrite address port: {addr}"))?;
-            (host, port)
-        };
+        let caps = ADDR_REGEX.captures(addr)
+            .ok_or_else(|| format!("invalid rewrite address format: {addr} (expected host:port or [ipv6]:port)"))?;
+        
+        let host = caps.name("ipv6").or(caps.name("host")).unwrap().as_str();
+        let port = caps.name("port").unwrap().as_str().parse::<u16>()
+            .map_err(|_| format!("invalid rewrite address port: {addr}"))?;
 
-        self.server_address = match self.server_address.split_once('\0') {
-            Some((_, suffix)) => {
-                let mut rewritten = String::with_capacity(host.len() + suffix.len() + 1);
-                rewritten.push_str(host);
-                rewritten.push('\0');
-                rewritten.push_str(suffix);
-                rewritten
-            }
-            None => host.to_owned(),
-        };
+        if let Some(pos) = self.server_address.find('\0') {
+            let suffix = &self.server_address[pos..];
+            let mut rewritten = String::with_capacity(host.len() + suffix.len());
+            rewritten.push_str(host);
+            rewritten.push_str(suffix);
+            self.server_address = rewritten;
+        } else {
+            self.server_address = host.to_owned();
+        }
         self.server_port = port;
         Ok(())
     }
-}
+    }

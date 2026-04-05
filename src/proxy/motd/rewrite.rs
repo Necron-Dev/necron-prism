@@ -1,10 +1,10 @@
 use serde_json::Value;
 
-use crate::proxy::config::{MotdFaviconConfig, MotdFaviconMode, MotdProtocolMode};
+use crate::proxy::config::{MotdFaviconConfig, MotdFaviconMode, MotdProtocol};
 
 pub fn rewrite_json(
     raw_json: &str,
-    protocol_mode: MotdProtocolMode,
+    protocol_mode: MotdProtocol,
     client_protocol: i32,
     favicon: &MotdFaviconConfig,
     explicit_favicon_data_url: Option<&str>,
@@ -16,7 +16,7 @@ pub fn rewrite_json(
             && passthrough_favicon_json.is_some())
         || matches!(favicon.mode, MotdFaviconMode::Remove);
     let needs_protocol =
-        !matches!(protocol_mode, MotdProtocolMode::Client) || client_protocol != -1;
+        !matches!(protocol_mode, MotdProtocol::Client) || client_protocol != -1;
 
     if !needs_formatting && !needs_favicon && !needs_protocol {
         return raw_json.to_owned();
@@ -32,9 +32,8 @@ pub fn rewrite_json(
     }
     if needs_protocol {
         let protocol = match protocol_mode {
-            MotdProtocolMode::Client => client_protocol,
-            MotdProtocolMode::NegativeOne => -1,
-            MotdProtocolMode::Fixed(protocol) => protocol,
+            MotdProtocol::Client => client_protocol,
+            MotdProtocol::NegativeOne => -1,
         };
         let object = ensure_object(&mut value);
         let version = object
@@ -57,13 +56,12 @@ pub fn rewrite_json(
                 }
             }
             MotdFaviconMode::Passthrough => {
-                if let Some(json) = passthrough_favicon_json {
-                    if let Ok(source) = serde_json::from_str::<Value>(json) {
-                        if let Some(favicon) = source.get("favicon").and_then(Value::as_str) {
-                            ensure_object(&mut value)
-                                .insert("favicon".to_owned(), Value::String(favicon.to_owned()));
-                        }
-                    }
+                if let Some(json) = passthrough_favicon_json
+                    && let Ok(source) = serde_json::from_str::<Value>(json)
+                    && let Some(favicon) = source.get("favicon").and_then(Value::as_str)
+                {
+                    ensure_object(&mut value)
+                        .insert("favicon".to_owned(), Value::String(favicon.to_owned()));
                 }
             }
             MotdFaviconMode::Remove => {
@@ -95,14 +93,12 @@ fn normalize_minecraft_formatting(value: &mut Value) {
             let mut has_formatting = false;
             let mut chars = text.chars().peekable();
             while let Some(ch) = chars.next() {
-                if ch == '&' {
-                    if let Some(&code) = chars.peek() {
-                        if matches!(code, '0'..='9' | 'a'..='f' | 'k'..='o' | 'r' | 'A'..='F' | 'K'..='O' | 'R')
-                        {
-                            has_formatting = true;
-                            break;
-                        }
-                    }
+                if ch == '&'
+                    && let Some(&code) = chars.peek()
+                    && matches!(code, '0'..='9' | 'a'..='f' | 'k'..='o' | 'r' | 'A'..='F' | 'K'..='O' | 'R')
+                {
+                    has_formatting = true;
+                    break;
                 }
             }
 
@@ -110,16 +106,14 @@ fn normalize_minecraft_formatting(value: &mut Value) {
                 let mut result = String::with_capacity(text.len());
                 let mut chars = text.chars().peekable();
                 while let Some(ch) = chars.next() {
-                    if ch == '&' {
-                        if let Some(&code) = chars.peek() {
-                            if matches!(code, '0'..='9' | 'a'..='f' | 'k'..='o' | 'r' | 'A'..='F' | 'K'..='O' | 'R')
-                            {
-                                result.push('§');
-                                result.push(code.to_ascii_lowercase());
-                                chars.next();
-                                continue;
-                            }
-                        }
+                    if ch == '&'
+                        && let Some(&code) = chars.peek()
+                        && matches!(code, '0'..='9' | 'a'..='f' | 'k'..='o' | 'r' | 'A'..='F' | 'K'..='O' | 'R')
+                    {
+                        result.push('§');
+                        result.push(code.to_ascii_lowercase());
+                        chars.next();
+                        continue;
                     }
                     result.push(ch);
                 }

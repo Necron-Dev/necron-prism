@@ -10,6 +10,7 @@ schema = ["dep:schemars"]
 benchmark = ["dep:criterion", "dep:nerd-font-symbols", "dep:tokio"]
 
 [dependencies]
+arc-swap = "1.7"
 base64 = "0.22"
 mime_guess = { version = "2.0", default-features = false }
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls"], optional = true }
@@ -17,21 +18,28 @@ schemars = { version = "1.0", features = ["derive"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 socket2 = { version = "0.6", default-features = false, features = ["all"] }
-tokio = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs"], optional = true }
+strum = { version = "0.27", features = ["derive"] }
+tokio = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs", "signal"], optional = true }
 toml = "1.0.7"
 tracing = "0.1"
 tracing-appender = "0.2"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "registry"] }
 valence_protocol = "0.2.0-alpha.1"
 thiserror = "2.0.18"
 anyhow = "1.0"
 parking_lot = "0.12"
 libc = "0.2"
-lru = "0.16.3"
 http = "1.4.0"
 dashmap = "6.1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+flate2 = "1.0"
+regex = "1.11"
+validator = { version = "0.20", features = ["derive"] }
+owo-colors = "4.3.0"
+tokio-util = "0.7"
 criterion = { version = "0.8.2", features = ["html_reports"], optional = true }
 nerd-font-symbols = { version = "0.3", optional = true }
+tinytemplate = "1.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { version = "1.1", default-features = false, features = ["pipe", "std"] }

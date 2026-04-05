@@ -1,93 +1,86 @@
-use std::borrow::Cow;
-
-use super::config::{RelayMode, TransportConfig};
+use super::config::{MotdConfig, RelayMode};
 use super::players::PlayerRegistry;
+use serde::Serialize;
+use std::borrow::Cow;
+use tinytemplate::TinyTemplate;
 
 #[cfg(test)]
 mod test;
 
-pub struct TemplateContext<'a> {
-    transport: &'a TransportConfig,
-    relay_mode: RelayMode,
-    online_players: i32,
+#[derive(Serialize)]
+pub struct TemplateContext {
+    pub online_player: String,
+    pub motd_target_addr: String,
+    pub ping_target_addr: String,
+    pub favicon_target_addr: String,
+    pub relay_mode: String,
+    pub ping_mode: String,
+    pub favicon_mode: String,
+    pub upstream_addr: String,
 }
 
-impl<'a> TemplateContext<'a> {
+impl TemplateContext {
     pub fn for_transport(
-        transport: &'a TransportConfig,
+        transport: &MotdConfig,
         relay_mode: RelayMode,
         players: &PlayerRegistry,
     ) -> Self {
+        let upstream_addr = transport.upstream_addr.clone();
+        let ping_target_addr = transport
+            .ping_target_addr
+            .as_deref()
+            .unwrap_or(&upstream_addr)
+            .to_string();
+        let favicon_target_addr = transport
+            .favicon
+            .target_addr
+            .as_deref()
+            .unwrap_or(&upstream_addr)
+            .to_string();
+
         Self {
-            transport,
-            relay_mode,
-            online_players: players.current_online_count(),
+            online_player: players.current_online_count().to_string(),
+            motd_target_addr: upstream_addr.clone(),
+            ping_target_addr,
+            favicon_target_addr,
+            relay_mode: relay_mode.to_string(),
+            ping_mode: transport.ping_mode.to_string(),
+            favicon_mode: transport.favicon.mode.to_string(),
+            upstream_addr,
         }
     }
 }
 
-pub fn render<'a>(value: &'a str, context: &TemplateContext<'_>) -> Cow<'a, str> {
-    let online_players = context.online_players.to_string();
-    render_with_online(
-        value,
-        context.transport,
-        context.relay_mode,
-        &online_players,
-    )
+pub fn render<'a>(template_str: &'a str, context: &TemplateContext) -> Cow<'a, str> {
+    if !template_str.contains('{') {
+        return Cow::Borrowed(template_str);
+    }
+
+    let mut tt = TinyTemplate::new();
+    if tt.add_template("t", template_str).is_err() {
+        return Cow::Borrowed(template_str);
+    }
+
+    match tt.render("t", context) {
+        Ok(rendered) => Cow::Owned(rendered),
+        Err(_) => Cow::Borrowed(template_str),
+    }
 }
 
 pub fn render_static_transport<'a>(
     value: &'a str,
-    transport: &TransportConfig,
+    transport: &MotdConfig,
     relay_mode: RelayMode,
 ) -> Cow<'a, str> {
-    render_with_online(value, transport, relay_mode, "%ONLINE_PLAYER%")
-}
-
-fn render_with_online<'a>(
-    value: &'a str,
-    transport: &TransportConfig,
-    relay_mode: RelayMode,
-    online_players: impl AsRef<str>,
-) -> Cow<'a, str> {
-    if !value.contains('%') {
-        return Cow::Borrowed(value);
-    }
-
-    let mut rendered = value.to_owned();
-
-    let ping_target_addr = transport
-        .motd
-        .ping
-        .target_addr
-        .clone()
-        .or_else(|| transport.motd.upstream_addr.clone())
-        .unwrap_or_default();
-
-    let favicon_target_addr = transport
-        .motd
-        .favicon
-        .target_addr
-        .clone()
-        .or_else(|| transport.motd.upstream_addr.clone())
-        .unwrap_or_default();
-
-    let upstream_addr = transport.motd.upstream_addr.clone().unwrap_or_default();
-
-    rendered = rendered.replace("%ONLINE_PLAYER%", online_players.as_ref());
-    rendered = rendered.replace("%MOTD_TARGET_ADDR%", &upstream_addr);
-    rendered = rendered.replace("%PING_TARGET_ADDR%", &ping_target_addr);
-    rendered = rendered.replace("%FAVICON_TARGET_ADDR%", &favicon_target_addr);
-    rendered = rendered.replace("%RELAY_MODE%", relay_mode.as_placeholder_value());
-    rendered = rendered.replace(
-        "%PING_MODE%",
-        transport.motd.ping_mode.as_placeholder_value(),
-    );
-    rendered = rendered.replace(
-        "%FAVICON_MODE%",
-        transport.motd.favicon.mode.as_placeholder_value(),
-    );
-    rendered = rendered.replace("%UPSTREAM_ADDR%", &upstream_addr);
-
-    Cow::Owned(rendered)
+    let ctx = TemplateContext {
+        online_player: "{online_player}".to_string(),
+        motd_target_addr: transport.upstream_addr.clone(),
+        ping_target_addr: transport.ping_target_addr.clone().unwrap_or_default(),
+        favicon_target_addr: transport.favicon.target_addr.clone().unwrap_or_default(),
+        relay_mode: relay_mode.to_string(),
+        ping_mode: transport.ping_mode.to_string(),
+        favicon_mode: transport.favicon.mode.to_string(),
+        upstream_addr: transport.upstream_addr.clone(),
+    };
+    render(value, &ctx)
 }

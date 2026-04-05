@@ -1,12 +1,11 @@
+use crate::proxy::config::Config;
 use socket2::{SockRef, TcpKeepalive};
 use std::io;
 
-use super::super::config::SocketOptions;
-
-pub fn apply_sockref_options(socket: SockRef<'_>, options: &SocketOptions) -> io::Result<()> {
-    socket.set_tcp_nodelay(options.tcp_nodelay)?;
+pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result<()> {
+    socket.set_tcp_nodelay(config.tcp_nodelay)?;
     socket.set_keepalive(true)?;
-    socket.set_tcp_keepalive(&TcpKeepalive::new().with_time(options.keepalive))?;
+    socket.set_tcp_keepalive(&TcpKeepalive::new().with_time(config.keepalive()))?;
 
     #[cfg(target_os = "linux")]
     {
@@ -19,11 +18,11 @@ pub fn apply_sockref_options(socket: SockRef<'_>, options: &SocketOptions) -> io
         }
     }
 
-    if let Some(size) = options.recv_buffer_size {
+    if let Some(size) = config.recv_buffer_size {
         socket.set_recv_buffer_size(size)?;
     }
 
-    if let Some(size) = options.send_buffer_size {
+    if let Some(size) = config.send_buffer_size {
         socket.set_send_buffer_size(size)?;
     }
 

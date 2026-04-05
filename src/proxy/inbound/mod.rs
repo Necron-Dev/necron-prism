@@ -4,9 +4,9 @@ use std::net::TcpListener;
 
 use tokio::net::lookup_host;
 
-use super::config::InboundConfig;
+use crate::proxy::config::Config;
 
-pub async fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
+pub async fn bind_listener(config: &Config) -> io::Result<TcpListener> {
     let address = lookup_host(&config.listen_addr)
         .await?
         .next()
@@ -33,11 +33,12 @@ pub async fn bind_listener(config: &InboundConfig) -> io::Result<TcpListener> {
         target_os = "netbsd",
         target_vendor = "apple"
     ))]
-    if config.socket_options.reuse_port {
+    if config.reuse_port {
         socket.set_reuse_port(true)?;
     }
 
     socket.bind(&address.into())?;
+    tracing::debug!(listen_addr = %address, "bound listener to socket address");
     socket.listen(1024)?;
     Ok(socket.into())
 }

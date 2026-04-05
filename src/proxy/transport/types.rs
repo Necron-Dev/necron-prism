@@ -20,7 +20,9 @@ pub struct ConnectionRoute {
 pub struct ConnectionReport {
     pub connection_traffic: ConnectionTraffic,
     pub relay_mode: Option<RelayMode>,
+    #[allow(dead_code)]
     pub target_addr: Option<Arc<str>>,
+    #[allow(dead_code)]
     pub rewrite_addr: Option<Arc<str>>,
 }
 

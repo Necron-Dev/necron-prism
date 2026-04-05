@@ -1,5 +1,5 @@
 use crate::minecraft::HandshakeInfo;
-use crate::proxy::config::{RelayMode, TransportConfig};
+use crate::proxy::config::{RelayMode, MotdConfig, MotdMode};
 use crate::proxy::players::{PlayerRegistry, PlayerState};
 use crate::proxy::template::{self, TemplateContext};
 use tokio::io::AsyncWriteExt;
@@ -8,28 +8,25 @@ use super::rewrite::rewrite_json;
 
 pub async fn serve_legacy_ping(
     client: &mut tokio::net::TcpStream,
-    transport: &TransportConfig,
+    config: &MotdConfig,
     relay_mode: RelayMode,
     players: &PlayerRegistry,
     connection_id: u64,
 ) -> anyhow::Result<()> {
-    let upstream_json = if matches!(
-        transport.motd.mode,
-        crate::proxy::config::MotdMode::Upstream
-    ) {
-        fetch_upstream_status_json(transport)
+    let upstream_json = if matches!(config.mode, MotdMode::Upstream) {
+        fetch_upstream_status_json(config)
             .await
-            .unwrap_or_else(|_| transport.motd.local_json.clone())
+            .unwrap_or_else(|_| config.local_json.clone())
     } else {
-        let template_context = TemplateContext::for_transport(transport, relay_mode, players);
-        template::render(&transport.motd.local_json, &template_context).into_owned()
+        let template_context = TemplateContext::for_transport(config, relay_mode, players);
+        template::render(&config.local_json, &template_context).into_owned()
     };
 
     let motd_json = rewrite_json(
         &upstream_json,
-        transport.motd.protocol_mode,
+        config.protocol,
         763,
-        &transport.motd.favicon,
+        &config.favicon,
         None,
         None,
     );
@@ -50,12 +47,8 @@ pub async fn serve_legacy_ping(
     Ok(())
 }
 
-async fn fetch_upstream_status_json(transport: &TransportConfig) -> anyhow::Result<String> {
-    let address = transport
-        .motd
-        .upstream_addr
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("missing MOTD upstream address"))?;
+async fn fetch_upstream_status_json(config: &MotdConfig) -> anyhow::Result<String> {
+    let address = &config.upstream_addr;
     let mut stream = tokio::net::TcpStream::connect(address).await?;
 
     let server_port = if let Some(stripped) = address.strip_prefix('[') {

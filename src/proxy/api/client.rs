@@ -31,7 +31,7 @@ impl ApiClient {
 
         let inner = reqwest::Client::builder()
             .default_headers(headers)
-            .timeout(config.timeout)
+            .timeout(std::time::Duration::from_millis(config.timeout_ms))
             .build()
             .map_err(|error| anyhow!("build reqwest client: {error}"))?;
         let base_url = config

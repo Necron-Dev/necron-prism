@@ -74,10 +74,10 @@ mod imp {
             ("custom_relay", RelayImplementation::CustomRelay),
             ("prism_relay", RelayImplementation::Prism),
         ] {
-            if let Some(selected) = selected_relay_impl() {
-                if selected != name {
-                    continue;
-                }
+            if let Some(selected) = selected_relay_impl()
+                && selected != name
+            {
+                continue;
             }
 
             let harness = RelayHarness::with_impl(RELAY_BUFFER_SIZE, implementation);

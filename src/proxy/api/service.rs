@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 #[cfg(feature = "http-api")]
 use super::client::ApiClient;
-use crate::proxy::config::{ApiConfig, ApiMode, MockApiConfig};
+use crate::proxy::config::{ApiConfig, ApiMode};
 use crate::proxy::routing::{JoinDecision, JoinTarget};
 
 pub enum ApiService {
     #[cfg(feature = "http-api")]
-    Http(HttpApiService),
+    Http(Box<HttpApiService>),
     Mock(MockApiService),
 }
 
@@ -19,21 +19,17 @@ pub struct HttpApiService {
 }
 
 pub struct MockApiService {
-    target_addr: Arc<str>,
-    rewrite_addr: Option<Arc<str>>,
-    kick_reason: Option<Arc<str>>,
-    connection_id_prefix: Arc<str>,
-    counter: AtomicU64,
+    counter: Arc<AtomicU64>,
 }
 
 impl ApiService {
-    pub fn new(config: &ApiConfig) -> Result<Self> {
+    pub fn new(config: &ApiConfig, mock_counter: Arc<AtomicU64>) -> Result<Self> {
         match config.mode {
             #[cfg(feature = "http-api")]
-            ApiMode::Http => Ok(Self::Http(HttpApiService::new(config)?)),
+            ApiMode::Http => Ok(Self::Http(Box::new(HttpApiService::new(config)?))),
             #[cfg(not(feature = "http-api"))]
             ApiMode::Http => Err(anyhow!("http api support is disabled at compile time")),
-            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(&config.mock))),
+            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(mock_counter))),
         }
     }
 
@@ -43,11 +39,12 @@ impl ApiService {
         uuid: Option<&str>,
         addr: Option<&str>,
         load: i32,
+        config: &ApiConfig,
     ) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
             Self::Http(service) => service.join(name, uuid, addr, load).await,
-            Self::Mock(service) => service.join(name, uuid, addr, load).await,
+            Self::Mock(service) => service.join(name, uuid, addr, load, config).await,
         }
     }
 
@@ -109,14 +106,8 @@ impl HttpApiService {
 }
 
 impl MockApiService {
-    fn new(config: &MockApiConfig) -> Self {
-        Self {
-            target_addr: Arc::<str>::from(config.target_addr.as_str()),
-            rewrite_addr: config.rewrite_addr.as_deref().map(Arc::<str>::from),
-            connection_id_prefix: Arc::<str>::from(config.connection_id_prefix.as_str()),
-            kick_reason: config.kick_reason.as_deref().map(Arc::<str>::from),
-            counter: AtomicU64::new(0),
-        }
+    fn new(counter: Arc<AtomicU64>) -> Self {
+        Self { counter }
     }
 
     async fn join(
@@ -125,18 +116,19 @@ impl MockApiService {
         _uuid: Option<&str>,
         _addr: Option<&str>,
         _load: i32,
+        config: &ApiConfig,
     ) -> Result<JoinDecision> {
-        if let Some(kick_reason) = &self.kick_reason {
+        if let Some(kick_reason) = &config.mock_kick_reason {
             return Ok(JoinDecision::Deny {
-                kick_reason: kick_reason.to_string(),
+                kick_reason: kick_reason.clone(),
             });
         }
 
         let sequence = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(JoinDecision::Allow(JoinTarget {
-            target_addr: self.target_addr.to_string(),
-            rewrite_addr: self.rewrite_addr.as_ref().map(|a| a.to_string()),
-            connection_id: Some(format!("{}-{sequence}", self.connection_id_prefix)),
+            target_addr: config.mock_target_addr.clone(),
+            rewrite_addr: config.mock_rewrite_addr.clone(),
+            connection_id: Some(format!("{}-{sequence}", config.mock_connection_id_prefix)),
         }))
     }
 

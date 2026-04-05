@@ -9,11 +9,11 @@ use schemars::schema_for;
 #[cfg(feature = "schema")]
 use super::literals::CONFIG_SCHEMA_FILE;
 #[cfg(feature = "schema")]
-use super::schema_types::ConfigFile;
+use super::types::Config;
 
 #[cfg(feature = "schema")]
 pub fn write_schema_file(root: &Path) -> Result<(), String> {
-    let schema = schema_for!(ConfigFile);
+    let schema = schema_for!(Config);
     let content = serde_json::to_string_pretty(&schema)
         .map_err(|error| format!("failed to serialize config schema: {error}"))?;
     let path = root.join(CONFIG_SCHEMA_FILE);

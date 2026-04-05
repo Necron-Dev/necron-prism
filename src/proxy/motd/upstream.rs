@@ -5,7 +5,7 @@ use anyhow::Context;
 use tokio::io::AsyncWriteExt;
 use tokio::net::lookup_host;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::debug;
 
 use crate::minecraft::{
     decode_pong_response, decode_status_response, encode_handshake, ping_request_packet,
@@ -23,13 +23,13 @@ pub struct UpstreamStatusSession {
 }
 
 impl UpstreamStatusSession {
+    #[allow(clippy::too_many_arguments)]
     pub async fn connect(
         target_addr: &str,
         rewrite_addr: &str,
         handshake: &HandshakeInfo,
         timeout_limit: Duration,
-        service: &MotdService,
-        cached_status_json: Option<Arc<str>>,
+        _service: &MotdService,
         needs_status_json: bool,
         needs_ping: bool,
     ) -> anyhow::Result<Self> {
@@ -51,30 +51,22 @@ impl UpstreamStatusSession {
             .await
             .with_context(|| format!("write upstream status probe to {address} timed out"))??;
 
-        let needs_fetch = cached_status_json.is_none() || needs_status_json || needs_ping;
-        if needs_fetch {
-            let mut packet_io = PacketIo::new();
+        let mut packet_io = PacketIo::new();
+        let mut cached_status_json = None;
+
+        if needs_status_json || needs_ping {
             let frame = timeout(timeout_limit, packet_io.read_frame(&mut stream, 64 * 1024))
                 .await
                 .with_context(|| {
                     format!("read upstream status response from {address} timed out")
                 })??;
             let json = decode_status_response(&frame).map_err(anyhow::Error::from)?;
-            let json = Arc::<str>::from(json);
-            service.store_cached_status_arc(target_addr, rewrite_addr, Arc::clone(&json));
-
-            return Ok(Self {
-                stream,
-                packet_io,
-                target_addr: address,
-                cached_status_json: Some(json),
-                op_timeout: timeout_limit,
-            });
+            cached_status_json = Some(Arc::<str>::from(json));
         }
 
         Ok(Self {
             stream,
-            packet_io: PacketIo::new(),
+            packet_io,
             target_addr: address,
             cached_status_json,
             op_timeout: timeout_limit,
@@ -117,7 +109,7 @@ impl UpstreamStatusSession {
         let payload = decode_pong_response(&frame).map_err(anyhow::Error::from)?;
         let measured_ms = started.elapsed().as_millis().min(u32::MAX as u128) as u32;
 
-        info!(
+        debug!(
             target_addr = %self.target_addr,
             upstream_payload = payload,
             measured_ms = measured_ms,

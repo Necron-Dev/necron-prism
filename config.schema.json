@@ -1,172 +1,156 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ConfigFile",
-  "description": "#:schema ./config.schema.json",
+  "title": "Config",
   "type": "object",
   "properties": {
     "api": {
-      "$ref": "#/$defs/ApiFileConfig",
+      "$ref": "#/$defs/ApiConfig",
       "default": {
-        "base_url": null,
-        "bearer_token": null,
-        "mock": {
-          "connection_id_prefix": "debug",
-          "kick_reason": null,
-          "rewrite_addr": null,
-          "target_addr": "mc.hypixel.net:25565"
-        },
+        "mock_connection_id_prefix": "debug",
+        "mock_target_addr": "mc.hypixel.net:25565",
         "mode": "mock",
         "timeout_ms": 3000,
         "traffic_interval_ms": 5000
       }
     },
-    "inbound": {
-      "$ref": "#/$defs/InboundFileConfig",
+    "first_packet_timeout_ms": {
+      "type": "integer",
+      "format": "uint64",
+      "default": 5000,
+      "minimum": 0
+    },
+    "keepalive_secs": {
+      "type": "integer",
+      "format": "uint64",
+      "default": 30,
+      "minimum": 0
+    },
+    "listen_addr": {
+      "type": "string",
+      "default": "0.0.0.0:25565"
+    },
+    "logging": {
+      "$ref": "#/$defs/LoggingConfig",
       "default": {
-        "first_packet_timeout_ms": 5000,
-        "listen_addr": "0.0.0.0:25565",
-        "socket": {
-          "keepalive_secs": 30,
-          "recv_buffer_size": null,
-          "reuse_port": false,
-          "send_buffer_size": null,
-          "tcp_nodelay": true
-        }
+        "async_enabled": true,
+        "format": "pretty",
+        "level": "info"
       }
     },
-    "relay": {
-      "$ref": "#/$defs/RelayFileConfig",
+    "motd": {
+      "$ref": "#/$defs/MotdConfig",
       "default": {
-        "mode": "standard"
-      }
-    },
-    "runtime": {
-      "$ref": "#/$defs/RuntimeFileConfig",
-      "default": {
-        "logging": {
-          "async_enabled": true,
-          "format": "pretty",
-          "level": "info"
+        "favicon": {
+          "mode": "json"
         },
-        "stats_log_interval_secs": 10
+        "local_json": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}",
+        "mode": "local",
+        "ping_mode": "local",
+        "protocol": "client",
+        "upstream_addr": "mc.hypixel.net:25565",
+        "upstream_ping_timeout_ms": 1500
       }
     },
-    "transport": {
-      "$ref": "#/$defs/TransportFileConfig",
-      "default": {
-        "motd": {
-          "favicon": {
-            "mode": "json",
-            "path": null,
-            "target_addr": null
-          },
-          "json": "{\"version\":{\"name\":\"&bnecron-prism\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"&bping target &8> &f%PING_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"&bfavicon target &8> &f%FAVICON_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"&bmotd target &8> &f%MOTD_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"&bnecron-prism &8| &frelay %RELAY_MODE% &8| &7online &b%ONLINE_PLAYER%\\n&7ping %PING_MODE% &8| &7favicon %FAVICON_MODE% &8| &7upstream %UPSTREAM_ADDR%\"}}",
-          "mode": "local",
-          "ping": {
-            "target_addr": null
-          },
-          "ping_mode": "passthrough",
-          "protocol": "client",
-          "status_cache_ttl_ms": 1000,
-          "upstream_addr": "mc.hypixel.net:25565",
-          "upstream_ping_timeout_ms": 1500
-        }
-      }
+    "recv_buffer_size": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0
+    },
+    "relay_mode": {
+      "$ref": "#/$defs/RelayMode",
+      "default": "standard"
+    },
+    "reuse_port": {
+      "type": "boolean",
+      "default": false
+    },
+    "send_buffer_size": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint",
+      "minimum": 0
+    },
+    "stats_log_interval_secs": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "default": 10,
+      "minimum": 0
+    },
+    "tcp_nodelay": {
+      "type": "boolean",
+      "default": true
     }
   },
-  "additionalProperties": false,
   "$defs": {
-    "ApiFileConfig": {
+    "ApiConfig": {
       "type": "object",
       "properties": {
         "base_url": {
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
         },
         "bearer_token": {
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
         },
-        "mock": {
-          "$ref": "#/$defs/MockApiFileConfig",
-          "default": {
-            "connection_id_prefix": "debug",
-            "kick_reason": null,
-            "rewrite_addr": null,
-            "target_addr": "mc.hypixel.net:25565"
-          }
+        "mock_connection_id_prefix": {
+          "type": "string",
+          "default": "debug"
+        },
+        "mock_kick_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mock_rewrite_addr": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mock_target_addr": {
+          "type": "string",
+          "default": "mc.hypixel.net:25565"
         },
         "mode": {
-          "$ref": "#/$defs/ApiModeLiteral",
+          "$ref": "#/$defs/ApiMode",
           "default": "mock"
         },
         "timeout_ms": {
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": "integer",
           "format": "uint64",
-          "default": null,
+          "default": 3000,
           "minimum": 0
         },
         "traffic_interval_ms": {
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": "integer",
           "format": "uint64",
-          "default": null,
+          "default": 5000,
           "minimum": 0
         }
-      },
-      "additionalProperties": false
+      }
     },
-    "ApiModeLiteral": {
+    "ApiMode": {
       "type": "string",
       "enum": [
         "http",
         "mock"
       ]
     },
-    "InboundFileConfig": {
-      "type": "object",
-      "properties": {
-        "first_packet_timeout_ms": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "default": null,
-          "minimum": 0
-        },
-        "listen_addr": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "socket": {
-          "$ref": "#/$defs/SocketOptionsFileConfig",
-          "default": {
-            "keepalive_secs": 30,
-            "recv_buffer_size": null,
-            "reuse_port": false,
-            "send_buffer_size": null,
-            "tcp_nodelay": true
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "LogFormatLiteral": {
+    "LogFormat": {
       "type": "string",
       "enum": [
         "pretty",
@@ -174,7 +158,7 @@
         "json"
       ]
     },
-    "LogLevelLiteral": {
+    "LogLevel": {
       "type": "string",
       "enum": [
         "trace",
@@ -184,83 +168,94 @@
         "error"
       ]
     },
-    "LoggingFileConfig": {
+    "LoggingConfig": {
       "type": "object",
       "properties": {
         "async_enabled": {
           "type": "boolean",
           "default": true
         },
+        "file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "format": {
-          "$ref": "#/$defs/LogFormatLiteral",
+          "$ref": "#/$defs/LogFormat",
           "default": "pretty"
         },
         "level": {
-          "$ref": "#/$defs/LogLevelLiteral",
+          "$ref": "#/$defs/LogLevel",
           "default": "info"
         }
-      },
-      "additionalProperties": false
+      }
     },
-    "MockApiFileConfig": {
+    "MotdConfig": {
       "type": "object",
       "properties": {
-        "connection_id_prefix": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
+        "favicon": {
+          "$ref": "#/$defs/MotdFaviconConfig",
+          "default": {
+            "mode": "json"
+          }
         },
-        "kick_reason": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
+        "local_json": {
+          "type": "string",
+          "default": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}"
         },
-        "rewrite_addr": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
+        "mode": {
+          "$ref": "#/$defs/MotdMode",
+          "default": "local"
         },
-        "target_addr": {
+        "ping_mode": {
+          "$ref": "#/$defs/StatusPingMode",
+          "default": "local"
+        },
+        "ping_target_addr": {
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/MotdProtocol",
+          "default": "client"
+        },
+        "upstream_addr": {
+          "type": "string",
+          "default": "mc.hypixel.net:25565"
+        },
+        "upstream_ping_timeout_ms": {
+          "type": "integer",
+          "format": "uint64",
+          "default": 1500,
+          "minimum": 0
         }
-      },
-      "additionalProperties": false
+      }
     },
-    "MotdFaviconFileConfig": {
+    "MotdFaviconConfig": {
       "type": "object",
       "properties": {
         "mode": {
-          "$ref": "#/$defs/MotdFaviconModeLiteral",
+          "$ref": "#/$defs/MotdFaviconMode",
           "default": "json"
         },
         "path": {
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
         },
         "target_addr": {
           "type": [
             "string",
             "null"
-          ],
-          "default": null
+          ]
         }
-      },
-      "additionalProperties": false
+      }
     },
-    "MotdFaviconModeLiteral": {
+    "MotdFaviconMode": {
       "type": "string",
       "enum": [
         "json",
@@ -269,223 +264,35 @@
         "remove"
       ]
     },
-    "MotdFileConfig": {
-      "type": "object",
-      "properties": {
-        "favicon": {
-          "$ref": "#/$defs/MotdFaviconFileConfig",
-          "default": {
-            "mode": "json",
-            "path": null,
-            "target_addr": null
-          }
-        },
-        "json": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "mode": {
-          "$ref": "#/$defs/MotdModeLiteral",
-          "default": "local"
-        },
-        "ping": {
-          "$ref": "#/$defs/MotdPingFileConfig",
-          "default": {
-            "target_addr": null
-          }
-        },
-        "ping_mode": {
-          "$ref": "#/$defs/StatusPingModeLiteral",
-          "default": "passthrough"
-        },
-        "protocol": {
-          "$ref": "#/$defs/MotdProtocolLiteral",
-          "default": "client"
-        },
-        "status_cache_ttl_ms": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "default": null,
-          "minimum": 0
-        },
-        "upstream_addr": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "upstream_ping_timeout_ms": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "default": null,
-          "minimum": 0
-        }
-      },
-      "additionalProperties": false
-    },
-    "MotdModeLiteral": {
+    "MotdMode": {
       "type": "string",
       "enum": [
         "local",
         "upstream"
       ]
     },
-    "MotdPingFileConfig": {
-      "type": "object",
-      "properties": {
-        "target_addr": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
-    },
-    "MotdProtocolLiteral": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/MotdProtocolNamedLiteral"
-        },
-        {
-          "type": "integer",
-          "format": "int32"
-        }
-      ]
-    },
-    "MotdProtocolNamedLiteral": {
+    "MotdProtocol": {
       "type": "string",
       "enum": [
         "client",
-        "-1"
+        "negative_one"
       ]
     },
-    "RelayFileConfig": {
-      "type": "object",
-      "properties": {
-        "mode": {
-          "$ref": "#/$defs/RelayModeLiteral",
-          "default": "standard"
-        }
-      },
-      "additionalProperties": false
-    },
-    "RelayModeLiteral": {
+    "RelayMode": {
       "type": "string",
       "enum": [
         "standard",
         "linux_splice"
       ]
     },
-    "RuntimeFileConfig": {
-      "type": "object",
-      "properties": {
-        "logging": {
-          "$ref": "#/$defs/LoggingFileConfig",
-          "default": {
-            "async_enabled": true,
-            "format": "pretty",
-            "level": "info"
-          }
-        },
-        "stats_log_interval_secs": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "default": null,
-          "minimum": 0
-        }
-      },
-      "additionalProperties": false
-    },
-    "SocketOptionsFileConfig": {
-      "type": "object",
-      "properties": {
-        "keepalive_secs": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint64",
-          "default": null,
-          "minimum": 0
-        },
-        "recv_buffer_size": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "default": null,
-          "minimum": 0
-        },
-        "reuse_port": {
-          "type": "boolean",
-          "default": false
-        },
-        "send_buffer_size": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "default": null,
-          "minimum": 0
-        },
-        "tcp_nodelay": {
-          "type": "boolean",
-          "default": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "StatusPingModeLiteral": {
+    "StatusPingMode": {
       "type": "string",
       "enum": [
+        "local",
+        "zero_ms",
         "passthrough",
-        "0ms",
-        "upstream_tcp",
         "disconnect"
       ]
-    },
-    "TransportFileConfig": {
-      "type": "object",
-      "properties": {
-        "motd": {
-          "$ref": "#/$defs/MotdFileConfig",
-          "default": {
-            "favicon": {
-              "mode": "json",
-              "path": null,
-              "target_addr": null
-            },
-            "json": "{\"version\":{\"name\":\"&bnecron-prism\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":%ONLINE_PLAYER%,\"sample\":[{\"name\":\"&bping target &8> &f%PING_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"&bfavicon target &8> &f%FAVICON_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"&bmotd target &8> &f%MOTD_TARGET_ADDR%\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"&bnecron-prism &8| &frelay %RELAY_MODE% &8| &7online &b%ONLINE_PLAYER%\\n&7ping %PING_MODE% &8| &7favicon %FAVICON_MODE% &8| &7upstream %UPSTREAM_ADDR%\"}}",
-            "mode": "local",
-            "ping": {
-              "target_addr": null
-            },
-            "ping_mode": "passthrough",
-            "protocol": "client",
-            "status_cache_ttl_ms": 1000,
-            "upstream_addr": "mc.hypixel.net:25565",
-            "upstream_ping_timeout_ms": 1500
-          }
-        }
-      },
-      "additionalProperties": false
     }
   }
 }

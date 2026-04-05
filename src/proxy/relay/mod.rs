@@ -8,8 +8,7 @@ use socket2::SockRef;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use super::network::apply_sockref_options;
-
-use super::config::{RelayMode as ConfigRelayMode, SocketOptions};
+use crate::proxy::config::{Config, RelayMode as ConfigRelayMode};
 use super::traffic::ConnectionCounters;
 
 mod linux;
@@ -48,12 +47,14 @@ pub async fn relay_bidirectional(
     client: tokio::net::TcpStream,
     upstream: tokio::net::TcpStream,
     counters: ConnectionCounters,
-    socket_options: &SocketOptions,
+    config: &Config,
     #[allow(unused_variables)]
     config_mode: ConfigRelayMode,
 ) -> io::Result<RelayStats> {
-    let _ = apply_sockref_options(SockRef::from(&client), socket_options);
-    let _ = apply_sockref_options(SockRef::from(&upstream), socket_options);
+    let _ = apply_sockref_options(SockRef::from(&client), config);
+    let _ = apply_sockref_options(SockRef::from(&upstream), config);
+
+    tracing::debug!(mode = ?config_mode, "starting bidirectional relay");
 
     #[cfg(target_os = "linux")]
     {
@@ -85,6 +86,12 @@ pub async fn relay_bidirectional(
 
     let (upload_bytes, download_bytes) = relay(client, upstream, counters.clone()).await?;
 
+    tracing::debug!(
+        upload_bytes,
+        download_bytes,
+        "bidirectional relay completed"
+    );
+
     Ok(RelayStats {
         upload_bytes,
         download_bytes,
@@ -92,9 +99,6 @@ pub async fn relay_bidirectional(
     })
 }
 
-/// Fixed relay buffer size: 32KB stack buffer avoids heap allocation
-/// Tradeoff: Uses 64KB stack per relay direction (2 directions = 128KB total)
-/// Benefit: Zero heap allocation, better cache locality, stable latency
 const RELAY_BUFFER_SIZE: usize = 32 * 1024;
 
 async fn relay(
@@ -113,8 +117,6 @@ async fn relay(
     )
 }
 
-/// Zero-allocation relay using stack buffer.
-/// Stack buffer is pre-allocated, no heap allocation per call.
 async fn custom_async_copy<R, W>(
     reader: &mut R,
     writer: &mut W,
@@ -126,7 +128,6 @@ where
     W: AsyncWrite + Unpin,
 {
     let mut total = 0_u64;
-    // Stack-allocated buffer: no heap allocation, better cache locality
     let mut buf = [0_u8; RELAY_BUFFER_SIZE];
 
     loop {
@@ -135,8 +136,14 @@ where
             writer.shutdown().await?;
             return Ok(total);
         }
+        tracing::trace!(
+            direction = if upload_direction { "upload" } else { "download" },
+            bytes = read,
+            "relay chunk transferred"
+        );
 
         writer.write_all(&buf[..read]).await?;
+
         let bytes = read as u64;
         total += bytes;
         if upload_direction {

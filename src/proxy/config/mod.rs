@@ -1,18 +1,39 @@
-mod checker;
-pub(crate) mod default;
-pub(crate) mod literals;
-mod loader;
-mod normalizer;
-pub(crate) mod schema;
-pub(crate) mod schema_types;
-mod tests;
-mod types;
+mod default;
+mod literals;
+mod schema;
+pub mod types;
 
-pub use loader::ConfigLoader;
+pub use types::*;
+
+use self::default::ConfigDefaults;
+use anyhow::{Context, Result};
+use std::fs;
+use std::path::Path;
+
+pub struct ConfigLoader;
+
+impl ConfigLoader {
+    pub fn load_default() -> Result<Config> {
+        Self::load_from_path(Path::new("config.toml"))
+    }
+
+    pub fn load_from_path(path: &Path) -> Result<Config> {
+        ConfigDefaults::write_if_missing(path)?;
+
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("failed to read config {}", path.display()))?;
+
+        let mut config = toml::from_str::<Config>(&content)
+            .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
+
+        config.source_path = path.to_path_buf();
+        config.validate()?;
+        Ok(config)
+    }
+}
+
 #[cfg(feature = "schema")]
 pub use schema::write_schema_file;
-pub use types::{
-    ApiConfig, ApiMode, Config, InboundConfig, LogFormat, LogLevel, LoggingConfig, MockApiConfig,
-    MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdPingConfig, MotdProtocolMode,
-    RelayMode, RuntimeConfig, SocketOptions, StatusPingMode, TransportConfig,
-};
+
+#[cfg(test)]
+mod tests;

@@ -115,10 +115,10 @@ impl PlayerRegistry {
     }
 
     pub fn remove_connection(&self, connection_id: u64) -> usize {
-        if let Some((_, session)) = self.sessions.remove(&connection_id) {
-            if session.state == PlayerState::Proxying {
-                self.online_count.fetch_sub(1, Ordering::Relaxed);
-            }
+        if let Some((_, session)) = self.sessions.remove(&connection_id)
+            && session.state == PlayerState::Proxying
+        {
+            self.online_count.fetch_sub(1, Ordering::Relaxed);
         }
         self.sessions.len()
     }

@@ -27,7 +27,8 @@
     },
     "listen_addr": {
       "type": "string",
-      "default": "0.0.0.0:25565"
+      "default": "0.0.0.0:25565",
+      "minLength": 1
     },
     "logging": {
       "$ref": "#/$defs/LoggingConfig",
@@ -50,6 +51,10 @@
         "upstream_addr": "mc.hypixel.net:25565",
         "upstream_ping_timeout_ms": 1500
       }
+    },
+    "multipath_tcp": {
+      "type": "boolean",
+      "default": false
     },
     "recv_buffer_size": {
       "type": [
@@ -123,7 +128,8 @@
         },
         "mock_target_addr": {
           "type": "string",
-          "default": "mc.hypixel.net:25565"
+          "default": "mc.hypixel.net:25565",
+          "minLength": 1
         },
         "mode": {
           "$ref": "#/$defs/ApiMode",
@@ -150,6 +156,23 @@
         "mock"
       ]
     },
+    "LogFileConfig": {
+      "type": "object",
+      "properties": {
+        "archive_pattern": {
+          "type": "string",
+          "default": "{date}-{index}.log.gz"
+        },
+        "mode": {
+          "$ref": "#/$defs/LogRotation",
+          "default": "compress"
+        },
+        "path": {
+          "type": "string",
+          "default": "data/logs/latest.log"
+        }
+      }
+    },
     "LogFormat": {
       "type": "string",
       "enum": [
@@ -168,6 +191,14 @@
         "error"
       ]
     },
+    "LogRotation": {
+      "type": "string",
+      "enum": [
+        "none",
+        "rename",
+        "compress"
+      ]
+    },
     "LoggingConfig": {
       "type": "object",
       "properties": {
@@ -176,9 +207,13 @@
           "default": true
         },
         "file": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogFileConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "format": {
@@ -202,7 +237,8 @@
         },
         "local_json": {
           "type": "string",
-          "default": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}"
+          "default": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}",
+          "minLength": 1
         },
         "mode": {
           "$ref": "#/$defs/MotdMode",
@@ -224,7 +260,8 @@
         },
         "upstream_addr": {
           "type": "string",
-          "default": "mc.hypixel.net:25565"
+          "default": "mc.hypixel.net:25565",
+          "minLength": 1
         },
         "upstream_ping_timeout_ms": {
           "type": "integer",

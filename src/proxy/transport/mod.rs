@@ -1,98 +1,89 @@
-mod forward;
 mod login;
 mod types;
 
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context as AnyhowContext};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{debug, info, trace};
 
-use super::api::ApiService;
-use super::config::Config;
-use super::motd::{serve_legacy_ping, MotdService};
+use super::context::Context as ProxyContext;
 use super::outbound::connect_addr as connect_outbound_addr;
-use super::players::PlayerRegistry;
 use super::relay::relay_bidirectional;
 use super::stats::ConnectionTraffic;
-use super::traffic::TrafficReporter;
 use crate::minecraft::{
-    decode_handshake, encode_handshake, PacketIo, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE,
-    MAX_LOGIN_PACKET_SIZE, PRISM_MAGIC_ID,
+    decode_handshake, encode_handshake, encode_raw_frame, PacketIo, INTENT_STATUS,
+    MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, PRISM_MAGIC_ID,
 };
 
 pub use types::{ConnectionContext, ConnectionReport, ConnectionRoute};
 
 pub async fn handle_client(
     mut client: tokio::net::TcpStream,
-    config: &Config,
-    api: &ApiService,
-    motd: &MotdService,
-    traffic_reporter: &TrafficReporter,
-    players: &PlayerRegistry,
-    context: ConnectionContext,
-    started_at: Instant,
+    ctx: ProxyContext,
+    conn: ConnectionContext,
 ) -> anyhow::Result<ConnectionReport> {
-    info!(
-        connection_id = context.id,
-        elapsed_ms = started_at.elapsed().as_millis() as u64,
+    let started_at = Instant::now();
+    
+    debug!(
+        connection_id = conn.id,
+        elapsed_ms = started_at.elapsed().as_millis(),
         phase = "start_handle_client",
-        "starting client handling"
+        "connection handling started"
     );
+
+    let config = ctx.config();
+    let services = ctx.services();
 
     let mut packet_io = PacketIo::new();
     let mut first_byte = [0_u8; 1];
     timeout(
-        config.inbound.first_packet_timeout,
+        config.first_packet_timeout(),
         client.read_exact(&mut first_byte),
     )
     .await
     .with_context(|| {
         format!(
             "read first byte timed out after {}ms",
-            config.inbound.first_packet_timeout.as_millis()
+            config.first_packet_timeout().as_millis()
         )
     })?
     .context("read first byte")?;
 
-    info!(
-        connection_id = context.id,
-        elapsed_ms = started_at.elapsed().as_millis() as u64,
+    trace!(
+        connection_id = conn.id,
+        elapsed_ms = started_at.elapsed().as_millis(),
         phase = "first_byte_read",
         first_byte = first_byte[0],
-        "read first byte"
+        "read first byte from client"
     );
 
     if first_byte[0] == 0xFE {
-        serve_legacy_ping(
+        info!(connection_id = conn.id, "detected legacy ping (0xFE)");
+        super::motd::serve_legacy_ping(
             &mut client,
-            &config.transport,
-            config.relay.mode,
-            players,
-            context.id,
+            &config.motd,
+            config.relay_mode,
+            &ctx.core.players,
+            conn.id,
         )
         .await
         .context("serve legacy ping")?;
-        return Ok(ConnectionReport::new(
-            ConnectionTraffic::default(),
-            None,
-            None,
-            None,
-        ));
+        return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
     }
 
     packet_io.queue_slice(&first_byte);
     let handshake_packet = timeout(
-        config.inbound.first_packet_timeout,
+        config.first_packet_timeout(),
         packet_io.read_frame(&mut client, MAX_HANDSHAKE_PACKET_SIZE),
     )
     .await
     .with_context(|| {
         format!(
             "read handshake packet timed out after {}ms",
-            config.inbound.first_packet_timeout.as_millis()
+            config.first_packet_timeout().as_millis()
         )
     })?
     .context("read handshake packet")?;
@@ -103,51 +94,40 @@ pub async fn handle_client(
             .await
             .context("write magic response")?;
         client.shutdown().await.context("shutdown magic stream")?;
-        return Ok(ConnectionReport::new(
-            ConnectionTraffic::default(),
-            None,
-            None,
-            None,
-        ));
+        return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
     }
 
     let handshake = decode_handshake(&handshake_packet)
         .map_err(anyhow::Error::from)
         .context("decode handshake")?;
-    players.update_handshake(context.id, &handshake);
+    ctx.core.players.update_handshake(conn.id, &handshake);
 
-    info!(
-        connection_id = context.id,
+    debug!(
+        connection_id = conn.id,
         protocol_version = handshake.protocol_version,
-        next_state = handshake.next_state,
-        original_host = %handshake.server_address,
+        next_state = ?handshake.next_state,
+        original_host = handshake.server_address,
         original_port = handshake.server_port,
         handshake_wire_bytes = handshake_packet.wire_len,
-        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        elapsed_ms = started_at.elapsed().as_millis(),
         phase = "handshake_decoded",
-        "parsed client handshake"
+        "handshake packet decoded"
     );
 
     if handshake.next_state == INTENT_STATUS {
-        motd
+        services.motd
             .serve(
                 &mut packet_io,
                 &mut client,
-                &config.transport,
-                config.relay.mode,
+                &config.motd,
+                config.relay_mode,
                 &handshake,
-                players,
-                context.id,
+                &ctx.core.players,
+                conn.id,
             )
             .await
             .context("serve motd")?;
-
-        return Ok(ConnectionReport::new(
-            ConnectionTraffic::default(),
-            None,
-            None,
-            None,
-        ));
+        return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
     }
 
     let login_start_packet = packet_io
@@ -155,8 +135,8 @@ pub async fn handle_client(
         .await
         .context("read login start packet")?;
 
-    info!(
-        connection_id = context.id,
+    debug!(
+        connection_id = conn.id,
         elapsed_ms = started_at.elapsed().as_millis() as u64,
         phase = "login_start_read",
         "read login start packet"
@@ -164,11 +144,12 @@ pub async fn handle_client(
 
     let route = match login::resolve_login_route(
         &mut client,
-        api,
-        players,
-        context.id,
+        &services.api,
+        &ctx.core.players,
+        conn.id,
         &login_start_packet,
-        context.peer_addr,
+        conn.peer_addr,
+        &config.api,
     )
     .await? {
         Ok(route) => route,
@@ -176,36 +157,23 @@ pub async fn handle_client(
     };
 
     let counters = super::traffic::ConnectionCounters::default();
-
-    proxy_connection(
-        client,
-        config,
-        traffic_reporter,
-        players,
-        context,
-        handshake,
-        handshake_packet,
-        login_start_packet,
-        route,
-        started_at,
-        counters.clone(),
-    )
-    .await
+    proxy_connection(client, &ctx, conn, handshake, login_start_packet, route, started_at, counters.clone()).await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn proxy_connection(
     client: tokio::net::TcpStream,
-    config: &Config,
-    traffic_reporter: &TrafficReporter,
-    players: &PlayerRegistry,
-    context: ConnectionContext,
+    ctx: &ProxyContext,
+    conn: ConnectionContext,
     mut handshake: crate::minecraft::HandshakeInfo,
-    _handshake_packet: crate::minecraft::FramedPacket,
     login_start_packet: crate::minecraft::FramedPacket,
     route: ConnectionRoute,
     started_at: Instant,
     counters: super::traffic::ConnectionCounters,
 ) -> anyhow::Result<ConnectionReport> {
+    let config = ctx.config();
+    let services = ctx.services();
+
     let rewrite_addr = route
         .rewrite_addr
         .as_ref()
@@ -215,13 +183,13 @@ async fn proxy_connection(
         .rewrite_addr(rewrite_addr)
         .map_err(|e| anyhow!(e))
         .context("rewrite handshake")?;
-    players.update_outbound(context.id, Arc::clone(&route.target_addr));
+    ctx.core.players.update_outbound(conn.id, Arc::clone(&route.target_addr));
 
     let rewritten_packet = encode_handshake(&handshake)
         .map_err(anyhow::Error::from)
         .context("encode handshake")?;
 
-    info!(
+    debug!(
         rewrite_addr = %rewrite_addr,
         rewritten_handshake_bytes = rewritten_packet.len(),
         target_addr = %route.target_addr,
@@ -230,47 +198,36 @@ async fn proxy_connection(
         "rewrote handshake and connecting outbound"
     );
 
-    let mut upstream = connect_outbound_addr(route.target_addr.as_ref(), &config.inbound.socket_options)
+    let mut upstream = connect_outbound_addr(route.target_addr.as_ref(), &config)
         .await
-        .context("connect upstream")?;
+        .with_context(|| format!("failed to connect to upstream {}", route.target_addr))?;
+
+    info!(connection_id = conn.id, target_addr = %route.target_addr, "upstream connected");
 
     if let Some(external_connection_id) =
-        players.with_external_connection_id(context.id, |cid| cid.to_owned())
+        ctx.core.players.with_external_connection_id(conn.id, |cid| cid.to_owned())
     {
-        traffic_reporter.register(
-            context.id,
-            &external_connection_id,
-            counters.clone(),
-            None,
-        );
+        services.traffic.register(conn.id, &external_connection_id, counters.clone(), None);
     }
 
     upstream
         .write_all(&rewritten_packet)
         .await
         .context("write rewritten handshake")?;
-    forward::forward_login_start(&mut upstream, &login_start_packet)
-        .await
-        .context("forward login start")?;
+    let encoded_login_start = encode_raw_frame(&login_start_packet)
+        .map_err(anyhow::Error::from)
+        .context("encode login start")?;
+    upstream.write_all(&encoded_login_start).await.context("write login start")?;
 
-    let relay_stats = relay_bidirectional(
-        client,
-        upstream,
-        counters.clone(),
-        &config.inbound.socket_options,
-        config.relay.mode,
-    )
-    .await
-    .context("relay bidirectional")?;
+    let relay_stats = relay_bidirectional(client, upstream, counters.clone(), &config, config.relay_mode)
+        .await
+        .context("relay bidirectional")?;
 
     let upload_bytes = counters.upload();
     let download_bytes = counters.download();
 
     Ok(ConnectionReport::new(
-        ConnectionTraffic {
-            upload_bytes,
-            download_bytes,
-        },
+        ConnectionTraffic { upload_bytes, download_bytes },
         relay_stats.mode,
         Some(route.target_addr),
         route.rewrite_addr,

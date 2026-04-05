@@ -57,7 +57,8 @@ impl Default for Config {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-    pub struct MotdConfig {
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct MotdConfig {
     pub mode: MotdMode,
     #[validate(length(min = 1, message = "local_json cannot be empty"))]
     pub local_json: String,
@@ -88,6 +89,7 @@ impl Default for MotdConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct ApiConfig {
     pub mode: ApiMode,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -122,6 +124,7 @@ impl Default for ApiConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct LoggingConfig {
     pub level: LogLevel,
     pub format: LogFormat,
@@ -132,6 +135,7 @@ pub struct LoggingConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct LogFileConfig {
     pub path: PathBuf,
     pub mode: LogRotation,
@@ -170,6 +174,7 @@ impl Default for LogFileConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct MotdFaviconConfig {
     pub mode: MotdFaviconMode,
     #[serde(skip_serializing_if = "Option::is_none")]

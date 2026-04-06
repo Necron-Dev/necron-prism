@@ -9,6 +9,7 @@ mod test_cases {
         let config = toml::from_str::<crate::proxy::config::Config>(
             r#"
                 listen_addr = "127.0.0.1:25565"
+                multipath_tcp = true
                 [api]
                 mode = "mock"
                 mock_target_addr = "127.0.0.1"
@@ -18,6 +19,7 @@ mod test_cases {
 
         assert_eq!(config.api.mode, ApiMode::Mock);
         assert_eq!(config.listen_addr, "127.0.0.1:25565");
+        assert!(config.multipath_tcp);
     }
 
     #[test]
@@ -34,6 +36,7 @@ mod test_cases {
         let written = fs::read_to_string(&config_path).unwrap();
 
         assert!(written.contains("#:schema ./config.schema.json"));
+        assert!(written.contains("multipath_tcp = false"));
         assert!(written.contains("[logging]"));
         assert!(written.contains("level = \"info\""));
         assert_eq!(config.listen_addr, "0.0.0.0:25565");

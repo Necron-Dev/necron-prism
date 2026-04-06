@@ -55,6 +55,10 @@
         "upstream_ping_timeout_ms": 1500
       }
     },
+    "multipath_tcp": {
+      "type": "boolean",
+      "default": false
+    },
     "recv_buffer_size": {
       "type": [
         "integer",
@@ -163,20 +167,18 @@
       "type": "object",
       "properties": {
         "archive_pattern": {
-          "type": "string"
+          "type": "string",
+          "default": "{date}-{index}.log.gz"
         },
         "mode": {
-          "$ref": "#/$defs/LogRotation"
+          "$ref": "#/$defs/LogRotation",
+          "default": "compress"
         },
         "path": {
-          "type": "string"
+          "type": "string",
+          "default": "data/logs/latest.log"
         }
-      },
-      "required": [
-        "path",
-        "mode",
-        "archive_pattern"
-      ]
+      }
     },
     "LogFormat": {
       "type": "string",

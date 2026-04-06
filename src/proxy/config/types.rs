@@ -13,6 +13,7 @@ use validator::Validate;
 pub struct Config {
     #[validate(length(min = 1, message = "listen_addr cannot be empty"))]
     pub listen_addr: String,
+    pub multipath_tcp: bool,
     pub first_packet_timeout_ms: u64,
     pub tcp_nodelay: bool,
     pub tcp_keepalive: bool,
@@ -42,6 +43,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             listen_addr: "0.0.0.0:25565".to_string(),
+            multipath_tcp: false,
             first_packet_timeout_ms: 5_000,
             tcp_nodelay: true,
             tcp_keepalive: true,
@@ -142,6 +144,7 @@ pub struct LoggingConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct LogFileConfig {
     pub path: PathBuf,
     pub mode: LogRotation,

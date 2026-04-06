@@ -9,13 +9,13 @@ use crate::minecraft::{
 use super::rewrite::rewrite_json;
 use super::service::MotdService;
 use super::upstream::UpstreamStatusSession;
-use crate::proxy::config::{MotdFaviconMode, MotdMode, StatusPingMode, MotdConfig, RelayMode};
+use crate::proxy::config::{MotdFaviconMode, MotdMode, StatusPingMode, MotdConfig, RelayConfig};
 use crate::proxy::players::PlayerRegistry;
 use crate::proxy::template::{self, TemplateContext};
 
 pub struct StatusContext<'a> {
     config: &'a MotdConfig,
-    relay_mode: RelayMode,
+    relay: &'a RelayConfig,
     handshake: &'a HandshakeInfo,
     service: &'a MotdService,
 }
@@ -23,13 +23,13 @@ pub struct StatusContext<'a> {
 impl<'a> StatusContext<'a> {
     pub fn new(
         config: &'a MotdConfig,
-        relay_mode: RelayMode,
+        relay: &'a RelayConfig,
         handshake: &'a HandshakeInfo,
         service: &'a MotdService,
     ) -> Self {
         Self {
             config,
-            relay_mode,
+            relay,
             handshake,
             service,
         }
@@ -63,15 +63,14 @@ impl<'a> StatusContext<'a> {
     ) -> anyhow::Result<String> {
         if let Some(json) = self
             .service
-            .render_local_json(self.config, self.relay_mode, self.handshake, players)
+            .render_local_json(self.config, self.relay, self.handshake, players)
             .await
         {
             return Ok(json.as_ref().to_owned());
         }
 
         let explicit_favicon = self.load_explicit_favicon_data_url().await?;
-        let template_context =
-            TemplateContext::for_transport(self.config, self.relay_mode, players);
+        let template_context = TemplateContext::for_transport(self.config, self.relay, players);
 
         let base_json = match self.config.mode {
             MotdMode::Local => {

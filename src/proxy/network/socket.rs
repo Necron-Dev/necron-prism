@@ -8,7 +8,7 @@ fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> 
     if multipath_tcp {
         match Socket::new(domain, Type::STREAM, Some(Protocol::MPTCP)) {
             Ok(socket) => {
-                tracing::info!("multipath tcp enabled");
+                tracing::debug!("multipath tcp enabled");
                 return Ok(socket);
             }
             Err(error)

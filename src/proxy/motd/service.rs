@@ -3,7 +3,7 @@ use crate::minecraft::{
     MAX_STATUS_PACKET_SIZE,
 };
 use crate::proxy::config::{
-    MotdFaviconMode, MotdMode, RelayMode, StatusPingMode, MotdConfig,
+    MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode, MotdConfig,
 };
 use crate::proxy::players::{PlayerRegistry, PlayerState};
 use crate::proxy::template;
@@ -29,7 +29,7 @@ impl MotdService {
         packet_io: &mut PacketIo,
         client: &mut tokio::net::TcpStream,
         config: &MotdConfig,
-        relay_mode: RelayMode,
+        relay: &RelayConfig,
         handshake: &HandshakeInfo,
         players: &PlayerRegistry,
         connection_id: u64,
@@ -37,7 +37,7 @@ impl MotdService {
         let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
         decode_status_request(&status_request).map_err(anyhow::Error::from)?;
 
-        let context = StatusContext::new(config, relay_mode, handshake, self);
+        let context = StatusContext::new(config, relay, handshake, self);
         let mut upstream = if config.mode == MotdMode::Upstream
             || config.favicon.mode == MotdFaviconMode::Passthrough
             || config.ping_mode == StatusPingMode::Passthrough
@@ -110,7 +110,7 @@ impl MotdService {
     pub async fn render_local_json(
         &self,
         config: &MotdConfig,
-        relay_mode: RelayMode,
+        relay: &RelayConfig,
         handshake: &HandshakeInfo,
         players: &PlayerRegistry,
     ) -> Option<Arc<str>> {
@@ -118,7 +118,7 @@ impl MotdService {
             return None;
         }
 
-        let rendered = template::render_static_transport(&config.local_json, config, relay_mode);
+        let rendered = template::render_static_transport(&config.local_json, config, relay);
         let online_players = players.current_online_count().to_string();
         let final_text = rendered.replace("{online_player}", &online_players);
 

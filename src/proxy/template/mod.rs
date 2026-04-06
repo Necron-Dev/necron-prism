@@ -1,4 +1,4 @@
-use super::config::{MotdConfig, RelayMode};
+use super::config::{MotdConfig, RelayConfig};
 use super::players::PlayerRegistry;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -22,7 +22,7 @@ pub struct TemplateContext {
 impl TemplateContext {
     pub fn for_transport(
         transport: &MotdConfig,
-        relay_mode: RelayMode,
+        relay: &RelayConfig,
         players: &PlayerRegistry,
     ) -> Self {
         let upstream_addr = transport.upstream_addr.clone();
@@ -43,7 +43,7 @@ impl TemplateContext {
             motd_target_addr: upstream_addr.clone(),
             ping_target_addr,
             favicon_target_addr,
-            relay_mode: relay_mode.to_string(),
+            relay_mode: relay.label().to_string(),
             ping_mode: transport.ping_mode.to_string(),
             favicon_mode: transport.favicon.mode.to_string(),
             upstream_addr,
@@ -70,14 +70,14 @@ pub fn render<'a>(template_str: &'a str, context: &TemplateContext) -> Cow<'a, s
 pub fn render_static_transport<'a>(
     value: &'a str,
     transport: &MotdConfig,
-    relay_mode: RelayMode,
+    relay: &RelayConfig,
 ) -> Cow<'a, str> {
     let ctx = TemplateContext {
         online_player: "{online_player}".to_string(),
         motd_target_addr: transport.upstream_addr.clone(),
         ping_target_addr: transport.ping_target_addr.clone().unwrap_or_default(),
         favicon_target_addr: transport.favicon.target_addr.clone().unwrap_or_default(),
-        relay_mode: relay_mode.to_string(),
+        relay_mode: relay.label().to_string(),
         ping_mode: transport.ping_mode.to_string(),
         favicon_mode: transport.favicon.mode.to_string(),
         upstream_addr: transport.upstream_addr.clone(),

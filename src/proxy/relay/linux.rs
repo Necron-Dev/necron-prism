@@ -2,14 +2,17 @@
 
 #[cfg(target_os = "linux")]
 mod imp {
+    use std::fmt;
     use std::io;
     use std::net::TcpStream;
     use std::os::fd::OwnedFd;
-    use std::sync::Arc;
+    use std::sync::{mpsc as std_mpsc, Arc, OnceLock};
     use std::thread;
 
     use rustix::io::Errno;
     use rustix::pipe::{pipe_with, splice, PipeFlags, SpliceFlags};
+    use tokio::sync::mpsc::{self, error::TrySendError};
+    use tokio_uring::buf::BoundedBuf;
 
     use crate::proxy::traffic::ConnectionCounters;
 
@@ -18,6 +21,8 @@ mod imp {
     const PIPE_CHUNK_SIZE: usize = 4 * 1024;
     const SPLICE_FLAGS: SpliceFlags = SpliceFlags::MOVE.union(SpliceFlags::NONBLOCK);
     const WOULD_BLOCK_RETRY_LIMIT: usize = 32;
+    const IO_URING_RELAY_BUFFER_SIZE: usize = 32 * 1024;
+    const IO_URING_WORKER_QUEUE_CAPACITY: usize = 1024;
 
     pub struct SplicePipes {
         upload: SplicePipe,
@@ -29,6 +34,42 @@ mod imp {
         write_end: OwnedFd,
     }
 
+    pub enum IoUringRelayError {
+        Unavailable(io::Error),
+        Relay(io::Error),
+    }
+
+    struct IoUringRelayJob {
+        client: TcpStream,
+        upstream: TcpStream,
+        counters: ConnectionCounters,
+        response_tx: std_mpsc::SyncSender<io::Result<RelayStats>>,
+    }
+
+    struct SharedIoUringWorker {
+        submitter: mpsc::Sender<IoUringRelayJob>,
+    }
+
+    impl fmt::Display for IoUringRelayError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::Unavailable(error) | Self::Relay(error) => error.fmt(f),
+            }
+        }
+    }
+
+    impl IoUringRelayError {
+        pub fn is_unavailable(&self) -> bool {
+            matches!(self, Self::Unavailable(_))
+        }
+
+        pub fn into_io(self) -> io::Error {
+            match self {
+                Self::Unavailable(error) | Self::Relay(error) => error,
+            }
+        }
+    }
+
     impl SplicePipe {
         fn new() -> io::Result<Self> {
             let (read_end, write_end) = pipe_with(PipeFlags::CLOEXEC)?;
@@ -36,6 +77,79 @@ mod imp {
                 read_end,
                 write_end,
             })
+        }
+    }
+
+    impl SharedIoUringWorker {
+        fn shared() -> io::Result<&'static Self> {
+            static WORKER: OnceLock<SharedIoUringWorker> = OnceLock::new();
+
+            if let Some(worker) = WORKER.get() {
+                return Ok(worker);
+            }
+
+            let worker = Self::start()?;
+            let _ = WORKER.set(worker);
+            Ok(WORKER.get().expect("shared io_uring worker initialized"))
+        }
+
+        fn start() -> io::Result<Self> {
+            let (submitter, mut receiver) = mpsc::channel::<IoUringRelayJob>(IO_URING_WORKER_QUEUE_CAPACITY);
+            let (ready_tx, ready_rx) = std_mpsc::sync_channel::<io::Result<()>>(1);
+
+            thread::Builder::new()
+                .name("relay-io-uring".to_string())
+                .spawn(move || {
+                    tokio_uring::start(async move {
+                        let _ = ready_tx.send(Ok(()));
+
+                        while let Some(job) = receiver.recv().await {
+                            tokio_uring::spawn(async move {
+                                let result = run_io_uring_relay(job.client, job.upstream, job.counters).await;
+                                let _ = job.response_tx.send(result);
+                            });
+                        }
+                    });
+                })
+                .map_err(|error| io::Error::other(format!("spawn relay-io-uring thread: {error}")))?;
+
+            ready_rx
+                .recv()
+                .map_err(|_| io::Error::other("shared io_uring worker failed to initialize"))??;
+
+            Ok(Self { submitter })
+        }
+
+        fn relay(
+            &self,
+            client: TcpStream,
+            upstream: TcpStream,
+            counters: ConnectionCounters,
+        ) -> Result<RelayStats, IoUringRelayError> {
+            let (response_tx, response_rx) = std_mpsc::sync_channel(1);
+            let job = IoUringRelayJob {
+                client,
+                upstream,
+                counters,
+                response_tx,
+            };
+
+            self.submitter.try_send(job).map_err(|error| match error {
+                TrySendError::Full(_) => IoUringRelayError::Unavailable(io::Error::other(
+                    "shared io_uring worker queue is full",
+                )),
+                TrySendError::Closed(_) => IoUringRelayError::Unavailable(io::Error::other(
+                    "shared io_uring worker is unavailable",
+                )),
+            })?;
+
+            match response_rx.recv() {
+                Ok(Ok(stats)) => Ok(stats),
+                Ok(Err(error)) => Err(IoUringRelayError::Relay(error)),
+                Err(_) => Err(IoUringRelayError::Unavailable(io::Error::other(
+                    "shared io_uring worker dropped relay response",
+                ))),
+            }
         }
     }
 
@@ -110,32 +224,10 @@ mod imp {
         client: TcpStream,
         upstream: TcpStream,
         counters: ConnectionCounters,
-    ) -> io::Result<RelayStats> {
-        tokio_uring::start(async move {
-            let client = tokio_uring::net::TcpStream::from_std(client);
-            let upstream = tokio_uring::net::TcpStream::from_std(upstream);
-            let client = Arc::new(client);
-            let upstream = Arc::new(upstream);
-            let upload_counters = counters.clone();
-            let download_counters = counters;
-
-            let upload_client = Arc::clone(&client);
-            let upload_upstream = Arc::clone(&upstream);
-            let upload = tokio_uring::spawn(async move {
-                io_uring_copy(upload_client, upload_upstream, upload_counters, true).await
-            });
-
-            let download_bytes = io_uring_copy(upstream, client, download_counters, false).await?;
-            let upload_bytes = upload
-                .await
-                .map_err(|error| io::Error::other(format!("io_uring upload task failed: {error}")))??;
-
-            Ok(RelayStats {
-                upload_bytes,
-                download_bytes,
-                mode: Some(RelayMode::IoUring),
-            })
-        })
+    ) -> Result<RelayStats, IoUringRelayError> {
+        SharedIoUringWorker::shared()
+            .map_err(IoUringRelayError::Unavailable)?
+            .relay(client, upstream, counters)
     }
 
     fn splice_copy(
@@ -225,10 +317,6 @@ mod imp {
         counters: ConnectionCounters,
         upload_direction: bool,
     ) -> io::Result<u64> {
-        use tokio_uring::buf::BoundedBuf;
-
-        const IO_URING_RELAY_BUFFER_SIZE: usize = 32 * 1024;
-
         let mut total = 0_u64;
         let mut buf = vec![0_u8; IO_URING_RELAY_BUFFER_SIZE];
 
@@ -261,6 +349,35 @@ mod imp {
         }
     }
 
+    async fn run_io_uring_relay(
+        client: TcpStream,
+        upstream: TcpStream,
+        counters: ConnectionCounters,
+    ) -> io::Result<RelayStats> {
+        let client = tokio_uring::net::TcpStream::from_std(client);
+        let upstream = tokio_uring::net::TcpStream::from_std(upstream);
+        let client = Arc::new(client);
+        let upstream = Arc::new(upstream);
+        let upload_counters = counters.clone();
+        let download_counters = counters;
+
+        let upload_client = Arc::clone(&client);
+        let upload_upstream = Arc::clone(&upstream);
+        let upload = tokio_uring::spawn(async move {
+            io_uring_copy(upload_client, upload_upstream, upload_counters, true).await
+        });
+
+        let download_bytes = io_uring_copy(upstream, client, download_counters, false).await?;
+        let upload_bytes = upload
+            .await
+            .map_err(|error| io::Error::other(format!("io_uring upload task failed: {error}")))??;
+
+        Ok(RelayStats {
+            upload_bytes,
+            download_bytes,
+            mode: Some(RelayMode::IoUring),
+        })
+    }
 }
 
 #[cfg(target_os = "linux")]

@@ -69,7 +69,18 @@ pub async fn relay_bidirectional(
                 let counters_for_task = counters.clone();
 
                 let stats = tokio::task::spawn_blocking(move || {
-                    linux::relay_with_io_uring(client, upstream, counters_for_task)
+                    match linux::relay_with_io_uring(
+                        client.try_clone()?,
+                        upstream.try_clone()?,
+                        counters_for_task.clone(),
+                    ) {
+                        Ok(stats) => Ok(stats),
+                        Err(error) if error.is_unavailable() => {
+                            tracing::warn!(error = %error, "io_uring relay unavailable, falling back to standard relay");
+                            relay_with_copy(client, upstream, counters_for_task)
+                        }
+                        Err(error) => Err(error.into_io()),
+                    }
                 })
                 .await
                 .map_err(|error| io::Error::other(format!("io_uring relay task panicked: {error}")))??;
@@ -88,7 +99,7 @@ pub async fn relay_bidirectional(
                 let stats = tokio::task::spawn_blocking(move || {
                     match linux::relay_with_io_uring(client.try_clone()?, upstream.try_clone()?, counters_for_task.clone()) {
                         Ok(stats) => Ok(stats),
-                        Err(error) => {
+                        Err(error) if error.is_unavailable() => {
                             tracing::warn!(error = %error, "io_uring relay unavailable, falling back to splice relay");
                             if let Some(pipes) = linux::prepare_pipes() {
                                 return linux::relay_with_splice(client, upstream, pipes, counters_for_task);
@@ -97,6 +108,7 @@ pub async fn relay_bidirectional(
                             tracing::warn!("falling back to standard relay because splice pipes are unavailable");
                             relay_with_copy(client, upstream, counters_for_task)
                         }
+                        Err(error) => Err(error.into_io()),
                     }
                 })
                 .await

@@ -2,7 +2,8 @@
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FNecron-Dev%2Fnecron-prism.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FNecron-Dev%2Fnecron-prism?ref=badge_shield)
 
-> Necron Boost Rust kernel
+> Light-speed forward, ultimate purr-formance~☆  
+> 光速转发，性能「喵」不可言~☆
 
 ---
 

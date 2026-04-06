@@ -5,6 +5,7 @@ mod imp {
     use std::io;
     use std::net::TcpStream;
     use std::os::fd::OwnedFd;
+    use std::sync::Arc;
     use std::thread;
 
     use rustix::io::Errno;
@@ -105,6 +106,38 @@ mod imp {
         })
     }
 
+    pub fn relay_with_io_uring(
+        client: TcpStream,
+        upstream: TcpStream,
+        counters: ConnectionCounters,
+    ) -> io::Result<RelayStats> {
+        tokio_uring::start(async move {
+            let client = tokio_uring::net::TcpStream::from_std(client);
+            let upstream = tokio_uring::net::TcpStream::from_std(upstream);
+            let client = Arc::new(client);
+            let upstream = Arc::new(upstream);
+            let upload_counters = counters.clone();
+            let download_counters = counters;
+
+            let upload_client = Arc::clone(&client);
+            let upload_upstream = Arc::clone(&upstream);
+            let upload = tokio_uring::spawn(async move {
+                io_uring_copy(upload_client, upload_upstream, upload_counters, true).await
+            });
+
+            let download_bytes = io_uring_copy(upstream, client, download_counters, false).await?;
+            let upload_bytes = upload
+                .await
+                .map_err(|error| io::Error::other(format!("io_uring upload task failed: {error}")))??;
+
+            Ok(RelayStats {
+                upload_bytes,
+                download_bytes,
+                mode: Some(RelayMode::IoUring),
+            })
+        })
+    }
+
     fn splice_copy(
         src: &TcpStream,
         dst: &TcpStream,
@@ -185,6 +218,49 @@ mod imp {
         let copied = io::copy(&mut src, &mut dst)?;
         Ok(already_copied + copied)
     }
+
+    async fn io_uring_copy(
+        reader: Arc<tokio_uring::net::TcpStream>,
+        writer: Arc<tokio_uring::net::TcpStream>,
+        counters: ConnectionCounters,
+        upload_direction: bool,
+    ) -> io::Result<u64> {
+        use tokio_uring::buf::BoundedBuf;
+
+        const IO_URING_RELAY_BUFFER_SIZE: usize = 32 * 1024;
+
+        let mut total = 0_u64;
+        let mut buf = vec![0_u8; IO_URING_RELAY_BUFFER_SIZE];
+
+        loop {
+            let (read_result, next_buf) = reader.read(buf).await;
+            buf = next_buf;
+            let read = read_result?;
+            if read == 0 {
+                writer.shutdown(std::net::Shutdown::Write)?;
+                return Ok(total);
+            }
+
+            tracing::trace!(
+                direction = if upload_direction { "upload" } else { "download" },
+                bytes = read,
+                "io_uring relay chunk transferred"
+            );
+
+            let (write_result, next_buf) = writer.write_all(buf.slice(..read)).await;
+            write_result?;
+            buf = next_buf.into_inner();
+
+            let bytes = read as u64;
+            total += bytes;
+            if upload_direction {
+                counters.add_upload(bytes);
+            } else {
+                counters.add_download(bytes);
+            }
+        }
+    }
+
 }
 
 #[cfg(target_os = "linux")]

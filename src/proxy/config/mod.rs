@@ -36,4 +36,4 @@ impl ConfigLoader {
 pub use schema::write_schema_file;
 
 #[cfg(test)]
-mod tests;
+mod test;

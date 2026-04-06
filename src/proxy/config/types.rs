@@ -25,7 +25,8 @@ pub struct Config {
     pub send_buffer_size: Option<usize>,
     pub reuse_port: bool,
 
-    pub relay_mode: RelayMode,
+    #[validate(nested)]
+    pub relay: RelayConfig,
     #[validate(nested)]
     pub motd: MotdConfig,
     #[validate(nested)]
@@ -51,7 +52,7 @@ impl Default for Config {
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_port: false,
-            relay_mode: RelayMode::Standard,
+            relay: RelayConfig::default(),
             motd: MotdConfig::default(),
             api: ApiConfig::default(),
             logging: LoggingConfig::default(),
@@ -250,10 +251,38 @@ pub enum ApiMode {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum RelayMode {
+pub enum RelayDataMode {
     #[default]
-    Standard,
-    LinuxSplice,
+    Async,
+    Splice,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
+pub struct RelayConfig {
+    pub mode: RelayDataMode,
+    pub io_uring: bool,
+}
+
+impl Default for RelayConfig {
+    fn default() -> Self {
+        Self {
+            mode: RelayDataMode::Async,
+            io_uring: false,
+        }
+    }
+}
+
+impl RelayConfig {
+    pub fn label(&self) -> &'static str {
+        match (self.mode, self.io_uring) {
+            (RelayDataMode::Async, false) => "async",
+            (RelayDataMode::Async, true) => "async+io_uring",
+            (RelayDataMode::Splice, false) => "splice",
+            (RelayDataMode::Splice, true) => "splice+io_uring",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]

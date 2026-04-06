@@ -3,7 +3,7 @@ mod error;
 mod packet_io;
 mod protocol;
 #[cfg(test)]
-mod tests;
+mod test;
 mod types;
 
 pub use constants::{

@@ -2,6 +2,7 @@ use crate::proxy::config::Config;
 use socket2::{Domain, Protocol, SockRef, Socket, TcpKeepalive, Type};
 use std::io;
 use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> {
@@ -103,7 +104,7 @@ pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result
     {
         socket.set_tcp_quickack(true)?;
 
-        socket.set_tos_v4(0x10);
+        let _ = socket.set_tos_v4(0x10);
     }
 
     if let Some(size) = config.recv_buffer_size {

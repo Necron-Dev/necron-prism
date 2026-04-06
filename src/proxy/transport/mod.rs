@@ -65,7 +65,7 @@ pub async fn handle_client(
         super::motd::serve_legacy_ping(
             &mut client,
             &config.motd,
-            config.relay_mode,
+            &config.relay,
             &ctx.core.players,
             conn.id,
         )
@@ -120,7 +120,7 @@ pub async fn handle_client(
                 &mut packet_io,
                 &mut client,
                 &config.motd,
-                config.relay_mode,
+                &config.relay,
                 &handshake,
                 &ctx.core.players,
                 conn.id,
@@ -219,7 +219,7 @@ async fn proxy_connection(
         .context("encode login start")?;
     upstream.write_all(&encoded_login_start).await.context("write login start")?;
 
-    let relay_stats = relay_bidirectional(client, upstream, counters.clone(), &config, config.relay_mode)
+    let relay_stats = relay_bidirectional(client, upstream, counters.clone(), &config)
         .await
         .context("relay bidirectional")?;
 

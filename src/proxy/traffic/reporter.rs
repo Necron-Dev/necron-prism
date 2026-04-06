@@ -2,6 +2,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::net::Shutdown;
 use std::sync::Arc;
+use std::thread;
 use tokio_util::sync::CancellationToken;
 
 use tracing::{debug, warn};
@@ -47,7 +48,7 @@ impl TrafficReporter {
 
     pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
         let reporter = self.clone();
-        tokio::spawn(async move {
+        spawn_background(async move {
             reporter.finish_internal(connection_id, totals).await;
         });
     }
@@ -125,7 +126,7 @@ impl TrafficReporter {
     fn spawn_loop(&self, interval: std::time::Duration) {
         let reporter = self.clone();
         let cancel_token = self.cancel_token.clone();
-        tokio::spawn(async move {
+        spawn_background(async move {
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep(interval) => {
@@ -174,6 +175,24 @@ impl TrafficReporter {
             }
         });
     }
+}
+
+fn spawn_background<F>(future: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+        return;
+    }
+
+    thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("build background tokio runtime");
+        runtime.block_on(future);
+    });
 }
 
 

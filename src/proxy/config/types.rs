@@ -15,7 +15,9 @@ pub struct Config {
     pub listen_addr: String,
     pub first_packet_timeout_ms: u64,
     pub tcp_nodelay: bool,
-    pub keepalive_secs: u64,
+    pub tcp_keepalive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keepalive_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recv_buffer_size: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,7 +44,8 @@ impl Default for Config {
             listen_addr: "0.0.0.0:25565".to_string(),
             first_packet_timeout_ms: 5_000,
             tcp_nodelay: true,
-            keepalive_secs: 30,
+            tcp_keepalive: true,
+            keepalive_secs: Some(30),
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_port: false,
@@ -58,6 +61,7 @@ impl Default for Config {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct MotdConfig {
     pub mode: MotdMode,
     #[validate(length(min = 1, message = "local_json cannot be empty"))]
@@ -90,6 +94,7 @@ impl Default for MotdConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct ApiConfig {
     pub mode: ApiMode,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -125,6 +130,7 @@ impl Default for ApiConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct LoggingConfig {
     pub level: LogLevel,
     pub format: LogFormat,
@@ -175,6 +181,7 @@ impl Default for LogFileConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Validate)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct MotdFaviconConfig {
     pub mode: MotdFaviconMode,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -270,6 +277,7 @@ pub enum MotdProtocol {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum StatusPingMode {
     #[default]
     Local,
@@ -298,10 +306,6 @@ impl Config {
 
     pub fn first_packet_timeout(&self) -> Duration {
         Duration::from_millis(self.first_packet_timeout_ms)
-    }
-
-    pub fn keepalive(&self) -> Duration {
-        Duration::from_secs(self.keepalive_secs)
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {

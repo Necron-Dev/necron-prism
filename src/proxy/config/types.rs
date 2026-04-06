@@ -16,7 +16,9 @@ pub struct Config {
     pub multipath_tcp: bool,
     pub first_packet_timeout_ms: u64,
     pub tcp_nodelay: bool,
-    pub keepalive_secs: u64,
+    pub tcp_keepalive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keepalive_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recv_buffer_size: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,7 +46,8 @@ impl Default for Config {
             multipath_tcp: false,
             first_packet_timeout_ms: 5_000,
             tcp_nodelay: true,
-            keepalive_secs: 30,
+            tcp_keepalive: true,
+            keepalive_secs: Some(30),
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_port: false,
@@ -277,6 +280,7 @@ pub enum MotdProtocol {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum StatusPingMode {
     #[default]
     Local,
@@ -305,10 +309,6 @@ impl Config {
 
     pub fn first_packet_timeout(&self) -> Duration {
         Duration::from_millis(self.first_packet_timeout_ms)
-    }
-
-    pub fn keepalive(&self) -> Duration {
-        Duration::from_secs(self.keepalive_secs)
     }
 
     pub fn validate(&self) -> anyhow::Result<()> {

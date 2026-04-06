@@ -2,7 +2,7 @@
 
 #[cfg(feature = "benchmark")]
 mod imp {
-    use crate::proxy::config::{RelayMode, SocketOptions};
+    use crate::proxy::config::{Config, RelayMode};
     use crate::proxy::relay::relay_bidirectional;
     use crate::proxy::traffic::ConnectionCounters;
     use parking_lot::{Condvar, Mutex};
@@ -222,11 +222,11 @@ mod imp {
         upstream_stream.set_nonblocking(true)?;
 
         let counters = ConnectionCounters::default();
-        let socket_options = SocketOptions::default();
+        let config = Config::default();
         relay_runtime()?.block_on(async move {
             let client = tokio::net::TcpStream::from_std(client_stream)?;
             let upstream = tokio::net::TcpStream::from_std(upstream_stream)?;
-            relay_bidirectional(client, upstream, counters, &socket_options, RelayMode::Standard)
+            relay_bidirectional(client, upstream, counters, &config, RelayMode::Standard)
                 .await
                 .map(|_| ())
         })

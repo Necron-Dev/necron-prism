@@ -5,11 +5,15 @@ use necron_prism::benchmark::{
     register_kernel_benchmark, register_mc_benchmark, register_relay_compare_benchmark,
 };
 use std::env;
+use std::process::Command;
 
 const BENCHMARK_NAME_ENV: &str = "NECRON_BENCHMARK";
 
 fn main() {
-    let benchmark = parse_benchmark_name();
+    let benchmark = match normalize_cli_args() {
+        CliMode::Run { benchmark } => benchmark,
+        CliMode::Reexec(status) => std::process::exit(status.code().unwrap_or(1)),
+    };
     let mut criterion = Criterion::default().configure_from_args();
 
     match benchmark.as_str() {
@@ -25,28 +29,60 @@ fn main() {
     criterion.final_summary();
 }
 
-fn parse_benchmark_name() -> String {
-    if let Ok(value) = env::var(BENCHMARK_NAME_ENV) {
-        let value = value.trim();
-        if !value.is_empty() {
-            return value.to_string();
-        }
-    }
+enum CliMode {
+    Run { benchmark: String },
+    Reexec(std::process::ExitStatus),
+}
 
-    let mut args = env::args().skip(1);
+fn normalize_cli_args() -> CliMode {
+    let mut benchmark = env::var(BENCHMARK_NAME_ENV)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let program = env::current_exe().unwrap_or_else(|error| {
+        eprintln!("error: failed to locate current executable: {error}");
+        std::process::exit(2);
+    });
+    let mut forwarded_args = Vec::new();
+    let mut args = env::args_os().skip(1);
 
     while let Some(arg) = args.next() {
         if arg == "--benchmark" {
-            if let Some(value) = args.next() {
-                return value;
+            let Some(value) = args.next() else {
+                eprintln!("error: --benchmark requires a value");
+                std::process::exit(2);
+            };
+
+            let value = value.to_string_lossy().trim().to_string();
+            if value.is_empty() {
+                eprintln!("error: --benchmark requires a non-empty value");
+                std::process::exit(2);
             }
-            eprintln!("error: --benchmark requires a value");
-            std::process::exit(2);
+            benchmark = Some(value);
+            continue;
         }
+
+        forwarded_args.push(arg);
     }
 
-    eprintln!(
+    let Some(benchmark) = benchmark else {
+        eprintln!(
         "error: missing benchmark selection. Set {BENCHMARK_NAME_ENV}=<mc|kernel|compare> or pass --benchmark <mc|kernel|compare>"
-    );
-    std::process::exit(2);
+        );
+        std::process::exit(2);
+    };
+
+    if env::var_os(BENCHMARK_NAME_ENV).is_none() {
+        let status = Command::new(program)
+            .args(&forwarded_args)
+            .env(BENCHMARK_NAME_ENV, &benchmark)
+            .status()
+            .unwrap_or_else(|error| {
+                eprintln!("error: failed to restart benchmark process: {error}");
+                std::process::exit(2);
+            });
+        return CliMode::Reexec(status);
+    }
+
+    CliMode::Run { benchmark }
 }

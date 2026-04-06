@@ -20,7 +20,10 @@
       "minimum": 0
     },
     "keepalive_secs": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "format": "uint64",
       "default": 30,
       "minimum": 0
@@ -88,6 +91,10 @@
       "format": "uint64",
       "default": 10,
       "minimum": 0
+    },
+    "tcp_keepalive": {
+      "type": "boolean",
+      "default": true
     },
     "tcp_nodelay": {
       "type": "boolean",

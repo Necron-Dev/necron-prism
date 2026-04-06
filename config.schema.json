@@ -20,7 +20,10 @@
       "minimum": 0
     },
     "keepalive_secs": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "format": "uint64",
       "default": 30,
       "minimum": 0
@@ -85,6 +88,10 @@
       "default": 10,
       "minimum": 0
     },
+    "tcp_keepalive": {
+      "type": "boolean",
+      "default": true
+    },
     "tcp_nodelay": {
       "type": "boolean",
       "default": true
@@ -107,7 +114,8 @@
           ]
         },
         "mock_connection_id_prefix": {
-          "type": "string"
+          "type": "string",
+          "default": "debug"
         },
         "mock_kick_reason": {
           "type": [
@@ -123,29 +131,26 @@
         },
         "mock_target_addr": {
           "type": "string",
+          "default": "mc.hypixel.net:25565",
           "minLength": 1
         },
         "mode": {
-          "$ref": "#/$defs/ApiMode"
+          "$ref": "#/$defs/ApiMode",
+          "default": "mock"
         },
         "timeout_ms": {
           "type": "integer",
           "format": "uint64",
+          "default": 3000,
           "minimum": 0
         },
         "traffic_interval_ms": {
           "type": "integer",
           "format": "uint64",
+          "default": 5000,
           "minimum": 0
         }
-      },
-      "required": [
-        "mode",
-        "timeout_ms",
-        "traffic_interval_ms",
-        "mock_target_addr",
-        "mock_connection_id_prefix"
-      ]
+      }
     },
     "ApiMode": {
       "type": "string",
@@ -203,7 +208,8 @@
       "type": "object",
       "properties": {
         "async_enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "default": true
         },
         "file": {
           "anyOf": [
@@ -216,33 +222,36 @@
           ]
         },
         "format": {
-          "$ref": "#/$defs/LogFormat"
+          "$ref": "#/$defs/LogFormat",
+          "default": "pretty"
         },
         "level": {
-          "$ref": "#/$defs/LogLevel"
+          "$ref": "#/$defs/LogLevel",
+          "default": "info"
         }
-      },
-      "required": [
-        "level",
-        "format",
-        "async_enabled"
-      ]
+      }
     },
     "MotdConfig": {
       "type": "object",
       "properties": {
         "favicon": {
-          "$ref": "#/$defs/MotdFaviconConfig"
+          "$ref": "#/$defs/MotdFaviconConfig",
+          "default": {
+            "mode": "json"
+          }
         },
         "local_json": {
           "type": "string",
+          "default": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}",
           "minLength": 1
         },
         "mode": {
-          "$ref": "#/$defs/MotdMode"
+          "$ref": "#/$defs/MotdMode",
+          "default": "local"
         },
         "ping_mode": {
-          "$ref": "#/$defs/StatusPingMode"
+          "$ref": "#/$defs/StatusPingMode",
+          "default": "local"
         },
         "ping_target_addr": {
           "type": [
@@ -251,33 +260,28 @@
           ]
         },
         "protocol": {
-          "$ref": "#/$defs/MotdProtocol"
+          "$ref": "#/$defs/MotdProtocol",
+          "default": "client"
         },
         "upstream_addr": {
           "type": "string",
+          "default": "mc.hypixel.net:25565",
           "minLength": 1
         },
         "upstream_ping_timeout_ms": {
           "type": "integer",
           "format": "uint64",
+          "default": 1500,
           "minimum": 0
         }
-      },
-      "required": [
-        "mode",
-        "local_json",
-        "upstream_addr",
-        "protocol",
-        "ping_mode",
-        "upstream_ping_timeout_ms",
-        "favicon"
-      ]
+      }
     },
     "MotdFaviconConfig": {
       "type": "object",
       "properties": {
         "mode": {
-          "$ref": "#/$defs/MotdFaviconMode"
+          "$ref": "#/$defs/MotdFaviconMode",
+          "default": "json"
         },
         "path": {
           "type": [
@@ -291,10 +295,7 @@
             "null"
           ]
         }
-      },
-      "required": [
-        "mode"
-      ]
+      }
     },
     "MotdFaviconMode": {
       "type": "string",

@@ -29,7 +29,7 @@ fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> 
 #[cfg(not(target_os = "linux"))]
 fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> {
     if multipath_tcp {
-        tracing::warn!("multipath tcp requested but only linux kernels support it; falling back to tcp");
+        tracing::debug!("multipath tcp requested but only linux kernels support it; falling back to tcp");
     }
 
     Socket::new(domain, Type::STREAM, Some(Protocol::TCP))

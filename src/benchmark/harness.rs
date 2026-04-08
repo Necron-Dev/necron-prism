@@ -3,8 +3,8 @@
 #[cfg(feature = "benchmark")]
 mod imp {
     use crate::proxy::config::{Config, RelayDataMode};
-    use crate::proxy::relay::relay_bidirectional;
-    use crate::proxy::traffic::ConnectionCounters;
+    use crate::proxy::ConnectionSession;
+    use crate::proxy::transport::relay::relay_bidirectional;
     use parking_lot::{Condvar, Mutex};
     use std::io::{Read, Write};
     use std::net::{Shutdown, TcpListener, TcpStream};
@@ -221,14 +221,14 @@ mod imp {
         client_stream.set_nonblocking(true)?;
         upstream_stream.set_nonblocking(true)?;
 
-        let counters = ConnectionCounters::default();
+        let session = ConnectionSession::new(1, None);
         let mut config = Config::default();
-        config.relay.mode = RelayDataMode::Async;
-        config.relay.io_uring = false;
+        config.network.relay.mode = RelayDataMode::Async;
+        config.network.relay.io_uring = false;
         relay_runtime()?.block_on(async move {
             let client = tokio::net::TcpStream::from_std(client_stream)?;
             let upstream = tokio::net::TcpStream::from_std(upstream_stream)?;
-            relay_bidirectional(client, upstream, counters, &config)
+            relay_bidirectional(client, upstream, session, &config)
                 .await
                 .map(|_| ())
         })

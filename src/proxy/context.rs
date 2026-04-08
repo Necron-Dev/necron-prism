@@ -12,6 +12,12 @@ use crate::proxy::traffic::{spawn_stats_logger, StatsLoggerHandle, TrafficReport
 use super::api::ApiService;
 use super::motd::MotdService;
 
+#[cfg(not(target_os = "linux"))]
+use tracing::warn;
+
+#[cfg(not(target_os = "linux"))]
+use super::config::RelayDataMode;
+
 #[derive(Default)]
 pub struct Core {
     pub players: PlayerRegistry,
@@ -41,6 +47,7 @@ impl Context {
     }
 
     fn build(config: Config, core: Arc<Core>) -> anyhow::Result<Self> {
+        Self::warn_unsupported_relay_acceleration(&config);
         let config = Arc::new(ArcSwap::from(Arc::new(config)));
         let services = Self::create_services(&config, &core)?;
 
@@ -60,15 +67,19 @@ impl Context {
         let motd = Arc::new(MotdService::new());
         let traffic = TrafficReporter::new(api.clone(), &loaded.api);
 
-        let logger = loaded.stats_log_interval().map(|interval| {
-            spawn_stats_logger(
-                core.stats.clone(),
-                core.totals.clone(),
-                core.players.clone(),
-                traffic.clone(),
-                interval,
-            )
-        });
+        let logger = loaded
+            .logging
+            .stats_log_interval_secs
+            .map(std::time::Duration::from_secs)
+            .map(|interval| {
+                spawn_stats_logger(
+                    core.stats.clone(),
+                    core.totals.clone(),
+                    core.players.clone(),
+                    traffic.clone(),
+                    interval,
+                )
+            });
 
         Ok(Services {
             api,
@@ -89,6 +100,7 @@ impl Context {
     pub fn reload(&self, log_handle: &LogHandle) -> anyhow::Result<()> {
         let new_config = ConfigLoader::load_default()?;
         new_config.validate()?;
+        Self::warn_unsupported_relay_acceleration(&new_config);
 
         let filter = EnvFilter::new(new_config.logging.level.as_filter_directive());
         log_handle.modify(|f| *f = filter)?;
@@ -105,4 +117,20 @@ impl Context {
 
         Ok(())
     }
+
+    #[cfg(not(target_os = "linux"))]
+    fn warn_unsupported_relay_acceleration(config: &Config) {
+        let requested = &config.requested_relay;
+        if requested.io_uring || matches!(requested.mode, RelayDataMode::Splice) {
+            warn!(
+                requested_relay_mode = requested.label(),
+                requested_io_uring = requested.io_uring,
+                effective_relay_mode = "async",
+                "requested Linux-only relay acceleration is unavailable on this platform; falling back to async relay"
+            );
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn warn_unsupported_relay_acceleration(_: &Config) {}
 }

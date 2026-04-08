@@ -1,41 +1,43 @@
 use std::time::Instant;
-use tracing::{debug, info_span, warn};
+use tracing::{debug, warn};
 
 use super::Context;
-use super::transport::{handle_client, ConnectionContext, ConnectionReport, HandledConnection};
+use super::stats::{ConnectionReport, ConnectionSession};
+use super::transport::{handle_client, HandledConnection};
 
-pub async fn handle_connection(ctx: Context, stream: tokio::net::TcpStream, conn: ConnectionContext) {
-    let span = info_span!("connection", connection_id = conn.id, peer_addr = ?conn.peer_addr);
-    let _guard = span.enter();
+pub async fn handle_connection(ctx: Context, stream: tokio::net::TcpStream, session: ConnectionSession) {
+    let logging_conn = session.clone();
+    let _guard = logging_conn.enter_stage("CONNECT/LIFECYCLE");
     let started_at = Instant::now();
 
-    match handle_client(stream, ctx.clone(), conn).await {
-        Ok(report) => finish_success(&ctx, conn, started_at, report),
+    match handle_client(stream, ctx.clone(), session.clone()).await {
+        Ok(report) => finish_success(&ctx, session, started_at, report),
         Err(error) => {
             if let Some(report) = error.downcast_ref::<HandledConnection>().map(|h| &h.0) {
-                finish_success(&ctx, conn, started_at, report.clone());
+                finish_success(&ctx, session, started_at, report.clone());
             } else {
-                let remaining = ctx.core.players.remove_connection(conn.id);
+                let remaining = ctx.core.players.remove_connection(session.id);
                 warn!(
+                    connection_id = session.id,
                     error = %error,
                     elapsed_ms = started_at.elapsed().as_millis() as u64,
                     active_remaining = remaining,
-                    "connection failed"
+                    "[CONNECT/LIFECYCLE] connection failed"
                 );
             }
         }
     }
 }
 
-fn finish_success(ctx: &Context, conn: ConnectionContext, started_at: Instant, report: ConnectionReport) {
+fn finish_success(ctx: &Context, session: ConnectionSession, started_at: Instant, report: ConnectionReport) {
     let services = ctx.services();
-    services.traffic.finish(conn.id, report.connection_traffic);
+    services.traffic.finish(session.id, report.connection_traffic);
     
     let settled = ctx.core.totals.record_finished_connection(report.connection_traffic);
-    let remaining = ctx.core.players.remove_connection(conn.id);
+    let remaining = ctx.core.players.remove_connection(session.id);
 
     if let Some(mode) = report.relay_mode {
-        debug!(relay_mode = %mode, "relay completed");
+        debug!(relay_mode = %mode, "[CONNECT/LIFECYCLE] relay completed");
     }
 
     let elapsed_ms = started_at.elapsed().as_millis() as u64;
@@ -43,7 +45,6 @@ fn finish_success(ctx: &Context, conn: ConnectionContext, started_at: Instant, r
     let download_mb = report.connection_traffic.download_bytes as f64 / 1_000_000.0;
     
     debug!(
-        connection_id = conn.id,
         elapsed_ms,
         upload_mb,
         download_mb,
@@ -51,6 +52,8 @@ fn finish_success(ctx: &Context, conn: ConnectionContext, started_at: Instant, r
         settled_upload_mb = settled.upload_bytes as f64 / 1_000_000.0,
         settled_download_mb = settled.download_bytes as f64 / 1_000_000.0,
         active_remaining = remaining,
-        "connection closed and settled"
+        target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
+        rewrite_addr = report.rewrite_addr.as_ref().map(ToString::to_string).as_deref(),
+        "[CONNECT/LIFECYCLE] connection closed and settled"
     );
 }

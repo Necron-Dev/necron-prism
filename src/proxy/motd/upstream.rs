@@ -9,7 +9,7 @@ use tracing::debug;
 
 use crate::minecraft::{
     decode_pong_response, decode_status_response, encode_handshake, ping_request_packet,
-    HandshakeInfo, PacketIo,
+    HandshakeInfo, PacketIo, RuntimeAddress,
 };
 
 use super::service::MotdService;
@@ -25,15 +25,15 @@ pub struct UpstreamStatusSession {
 impl UpstreamStatusSession {
     #[allow(clippy::too_many_arguments)]
     pub async fn connect(
-        target_addr: &str,
-        rewrite_addr: &str,
+        target_addr: RuntimeAddress,
+        rewrite_addr: RuntimeAddress,
         handshake: &HandshakeInfo,
         timeout_limit: Duration,
         _service: &MotdService,
         needs_status_json: bool,
         needs_ping: bool,
     ) -> anyhow::Result<Self> {
-        let address = lookup_host(target_addr)
+        let address = lookup_host(target_addr.as_str())
             .await
             .map_err(|error| anyhow::anyhow!("resolve target address {target_addr}: {error}"))?
             .next()
@@ -43,7 +43,7 @@ impl UpstreamStatusSession {
             .with_context(|| format!("connect upstream status {address} timed out"))??;
 
         let mut rewritten = handshake.clone();
-        rewritten.rewrite_addr(rewrite_addr).map_err(|e| anyhow::anyhow!(e))?;
+        rewritten.rewrite_addr(&rewrite_addr).map_err(|e| anyhow::anyhow!(e))?;
 
         let mut probe = encode_handshake(&rewritten).map_err(anyhow::Error::from)?;
         probe.extend_from_slice(&[1, 0]);

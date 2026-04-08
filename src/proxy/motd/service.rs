@@ -2,10 +2,12 @@ use crate::minecraft::{
     decode_status_request, ping_response_packet, status_response_packet, HandshakeInfo, PacketIo,
     MAX_STATUS_PACKET_SIZE,
 };
+use crate::proxy::context::Context as ProxyContext;
 use crate::proxy::config::{
     MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode, MotdConfig,
 };
 use crate::proxy::players::{PlayerRegistry, PlayerState};
+use crate::proxy::stats::ConnectionSession;
 use crate::proxy::template;
 use std::path::Path;
 use std::sync::Arc;
@@ -28,12 +30,14 @@ impl MotdService {
         &self,
         packet_io: &mut PacketIo,
         client: &mut tokio::net::TcpStream,
-        config: &MotdConfig,
-        relay: &RelayConfig,
+        ctx: &ProxyContext,
         handshake: &HandshakeInfo,
-        players: &PlayerRegistry,
-        connection_id: u64,
+        session: &ConnectionSession,
     ) -> anyhow::Result<()> {
+        let config = &ctx.config().motd;
+        let relay = &ctx.config().network.relay;
+        let players = &ctx.core.players;
+        let _guard = session.enter_stage("MOTD");
         let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
         decode_status_request(&status_request).map_err(anyhow::Error::from)?;
 
@@ -72,10 +76,9 @@ impl MotdService {
             }
         };
 
-        players.set_state(connection_id, PlayerState::StatusServedLocally);
+        players.set_state(session.id, PlayerState::StatusServedLocally);
 
         debug!(
-            connection_id,
             motd_mode = ?config.mode,
             ping_mode = ?config.ping_mode,
             status_request_bytes = status_request.wire_len,
@@ -84,7 +87,7 @@ impl MotdService {
             pong_bytes = outcome.pong_bytes,
             pong_payload = ?outcome.pong_payload,
             upstream_ping_ms = ?outcome.upstream_ping_ms,
-            "motd status served to client"
+            "[MOTD] status served to client"
         );
 
         Ok(())
@@ -118,9 +121,8 @@ impl MotdService {
             return None;
         }
 
-        let rendered = template::render_static_transport(&config.local_json, config, relay);
-        let online_players = players.current_online_count().to_string();
-        let final_text = rendered.replace("{online_player}", &online_players);
+        let context = template::TemplateContext::for_transport(config, relay, players);
+        let final_text = template::render(&config.local_json, &context).into_owned();
 
         let favicon_data_url = match config.favicon.mode {
             MotdFaviconMode::Path => {

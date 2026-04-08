@@ -3,7 +3,8 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 
 use crate::minecraft::{
-    decode_ping_request, ping_response_packet, HandshakeInfo, PacketIo, MAX_STATUS_PACKET_SIZE,
+    decode_ping_request, ping_response_packet, HandshakeInfo, PacketIo, RuntimeAddress,
+    MAX_STATUS_PACKET_SIZE,
 };
 
 use super::rewrite::rewrite_json;
@@ -44,8 +45,8 @@ impl<'a> StatusContext<'a> {
         let needs_ping = self.config.ping_mode == StatusPingMode::Passthrough;
 
         UpstreamStatusSession::connect(
-            target_addr,
-            self.rewrite_addr(target_addr),
+            target_addr.clone(),
+            self.rewrite_addr(&target_addr)?,
             self.handshake,
             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
             self.service,
@@ -130,8 +131,8 @@ impl<'a> StatusContext<'a> {
                             .ping_target_addr()
                             .ok_or_else(|| anyhow::anyhow!("missing MOTD ping target address"))?;
                         UpstreamStatusSession::connect(
-                            target_addr,
-                            self.rewrite_addr(target_addr),
+                            target_addr.clone(),
+                            self.rewrite_addr(&target_addr)?,
                             self.handshake,
                             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
                             self.service,
@@ -148,17 +149,17 @@ impl<'a> StatusContext<'a> {
         }
     }
 
-    fn ping_target_addr(&self) -> Option<&str> {
-        self.config.ping_target_addr.as_deref().or(Some(&self.config.upstream_addr))
+    fn ping_target_addr(&self) -> Option<RuntimeAddress> {
+        self.parse_optional_addr(self.config.ping_target_addr.as_deref().or(Some(&self.config.upstream_addr)))
     }
 
-    fn favicon_target_addr(&self) -> Option<&str> {
-        self.config.favicon.target_addr.as_deref().or(Some(&self.config.upstream_addr))
+    fn favicon_target_addr(&self) -> Option<RuntimeAddress> {
+        self.parse_optional_addr(self.config.favicon.target_addr.as_deref().or(Some(&self.config.upstream_addr)))
     }
 
-    fn upstream_target_addr(&self) -> Option<&str> {
+    fn upstream_target_addr(&self) -> Option<RuntimeAddress> {
         if self.config.mode == MotdMode::Upstream {
-            Some(&self.config.upstream_addr)
+            self.parse_optional_addr(Some(&self.config.upstream_addr))
         } else if self.should_passthrough_favicon() {
             self.favicon_target_addr()
         } else if self.config.ping_mode == StatusPingMode::Passthrough {
@@ -168,12 +169,16 @@ impl<'a> StatusContext<'a> {
         }
     }
 
-    fn rewrite_addr<'b>(&'b self, target_addr: &'b str) -> &'b str {
+    fn rewrite_addr(&self, target_addr: &RuntimeAddress) -> anyhow::Result<RuntimeAddress> {
         if !self.config.upstream_addr.is_empty() {
-             &self.config.upstream_addr
+            RuntimeAddress::parse(&self.config.upstream_addr).map_err(anyhow::Error::msg)
         } else {
-            target_addr
+            Ok(target_addr.clone())
         }
+    }
+
+    fn parse_optional_addr(&self, addr: Option<&str>) -> Option<RuntimeAddress> {
+        addr.and_then(|value| RuntimeAddress::parse(value).ok())
     }
 
     fn should_passthrough_favicon(&self) -> bool {

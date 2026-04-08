@@ -1,6 +1,7 @@
 use crate::minecraft::HandshakeInfo;
-use crate::proxy::config::{RelayConfig, MotdConfig, MotdMode};
-use crate::proxy::players::{PlayerRegistry, PlayerState};
+use crate::proxy::context::Context as ProxyContext;
+use crate::proxy::config::{MotdConfig, MotdMode};
+use crate::proxy::players::PlayerState;
 use crate::proxy::template::{self, TemplateContext};
 use tokio::io::AsyncWriteExt;
 
@@ -8,11 +9,12 @@ use super::rewrite::rewrite_json;
 
 pub async fn serve_legacy_ping(
     client: &mut tokio::net::TcpStream,
-    config: &MotdConfig,
-    relay: &RelayConfig,
-    players: &PlayerRegistry,
+    ctx: &ProxyContext,
     connection_id: u64,
 ) -> anyhow::Result<()> {
+    let config = &ctx.config().motd;
+    let relay = &ctx.config().network.relay;
+    let players = &ctx.core.players;
     let upstream_json = if matches!(config.mode, MotdMode::Upstream) {
         fetch_upstream_status_json(config)
             .await

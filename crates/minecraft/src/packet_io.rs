@@ -60,9 +60,3 @@ impl PacketIo {
         }
     }
 }
-
-impl Default for PacketIo {
-    fn default() -> Self {
-        Self::new()
-    }
-}

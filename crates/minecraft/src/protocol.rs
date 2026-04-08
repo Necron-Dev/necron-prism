@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::io::{Cursor, Read};
+use std::str::FromStr;
 
 use valence_protocol::encode::PacketEncoder;
 use valence_protocol::packets::login::{LoginDisconnectS2c, LoginHelloC2s};
@@ -14,8 +15,6 @@ use super::constants::{INTENT_LOGIN, INTENT_STATUS, INTENT_TRANSFER};
 use super::error::ProtocolError;
 use super::packet_io::FramedPacket;
 use super::types::HandshakeInfo;
-
-use std::str::FromStr;
 
 thread_local! {
     static ENCODER: RefCell<PacketEncoder> = RefCell::new(PacketEncoder::new());

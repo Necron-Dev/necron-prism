@@ -1,3 +1,4 @@
 pub mod benchmark;
-pub mod minecraft;
 pub mod proxy;
+
+pub use necron_prism_minecraft as minecraft;

@@ -9,12 +9,12 @@ use tracing::{debug, warn};
 
 use super::super::api::ApiService;
 use super::super::config::ApiConfig;
-use super::super::stats::{ConnectionCounters, ConnectionTraffic};
+use super::super::stats::{ConnectionSession, ConnectionTraffic};
 
 #[derive(Clone)]
 pub struct TrafficReporter {
     api: Arc<ApiService>,
-    sessions: Arc<Mutex<HashMap<u64, TrafficSession>>>,
+    sessions: Arc<Mutex<HashMap<u64, TrafficRecord>>>,
     closers: Arc<Mutex<HashMap<Arc<str>, std::net::TcpStream>>>,
     cancel_token: CancellationToken,
 }
@@ -40,10 +40,10 @@ impl TrafficReporter {
         &self,
         connection_id: u64,
         external_connection_id: &str,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
         closer: Option<std::net::TcpStream>,
     ) {
-        self.register_internal(connection_id, external_connection_id, counters, closer);
+        self.register_internal(connection_id, external_connection_id, session, closer);
     }
 
     pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
@@ -63,18 +63,17 @@ impl TrafficReporter {
         &self,
         connection_id: u64,
         external_connection_id: &str,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
         closer: Option<std::net::TcpStream>,
     ) {
         let external_connection_id: Arc<str> = external_connection_id.to_owned().into();
         let mut sessions = self.sessions.lock();
         sessions.insert(
             connection_id,
-            TrafficSession {
+            TrafficRecord {
                 external_connection_id: Arc::clone(&external_connection_id),
-                counters,
-                last_sent_upload: 0,
-                last_sent_download: 0,
+                session,
+                last_sent: ConnectionTraffic::default(),
             },
         );
 
@@ -115,8 +114,8 @@ impl TrafficReporter {
 
         for session in sessions.values() {
             totals = totals.combined_with(ConnectionTraffic {
-                upload_bytes: session.counters.upload(),
-                download_bytes: session.counters.download(),
+                upload_bytes: session.session.upload(),
+                download_bytes: session.session.download(),
             });
         }
 
@@ -134,16 +133,18 @@ impl TrafficReporter {
                             let mut sessions = reporter.sessions.lock();
                             let mut snapshot = Vec::new();
                             for session in sessions.values_mut() {
-                                let upload = session.counters.upload();
-                                let download = session.counters.download();
-                                let delta_upload = upload.saturating_sub(session.last_sent_upload);
-                                let delta_download = download.saturating_sub(session.last_sent_download);
+                                let upload = session.session.upload();
+                                let download = session.session.download();
+                                let delta_upload = upload.saturating_sub(session.last_sent.upload_bytes);
+                                let delta_download = download.saturating_sub(session.last_sent.download_bytes);
                                 if delta_upload == 0 && delta_download == 0 {
                                     continue;
                                 }
 
-                                session.last_sent_upload = upload;
-                                session.last_sent_download = download;
+                                session.last_sent = ConnectionTraffic {
+                                    upload_bytes: upload,
+                                    download_bytes: download,
+                                };
                                 snapshot.push((
                                     session.external_connection_id.clone(),
                                     delta_upload,
@@ -209,9 +210,8 @@ fn close_connections(
     }
 }
 
-struct TrafficSession {
+struct TrafficRecord {
     external_connection_id: Arc<str>,
-    counters: ConnectionCounters,
-    last_sent_upload: u64,
-    last_sent_download: u64,
+    session: ConnectionSession,
+    last_sent: ConnectionTraffic,
 }

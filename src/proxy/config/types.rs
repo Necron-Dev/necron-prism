@@ -2,7 +2,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::time::Duration;
 use strum::Display;
 use validator::Validate;
 
@@ -11,6 +10,57 @@ use validator::Validate;
 #[serde(default)]
 #[validate(schema(function = "Self::validate_schema"))]
 pub struct Config {
+    #[validate(nested)]
+    pub network: NetworkConfig,
+    #[validate(nested)]
+    pub motd: MotdConfig,
+    #[validate(nested)]
+    pub api: ApiConfig,
+    #[validate(nested)]
+    pub logging: LoggingConfig,
+
+    #[serde(skip)]
+    pub source_path: PathBuf,
+    #[serde(skip)]
+    pub requested_relay: RelayConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            network: NetworkConfig::default(),
+            motd: MotdConfig::default(),
+            api: ApiConfig::default(),
+            logging: LoggingConfig::default(),
+            source_path: PathBuf::new(),
+            requested_relay: RelayConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
+pub struct NetworkConfig {
+    #[validate(nested)]
+    pub socket: NetworkSocketConfig,
+    #[validate(nested)]
+    pub relay: RelayConfig,
+}
+
+impl Default for NetworkConfig {
+    fn default() -> Self {
+        Self {
+            socket: NetworkSocketConfig::default(),
+            relay: RelayConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
+pub struct NetworkSocketConfig {
     #[validate(length(min = 1, message = "listen_addr cannot be empty"))]
     pub listen_addr: String,
     pub multipath_tcp: bool,
@@ -24,23 +74,9 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub send_buffer_size: Option<usize>,
     pub reuse_port: bool,
-
-    #[validate(nested)]
-    pub relay: RelayConfig,
-    #[validate(nested)]
-    pub motd: MotdConfig,
-    #[validate(nested)]
-    pub api: ApiConfig,
-    #[validate(nested)]
-    pub logging: LoggingConfig,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stats_log_interval_secs: Option<u64>,
-
-    #[serde(skip)]
-    pub source_path: PathBuf,
 }
 
-impl Default for Config {
+impl Default for NetworkSocketConfig {
     fn default() -> Self {
         Self {
             listen_addr: "0.0.0.0:25565".to_string(),
@@ -52,12 +88,6 @@ impl Default for Config {
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_port: false,
-            relay: RelayConfig::default(),
-            motd: MotdConfig::default(),
-            api: ApiConfig::default(),
-            logging: LoggingConfig::default(),
-            stats_log_interval_secs: Some(10),
-            source_path: PathBuf::new(),
         }
     }
 }
@@ -139,6 +169,8 @@ pub struct LoggingConfig {
     pub format: LogFormat,
     pub async_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub stats_log_interval_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[validate(nested)]
     pub file: Option<LogFileConfig>,
 }
@@ -168,6 +200,7 @@ impl Default for LoggingConfig {
             level: LogLevel::Info,
             format: LogFormat::Pretty,
             async_enabled: true,
+            stats_log_interval_secs: Some(10),
             file: None,
         }
     }
@@ -332,14 +365,6 @@ pub enum MotdFaviconMode {
 }
 
 impl Config {
-    pub fn stats_log_interval(&self) -> Option<Duration> {
-        self.stats_log_interval_secs.map(Duration::from_secs)
-    }
-
-    pub fn first_packet_timeout(&self) -> Duration {
-        Duration::from_millis(self.first_packet_timeout_ms)
-    }
-
     pub fn validate(&self) -> anyhow::Result<()> {
         Validate::validate(self).map_err(|e| anyhow::anyhow!(e))
     }

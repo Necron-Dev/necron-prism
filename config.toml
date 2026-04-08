@@ -1,13 +1,17 @@
 #:schema ./config.schema.json
 
+[network.socket]
 listen_addr = "0.0.0.0:25565"
-multipath_tcp = false
+multipath_tcp = true
 first_packet_timeout_ms = 5000
 tcp_nodelay = true
+tcp_keepalive = true
 keepalive_secs = 30
-reuse_port = false
-relay_mode = "standard"
-stats_log_interval_secs = 10
+reuse_port = true
+
+[network.relay]
+mode = "async"
+io_uring = true
 
 [motd]
 mode = "local"
@@ -29,9 +33,10 @@ mock_target_addr = "mc.hypixel.net:25565"
 mock_connection_id_prefix = "debug"
 
 [logging]
-level = "trace"
+level = "info"
 format = "pretty"
 async_enabled = true
+stats_log_interval_secs = 10
 
 [logging.file]
 path = "data/logs/latest.log"

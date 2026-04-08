@@ -27,8 +27,19 @@ impl ConfigLoader {
             .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
 
         config.source_path = path.to_path_buf();
+        config.requested_relay = config.network.relay.clone();
+        Self::canonicalize_runtime_config(&mut config);
         config.validate()?;
         Ok(config)
+    }
+
+    fn canonicalize_runtime_config(config: &mut Config) {
+        #[cfg(not(target_os = "linux"))]
+        {
+            let relay = &mut config.network.relay;
+            relay.mode = RelayDataMode::Async;
+            relay.io_uring = false;
+        }
     }
 }
 

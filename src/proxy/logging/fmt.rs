@@ -3,6 +3,7 @@ use owo_colors::{CssColors, Style};
 use std::fmt;
 use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::FormattedFields;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent};
 use tracing_subscriber::registry::LookupSpan;
 
@@ -145,11 +146,46 @@ where
                 if i > 0 {
                     write!(writer, "{}", theme::BLUE.style("·"))?;
                 }
-                write!(writer, "{}", theme::WHITE.dimmed().style(span.name()))?;
+                Self::write_span(
+                    writer.by_ref(),
+                    span.name(),
+                    span.extensions().get::<FormattedFields<N>>(),
+                )?;
             }
+        } else if let Some(span) = ctx.lookup_current() {
+            write!(writer, " {}", theme::BLUE.style("┇"))?;
+            Self::write_span(
+                writer.by_ref(),
+                span.name(),
+                span.extensions().get::<FormattedFields<N>>(),
+            )?;
         }
 
         writeln!(writer)
+    }
+}
+
+impl AnsiFormatter {
+    fn write_span<'a, N>(
+        mut writer: Writer<'a>,
+        name: &str,
+        fields: Option<&FormattedFields<N>>,
+    ) -> fmt::Result
+    where
+        N: for<'b> tracing_subscriber::fmt::FormatFields<'b> + 'static,
+    {
+        write!(writer, "{}", theme::WHITE.dimmed().style(name))?;
+
+        if let Some(fields) = fields {
+            let fields = fields.fields.as_str();
+            if !fields.is_empty() {
+                write!(writer, "{}", theme::BLUE.dimmed().style("{"))?;
+                write!(writer, "{}", theme::WHITE.dimmed().style(fields))?;
+                write!(writer, "{}", theme::BLUE.dimmed().style("}"))?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -160,6 +196,36 @@ struct EventVisitor {
 }
 
 impl tracing::field::Visit for EventVisitor {
+    fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
+    }
+
+    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
+    }
+
+    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
+    }
+
+    fn record_i128(&mut self, field: &tracing::field::Field, value: i128) {
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
+    }
+
+    fn record_u128(&mut self, field: &tracing::field::Field, value: u128) {
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
+    }
+
+    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
+        self.fields
+            .push((field.name().to_string(), value.to_string()));
+    }
+
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         if field.name() == "message" || field.name() == "msg" {
             self.message = Some(value.to_string());
@@ -181,35 +247,5 @@ impl tracing::field::Visit for EventVisitor {
         } else {
             self.fields.push((field.name().to_string(), val));
         }
-    }
-
-    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
-        self.fields
-            .push((field.name().to_string(), value.to_string()));
-    }
-
-    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-        self.fields
-            .push((field.name().to_string(), value.to_string()));
-    }
-
-    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
-        self.fields
-            .push((field.name().to_string(), value.to_string()));
-    }
-
-    fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
-        self.fields
-            .push((field.name().to_string(), value.to_string()));
-    }
-
-    fn record_u128(&mut self, field: &tracing::field::Field, value: u128) {
-        self.fields
-            .push((field.name().to_string(), value.to_string()));
-    }
-
-    fn record_i128(&mut self, field: &tracing::field::Field, value: i128) {
-        self.fields
-            .push((field.name().to_string(), value.to_string()));
     }
 }

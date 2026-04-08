@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use super::ConnectionTraffic;
+
 #[derive(Clone, Default)]
 pub struct ConnectionStats {
     total_connections: Arc<AtomicU64>,
@@ -44,48 +46,5 @@ impl ConnectionTotals {
             upload_bytes: self.settled_upload_bytes.load(Ordering::Relaxed),
             download_bytes: self.settled_download_bytes.load(Ordering::Relaxed),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ConnectionTraffic {
-    pub upload_bytes: u64,
-    pub download_bytes: u64,
-}
-
-impl ConnectionTraffic {
-    pub fn combined_with(self, other: Self) -> Self {
-        Self {
-            upload_bytes: self.upload_bytes + other.upload_bytes,
-            download_bytes: self.download_bytes + other.download_bytes,
-        }
-    }
-
-    pub fn total_bytes(self) -> u64 {
-        self.upload_bytes + self.download_bytes
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ConnectionCounters {
-    upload_bytes: Arc<AtomicU64>,
-    download_bytes: Arc<AtomicU64>,
-}
-
-impl ConnectionCounters {
-    pub fn add_upload(&self, bytes: u64) {
-        self.upload_bytes.fetch_add(bytes, Ordering::Relaxed);
-    }
-
-    pub fn add_download(&self, bytes: u64) {
-        self.download_bytes.fetch_add(bytes, Ordering::Relaxed);
-    }
-
-    pub fn upload(&self) -> u64 {
-        self.upload_bytes.load(Ordering::Relaxed)
-    }
-
-    pub fn download(&self) -> u64 {
-        self.download_bytes.load(Ordering::Relaxed)
     }
 }

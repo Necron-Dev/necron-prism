@@ -5,4 +5,3 @@ mod test;
 
 pub use reporter::TrafficReporter;
 pub use stats_logger::{spawn_stats_logger, StatsLoggerHandle};
-pub use crate::proxy::stats::ConnectionCounters;

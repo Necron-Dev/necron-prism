@@ -4,8 +4,9 @@ use std::thread;
 
 use crate::proxy::api::ApiService;
 use crate::proxy::config::{ApiConfig, ApiMode};
+use crate::proxy::stats::ConnectionSession;
 
-use super::{ConnectionCounters, TrafficReporter};
+use super::TrafficReporter;
 
 #[test]
 fn mock_mode_keeps_active_traffic_totals() {
@@ -23,12 +24,12 @@ fn mock_mode_keeps_active_traffic_totals() {
     let mock_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let api = Arc::new(ApiService::new(&config, mock_counter).expect("mock api should build"));
     let reporter = TrafficReporter::new(api, &config);
-    let counters = ConnectionCounters::default();
+    let session = ConnectionSession::new(1, None);
     let closer = connected_stream();
 
-    reporter.register(1, "mock-1", counters.clone(), Some(closer));
-    counters.add_upload(128);
-    counters.add_download(256);
+    reporter.register(1, "mock-1", session.clone(), Some(closer));
+    session.add_upload(128);
+    session.add_download(256);
 
     let totals = reporter.active_totals();
     assert_eq!(totals.upload_bytes, 128);

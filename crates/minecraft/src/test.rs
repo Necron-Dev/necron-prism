@@ -12,7 +12,7 @@ use super::protocol::LoginHelloInfo;
 use super::{
     decode_handshake, decode_login_hello, decode_ping_request, decode_status_request,
     encode_handshake, encode_raw_frame, login_disconnect_packet, ping_response_packet, status_response_packet,
-    HandshakeInfo, PacketIo, ProtocolError, MAX_HANDSHAKE_PACKET_SIZE,
+    HandshakeInfo, PacketIo, ProtocolError, RuntimeAddress, MAX_HANDSHAKE_PACKET_SIZE,
     MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
 };
 
@@ -54,7 +54,8 @@ async fn handshake_transfer_round_trip() {
 #[tokio::test]
 async fn rewrite_preserves_fml_suffix() {
     let mut handshake = sample_handshake("old.example\0FML\0", 25565, 2);
-    handshake.rewrite_addr("mc.hypixel.net:25566").unwrap();
+    let address = RuntimeAddress::parse("mc.hypixel.net:25566").unwrap();
+    handshake.rewrite_addr(&address).unwrap();
 
     assert_eq!(handshake.server_address, "mc.hypixel.net\0FML\0");
     assert_eq!(handshake.server_port, 25566);

@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "crates/minecraft"]
+resolver = "2"
+
 [package]
 name = "necron-prism"
 edition = "2024"
@@ -27,6 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json",
 valence_protocol = "0.2.0-alpha.1"
 thiserror = "2.0.18"
 anyhow = "1.0"
+necron-prism-minecraft = { path = "crates/minecraft" }
 parking_lot = "0.12"
 http = "1.4.0"
 dashmap = "6.1"

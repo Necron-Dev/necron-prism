@@ -1361,6 +1361,7 @@ dependencies = [
  "http",
  "libc",
  "mime_guess",
+ "necron-prism-minecraft",
  "nerd-font-symbols",
  "owo-colors",
  "parking_lot",
@@ -1383,6 +1384,16 @@ dependencies = [
  "tracing-subscriber",
  "valence_protocol",
  "validator",
+]
+
+[[package]]
+name = "necron-prism-minecraft"
+version = "0.0.0"
+dependencies = [
+ "regex",
+ "thiserror 2.0.18",
+ "tokio",
+ "valence_protocol",
 ]
 
 [[package]]

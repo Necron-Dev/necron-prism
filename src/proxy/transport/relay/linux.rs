@@ -14,7 +14,7 @@ mod imp {
     use tokio::sync::mpsc::{self, error::TrySendError};
     use tokio_uring::buf::BoundedBuf;
 
-    use crate::proxy::traffic::ConnectionCounters;
+    use crate::proxy::stats::ConnectionSession;
 
     use super::super::{shutdown_write, spawn_relay_worker, RelayMode, RelayStats};
 
@@ -42,7 +42,7 @@ mod imp {
     struct IoUringRelayJob {
         client: TcpStream,
         upstream: TcpStream,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
         response_tx: std_mpsc::SyncSender<io::Result<RelayStats>>,
     }
 
@@ -82,15 +82,12 @@ mod imp {
 
     impl SharedIoUringWorker {
         fn shared() -> io::Result<&'static Self> {
-            static WORKER: OnceLock<SharedIoUringWorker> = OnceLock::new();
+            static WORKER: OnceLock<io::Result<SharedIoUringWorker>> = OnceLock::new();
 
-            if let Some(worker) = WORKER.get() {
-                return Ok(worker);
+            match WORKER.get_or_init(Self::start) {
+                Ok(worker) => Ok(worker),
+                Err(error) => Err(io::Error::new(error.kind(), error.to_string())),
             }
-
-            let worker = Self::start()?;
-            let _ = WORKER.set(worker);
-            Ok(WORKER.get().expect("shared io_uring worker initialized"))
         }
 
         fn start() -> io::Result<Self> {
@@ -105,7 +102,7 @@ mod imp {
 
                         while let Some(job) = receiver.recv().await {
                             tokio_uring::spawn(async move {
-                                let result = run_io_uring_relay(job.client, job.upstream, job.counters).await;
+                                let result = run_io_uring_relay(job.client, job.upstream, job.session).await;
                                 let _ = job.response_tx.send(result);
                             });
                         }
@@ -124,13 +121,13 @@ mod imp {
             &self,
             client: TcpStream,
             upstream: TcpStream,
-            counters: ConnectionCounters,
+            session: ConnectionSession,
         ) -> Result<RelayStats, IoUringRelayError> {
             let (response_tx, response_rx) = std_mpsc::sync_channel(1);
             let job = IoUringRelayJob {
                 client,
                 upstream,
-                counters,
+                session,
                 response_tx,
             };
 
@@ -177,14 +174,14 @@ mod imp {
         client: TcpStream,
         upstream: TcpStream,
         pipes: SplicePipes,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
     ) -> io::Result<RelayStats> {
         let client_read = client.try_clone()?;
         let client_write = client;
         let upstream_read = upstream.try_clone()?;
         let upstream_write = upstream;
-        let upload_counters = counters.clone();
-        let download_counters = counters;
+        let upload_session = session.clone();
+        let download_session = session;
 
         let upload = spawn_relay_worker("splice-upload", move || {
             let copied = splice_copy(
@@ -192,7 +189,7 @@ mod imp {
                 &upstream_write,
                 &pipes.upload.read_end,
                 &pipes.upload.write_end,
-                &upload_counters,
+                &upload_session,
                 true,
             )?;
             shutdown_write(&upstream_write);
@@ -204,7 +201,7 @@ mod imp {
             &client_write,
             &pipes.download.read_end,
             &pipes.download.write_end,
-            &download_counters,
+            &download_session,
             false,
         )?;
         shutdown_write(&client_write);
@@ -223,11 +220,11 @@ mod imp {
     pub fn relay_with_io_uring(
         client: TcpStream,
         upstream: TcpStream,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
     ) -> Result<RelayStats, IoUringRelayError> {
         SharedIoUringWorker::shared()
             .map_err(IoUringRelayError::Unavailable)?
-            .relay(client, upstream, counters)
+            .relay(client, upstream, session)
     }
 
     fn splice_copy(
@@ -235,7 +232,7 @@ mod imp {
         dst: &TcpStream,
         pipe_read: &OwnedFd,
         pipe_write: &OwnedFd,
-        counters: &ConnectionCounters,
+        session: &ConnectionSession,
         upload_direction: bool,
     ) -> io::Result<u64> {
         let mut total = 0_u64;
@@ -268,9 +265,9 @@ mod imp {
                 let bytes = moved_from_pipe as u64;
                 total += bytes;
                 if upload_direction {
-                    counters.add_upload(bytes);
+                    session.add_upload(bytes);
                 } else {
-                    counters.add_download(bytes);
+                    session.add_download(bytes);
                 }
             }
         }
@@ -314,7 +311,7 @@ mod imp {
     async fn io_uring_copy(
         reader: Arc<tokio_uring::net::TcpStream>,
         writer: Arc<tokio_uring::net::TcpStream>,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
         upload_direction: bool,
     ) -> io::Result<u64> {
         let mut total = 0_u64;
@@ -342,9 +339,9 @@ mod imp {
             let bytes = read as u64;
             total += bytes;
             if upload_direction {
-                counters.add_upload(bytes);
+                session.add_upload(bytes);
             } else {
-                counters.add_download(bytes);
+                session.add_download(bytes);
             }
         }
     }
@@ -352,22 +349,22 @@ mod imp {
     async fn run_io_uring_relay(
         client: TcpStream,
         upstream: TcpStream,
-        counters: ConnectionCounters,
+        session: ConnectionSession,
     ) -> io::Result<RelayStats> {
         let client = tokio_uring::net::TcpStream::from_std(client);
         let upstream = tokio_uring::net::TcpStream::from_std(upstream);
         let client = Arc::new(client);
         let upstream = Arc::new(upstream);
-        let upload_counters = counters.clone();
-        let download_counters = counters;
+        let upload_session = session.clone();
+        let download_session = session;
 
         let upload_client = Arc::clone(&client);
         let upload_upstream = Arc::clone(&upstream);
         let upload = tokio_uring::spawn(async move {
-            io_uring_copy(upload_client, upload_upstream, upload_counters, true).await
+            io_uring_copy(upload_client, upload_upstream, upload_session, true).await
         });
 
-        let download_bytes = io_uring_copy(upstream, client, download_counters, false).await?;
+        let download_bytes = io_uring_copy(upstream, client, download_session, false).await?;
         let upload_bytes = upload
             .await
             .map_err(|error| io::Error::other(format!("io_uring upload task failed: {error}")))??;

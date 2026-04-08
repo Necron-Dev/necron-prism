@@ -9,9 +9,9 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 #[cfg(not(target_os = "linux"))]
 use tracing::warn;
 
-use super::network::apply_sockref_options;
 use crate::proxy::config::{Config, RelayDataMode};
-use super::traffic::ConnectionCounters;
+use crate::proxy::network::apply_sockref_options;
+use crate::proxy::stats::ConnectionSession;
 
 mod linux;
 
@@ -52,32 +52,36 @@ pub struct RelayStats {
 pub async fn relay_bidirectional(
     client: tokio::net::TcpStream,
     upstream: tokio::net::TcpStream,
-    counters: ConnectionCounters,
+    session: ConnectionSession,
     config: &Config,
 ) -> io::Result<RelayStats> {
+    let logging_session = session.clone();
+    let _guard = logging_session.enter_stage("CONNECT/RELAY");
     let _ = apply_sockref_options(SockRef::from(&client), config);
     let _ = apply_sockref_options(SockRef::from(&upstream), config);
 
-    tracing::debug!(relay_mode = config.relay.label(), "starting bidirectional relay");
+    tracing::debug!(relay_mode = config.network.relay.label(), "[CONNECT/RELAY] starting bidirectional relay");
 
     #[cfg(target_os = "linux")]
     {
-        match (config.relay.mode, config.relay.io_uring) {
+        match (config.network.relay.mode, config.network.relay.io_uring) {
             (RelayDataMode::Async, true) => {
                 let client = client.into_std()?;
                 let upstream = upstream.into_std()?;
-                let counters_for_task = counters.clone();
+                let session_for_task = session.clone();
+                let relay_span = session.root_span().clone();
 
-                let stats = tokio::task::spawn_blocking(move || {
+                let stats = tokio::task::spawn_blocking(move || -> io::Result<RelayStats> {
+                    let _guard = relay_span.enter();
                     match linux::relay_with_io_uring(
                         client.try_clone()?,
                         upstream.try_clone()?,
-                        counters_for_task.clone(),
+                        session_for_task.clone(),
                     ) {
                         Ok(stats) => Ok(stats),
                         Err(error) if error.is_unavailable() => {
-                            tracing::warn!(error = %error, "io_uring relay unavailable, falling back to standard relay");
-                            relay_with_copy(client, upstream, counters_for_task)
+                            tracing::warn!(error = %error, "[CONNECT/RELAY] io_uring relay unavailable, falling back to standard relay");
+                            relay_with_copy(client, upstream, session_for_task)
                         }
                         Err(error) => Err(error.into_io()),
                     }
@@ -88,25 +92,25 @@ pub async fn relay_bidirectional(
                 return Ok(stats);
             }
             (RelayDataMode::Splice, true) => {
-                tracing::warn!(
-                    "splice mode with io_uring enabled prefers io_uring first, then falls back to splice"
-                );
+                tracing::warn!("[CONNECT/RELAY] splice mode with io_uring enabled prefers io_uring first, then falls back to splice");
 
                 let client = client.into_std()?;
                 let upstream = upstream.into_std()?;
-                let counters_for_task = counters.clone();
+                let session_for_task = session.clone();
+                let relay_span = session.root_span().clone();
 
-                let stats = tokio::task::spawn_blocking(move || {
-                    match linux::relay_with_io_uring(client.try_clone()?, upstream.try_clone()?, counters_for_task.clone()) {
+                let stats = tokio::task::spawn_blocking(move || -> io::Result<RelayStats> {
+                    let _guard = relay_span.enter();
+                    match linux::relay_with_io_uring(client.try_clone()?, upstream.try_clone()?, session_for_task.clone()) {
                         Ok(stats) => Ok(stats),
                         Err(error) if error.is_unavailable() => {
-                            tracing::warn!(error = %error, "io_uring relay unavailable, falling back to splice relay");
+                            tracing::warn!(error = %error, "[CONNECT/RELAY] io_uring relay unavailable, falling back to splice relay");
                             if let Some(pipes) = linux::prepare_pipes() {
-                                return linux::relay_with_splice(client, upstream, pipes, counters_for_task);
+                                return linux::relay_with_splice(client, upstream, pipes, session_for_task);
                             }
 
-                            tracing::warn!("falling back to standard relay because splice pipes are unavailable");
-                            relay_with_copy(client, upstream, counters_for_task)
+                            tracing::warn!("[CONNECT/RELAY] falling back to standard relay because splice pipes are unavailable");
+                            relay_with_copy(client, upstream, session_for_task)
                         }
                         Err(error) => Err(error.into_io()),
                     }
@@ -117,23 +121,21 @@ pub async fn relay_bidirectional(
                 return Ok(stats);
             }
             (RelayDataMode::Splice, false) => {
-                tracing::warn!(
-                    "linux splice relay favors throughput and may increase latency jitter for Minecraft gameplay"
-                );
+                tracing::warn!("[CONNECT/RELAY] linux splice relay favors throughput and may increase latency jitter for Minecraft gameplay");
 
                 let client = client.into_std()?;
                 let upstream = upstream.into_std()?;
-                let counters_for_task = counters.clone();
+                let session_for_task = session.clone();
+                let relay_span = session.root_span().clone();
 
-                let stats = tokio::task::spawn_blocking(move || {
+                let stats = tokio::task::spawn_blocking(move || -> io::Result<RelayStats> {
+                    let _guard = relay_span.enter();
                     if let Some(pipes) = linux::prepare_pipes() {
-                        return linux::relay_with_splice(client, upstream, pipes, counters_for_task);
+                        return linux::relay_with_splice(client, upstream, pipes, session_for_task);
                     }
 
-                    tracing::warn!(
-                        "falling back to standard relay because splice pipes are unavailable"
-                    );
-                    relay_with_copy(client, upstream, counters_for_task)
+                    tracing::warn!("[CONNECT/RELAY] falling back to standard relay because splice pipes are unavailable");
+                    relay_with_copy(client, upstream, session_for_task)
                 })
                 .await
                 .map_err(|error| io::Error::other(format!("splice relay task panicked: {error}")))??;
@@ -146,18 +148,12 @@ pub async fn relay_bidirectional(
 
     #[cfg(not(target_os = "linux"))]
     {
-        if config.relay.io_uring || matches!(config.relay.mode, RelayDataMode::Splice) {
-            warn!(relay_mode = config.relay.label(), "requested Linux-specific relay acceleration is unavailable on this platform, using async relay");
+        if config.network.relay.io_uring || matches!(config.network.relay.mode, RelayDataMode::Splice) {
+            warn!(relay_mode = config.network.relay.label(), "[CONNECT/RELAY] requested Linux-specific relay acceleration is unavailable on this platform, using async relay");
         }
     }
 
-    let (upload_bytes, download_bytes) = relay(client, upstream, counters.clone()).await?;
-
-    tracing::debug!(
-        upload_bytes,
-        download_bytes,
-        "bidirectional relay completed"
-    );
+    let (upload_bytes, download_bytes) = relay(client, upstream, session).await?;
 
     Ok(RelayStats {
         upload_bytes,
@@ -171,29 +167,30 @@ const RELAY_BUFFER_SIZE: usize = 32 * 1024;
 async fn relay(
     client: tokio::net::TcpStream,
     upstream: tokio::net::TcpStream,
-    counters: ConnectionCounters,
+    session: ConnectionSession,
 ) -> io::Result<(u64, u64)> {
     let (mut client_read, mut client_write) = client.into_split();
     let (mut upstream_read, mut upstream_write) = upstream.into_split();
-    let upload_counters = counters.clone();
-    let download_counters = counters;
+    let upload_session = session.clone();
+    let download_session = session;
 
     tokio::try_join!(
-        custom_async_copy(&mut client_read, &mut upstream_write, upload_counters, true),
-        custom_async_copy(&mut upstream_read, &mut client_write, download_counters, false),
+        custom_async_copy(&mut client_read, &mut upstream_write, upload_session, true),
+        custom_async_copy(&mut upstream_read, &mut client_write, download_session, false),
     )
 }
 
 async fn custom_async_copy<R, W>(
     reader: &mut R,
     writer: &mut W,
-    counters: ConnectionCounters,
+    session: ConnectionSession,
     upload_direction: bool,
 ) -> io::Result<u64>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
+    let _guard = session.enter_stage("CONNECT/RELAY");
     let mut total = 0_u64;
     let mut buf = [0_u8; RELAY_BUFFER_SIZE];
 
@@ -206,7 +203,7 @@ where
         tracing::trace!(
             direction = if upload_direction { "upload" } else { "download" },
             bytes = read,
-            "relay chunk transferred"
+            "[CONNECT/RELAY] relay chunk transferred"
         );
 
         writer.write_all(&buf[..read]).await?;
@@ -214,9 +211,9 @@ where
         let bytes = read as u64;
         total += bytes;
         if upload_direction {
-            counters.add_upload(bytes);
+            session.add_upload(bytes);
         } else {
-            counters.add_download(bytes);
+            session.add_download(bytes);
         }
     }
 }
@@ -244,28 +241,28 @@ where
 fn relay_with_copy(
     client: TcpStream,
     upstream: TcpStream,
-    counters: ConnectionCounters,
+    session: ConnectionSession,
 ) -> io::Result<RelayStats> {
     let mut client_read = client.try_clone()?;
     let mut client_write = client;
     let mut upstream_read = upstream.try_clone()?;
     let mut upstream_write = upstream;
 
-    let upload_counters = counters.clone();
-    let download_counters = counters;
+    let upload_session = session.clone();
+    let download_session = session;
 
     let upload = std::thread::Builder::new()
         .name("relay-upload".to_string())
         .spawn(move || {
             let copied = io::copy(&mut client_read, &mut upstream_write)?;
-            upload_counters.add_upload(copied);
+            upload_session.add_upload(copied);
             let _ = upstream_write.shutdown(Shutdown::Write);
             Ok::<u64, io::Error>(copied)
         })
         .map_err(|error| io::Error::other(format!("spawn relay-upload thread: {error}")))?;
 
     let download_bytes = io::copy(&mut upstream_read, &mut client_write)?;
-    download_counters.add_download(download_bytes);
+    download_session.add_download(download_bytes);
     let _ = client_write.shutdown(Shutdown::Write);
 
     let upload_bytes = upload

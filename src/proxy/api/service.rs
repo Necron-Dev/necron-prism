@@ -20,6 +20,7 @@ pub struct HttpApiService {
 
 pub struct MockApiService {
     counter: Arc<AtomicU64>,
+    config: ApiConfig,
 }
 
 impl ApiService {
@@ -29,7 +30,7 @@ impl ApiService {
             ApiMode::Http => Ok(Self::Http(Box::new(HttpApiService::new(config)?))),
             #[cfg(not(feature = "http-api"))]
             ApiMode::Http => Err(anyhow!("http api support is disabled at compile time")),
-            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(mock_counter))),
+            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(mock_counter, config.clone()))),
         }
     }
 
@@ -39,12 +40,11 @@ impl ApiService {
         uuid: Option<&str>,
         addr: Option<&str>,
         load: i32,
-        config: &ApiConfig,
     ) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
             Self::Http(service) => service.join(name, uuid, addr, load).await,
-            Self::Mock(service) => service.join(name, uuid, addr, load, config).await,
+            Self::Mock(service) => service.join(name, uuid, addr, load).await,
         }
     }
 
@@ -106,8 +106,8 @@ impl HttpApiService {
 }
 
 impl MockApiService {
-    fn new(counter: Arc<AtomicU64>) -> Self {
-        Self { counter }
+    fn new(counter: Arc<AtomicU64>, config: ApiConfig) -> Self {
+        Self { counter, config }
     }
 
     async fn join(
@@ -116,9 +116,8 @@ impl MockApiService {
         _uuid: Option<&str>,
         _addr: Option<&str>,
         _load: i32,
-        config: &ApiConfig,
     ) -> Result<JoinDecision> {
-        if let Some(kick_reason) = &config.mock_kick_reason {
+        if let Some(kick_reason) = &self.config.mock_kick_reason {
             return Ok(JoinDecision::Deny {
                 kick_reason: kick_reason.clone(),
             });
@@ -126,9 +125,9 @@ impl MockApiService {
 
         let sequence = self.counter.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(JoinDecision::Allow(JoinTarget {
-            target_addr: config.mock_target_addr.clone(),
-            rewrite_addr: config.mock_rewrite_addr.clone(),
-            connection_id: Some(format!("{}-{sequence}", config.mock_connection_id_prefix)),
+            target_addr: self.config.mock_target_addr.clone(),
+            rewrite_addr: self.config.mock_rewrite_addr.clone(),
+            connection_id: Some(format!("{}-{sequence}", self.config.mock_connection_id_prefix)),
         }))
     }
 

@@ -6,6 +6,7 @@ mod protocol;
 mod test;
 mod types;
 
+pub use valence_protocol::uuid::Uuid;
 pub use constants::{
     INTENT_LOGIN, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
     MAX_STATUS_PACKET_SIZE,

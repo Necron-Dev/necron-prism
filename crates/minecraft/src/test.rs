@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use valence_protocol::packets::login::LoginDisconnectS2c;
 use valence_protocol::packets::login::LoginHelloC2s;
+use valence_protocol::{Encode, VarInt};
 use valence_protocol::packets::status::{QueryPongS2c, QueryRequestC2s, QueryResponseS2c};
 use valence_protocol::uuid::Uuid;
 use valence_protocol::Text;
@@ -167,6 +168,30 @@ async fn decode_login_hello_legacy_packet_without_profile_id() {
             profile_id: None,
         }
     );
+}
+
+#[tokio::test]
+async fn decode_login_hello_1_20_2_format_uuid() {
+    let profile_id = Uuid::from_bytes([1; 16]);
+    let mut body = Vec::new();
+    let name = "Me0wo";
+    VarInt(name.len() as i32).encode(&mut body).unwrap();
+    body.extend_from_slice(name.as_bytes());
+    body.extend_from_slice(&profile_id.into_bytes());
+
+    let mut packet = Vec::new();
+    VarInt((1 + body.len()) as i32).encode(&mut packet).unwrap();
+    VarInt(0).encode(&mut packet).unwrap();
+    packet.extend_from_slice(&body);
+
+    let frame = PacketIo::new()
+        .read_frame(&mut Cursor::new(packet), MAX_LOGIN_PACKET_SIZE)
+        .await
+        .unwrap();
+
+    let result = decode_login_hello(&frame).unwrap();
+    assert_eq!(result.username, "Me0wo");
+    assert_eq!(result.profile_id, Some(profile_id));
 }
 
 #[tokio::test]

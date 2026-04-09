@@ -50,7 +50,6 @@ impl<'a> StatusContext<'a> {
             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
             self.service,
             needs_status_json,
-            needs_ping,
         )
         .await
         .map(Some)
@@ -135,7 +134,6 @@ impl<'a> StatusContext<'a> {
                             self.handshake,
                             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
                             self.service,
-                            true,
                             true,
                         )
                         .await?

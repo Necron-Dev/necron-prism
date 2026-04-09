@@ -131,47 +131,6 @@ pub async fn relay_bidirectional(
 mod test;
 
 const RELAY_BUFFER_SIZE: usize = 32 * 1024;
-const RELAY_FLUSH_THRESHOLD: u64 = 64 * 1024;
-
-struct TrafficAccumulator<'a> {
-    session: &'a ConnectionSession,
-    unflushed: u64,
-    upload_direction: bool,
-}
-
-impl<'a> TrafficAccumulator<'a> {
-    fn new(session: &'a ConnectionSession, upload_direction: bool) -> Self {
-        Self {
-            session,
-            unflushed: 0,
-            upload_direction,
-        }
-    }
-
-    fn add(&mut self, bytes: u64) {
-        self.unflushed += bytes;
-        if self.unflushed >= RELAY_FLUSH_THRESHOLD {
-            self.flush();
-        }
-    }
-
-    fn flush(&mut self) {
-        if self.unflushed > 0 {
-            if self.upload_direction {
-                self.session.add_upload(self.unflushed);
-            } else {
-                self.session.add_download(self.unflushed);
-            }
-            self.unflushed = 0;
-        }
-    }
-}
-
-impl Drop for TrafficAccumulator<'_> {
-    fn drop(&mut self) {
-        self.flush();
-    }
-}
 
 async fn relay(
     mut client: tokio::net::TcpStream,
@@ -201,7 +160,6 @@ where
 {
     let _guard = session.enter_stage("CONNECT/RELAY");
     let mut total = 0_u64;
-    let mut acc = TrafficAccumulator::new(&session, upload_direction);
     let mut buf = [0_u8; RELAY_BUFFER_SIZE];
 
     loop {
@@ -215,7 +173,11 @@ where
 
         let bytes = read as u64;
         total += bytes;
-        acc.add(bytes);
+        if upload_direction {
+            session.add_upload(bytes);
+        } else {
+            session.add_download(bytes);
+        }
     }
 }
 

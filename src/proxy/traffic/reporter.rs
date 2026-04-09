@@ -63,13 +63,16 @@ impl TrafficReporter {
             if let Some((_, record)) = reporter.sessions.remove(&connection_id) {
                 reporter.closers.remove(record.external_connection_id.as_ref());
 
-                info!(
-                    cid = %record.external_connection_id,
-                    connection_id,
-                    upload_bytes = totals.upload_bytes,
-                    download_bytes = totals.download_bytes,
-                    "[TRAFFIC] connection closed"
-                );
+                {
+                    let _span = tracing::info_span!("traffic").entered();
+                    info!(
+                        cid = %record.external_connection_id,
+                        connection_id,
+                        upload_bytes = totals.upload_bytes,
+                        download_bytes = totals.download_bytes,
+                        "[TRAFFIC] connection closed"
+                    );
+                }
 
                 if let Err(error) = reporter
                     .api
@@ -105,19 +108,28 @@ impl TrafficReporter {
     fn spawn_loop(&self, interval: std::time::Duration) {
         let reporter = self.clone();
         let cancel_token = self.cancel_token.clone();
+        let interval_secs = interval.as_secs_f64();
         spawn_background(async move {
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep(interval) => {
                         let mut snapshot = Vec::new();
+                        let mut aggregate = ConnectionTraffic::default();
+                        let mut aggregate_delta = ConnectionTraffic::default();
                         for mut entry in reporter.sessions.iter_mut() {
                             let upload = entry.session.upload();
                             let download = entry.session.download();
                             let delta_upload = upload.saturating_sub(entry.last_sent.upload_bytes);
                             let delta_download = download.saturating_sub(entry.last_sent.download_bytes);
-                            if delta_upload == 0 && delta_download == 0 {
-                                continue;
-                            }
+
+                            aggregate = aggregate.combined_with(ConnectionTraffic {
+                                upload_bytes: upload,
+                                download_bytes: download,
+                            });
+                            aggregate_delta = aggregate_delta.combined_with(ConnectionTraffic {
+                                upload_bytes: delta_upload,
+                                download_bytes: delta_download,
+                            });
 
                             entry.last_sent = ConnectionTraffic {
                                 upload_bytes: upload,
@@ -127,18 +139,42 @@ impl TrafficReporter {
                                 entry.external_connection_id.clone(),
                                 delta_upload,
                                 delta_download,
+                                upload,
+                                download,
                             ));
                         }
 
-                        for (cid, send_bytes, recv_bytes) in snapshot {
+                        if snapshot.is_empty() {
+                            continue;
+                        }
+
+                        {
+                            let _span = tracing::info_span!("traffic").entered();
                             info!(
-                                cid = %cid,
-                                delta_upload_bytes = send_bytes,
-                                delta_download_bytes = recv_bytes,
-                                "[TRAFFIC] periodic report"
+                                total_upload_bytes = aggregate.upload_bytes,
+                                total_download_bytes = aggregate.download_bytes,
+                                total_upload_mbps = bytes_to_mbps(aggregate_delta.upload_bytes, interval_secs),
+                                total_download_mbps = bytes_to_mbps(aggregate_delta.download_bytes, interval_secs),
+                                active_connections = snapshot.len(),
+                                "[TRAFFIC] aggregate"
                             );
 
-                            match reporter.api.traffic_single(&cid, send_bytes, recv_bytes).await {
+                            for (cid, delta_up, delta_down, total_up, total_down) in &snapshot {
+                                info!(
+                                    cid = %cid,
+                                    delta_upload_bytes = delta_up,
+                                    delta_download_bytes = delta_down,
+                                    upload_mbps = bytes_to_mbps(*delta_up, interval_secs),
+                                    download_mbps = bytes_to_mbps(*delta_down, interval_secs),
+                                    total_upload_bytes = total_up,
+                                    total_download_bytes = total_down,
+                                    "[TRAFFIC] periodic report"
+                                );
+                            }
+                        }
+
+                        for (cid, delta_up, delta_down, _, _) in snapshot {
+                            match reporter.api.traffic_single(&cid, delta_up, delta_down).await {
                                 Ok(connections_to_close) => {
                                     if !connections_to_close.is_empty() {
                                         close_connections(&reporter.closers, &connections_to_close);
@@ -195,4 +231,11 @@ struct TrafficRecord {
     external_connection_id: Arc<str>,
     session: ConnectionSession,
     last_sent: ConnectionTraffic,
+}
+
+fn bytes_to_mbps(bytes: u64, interval_secs: f64) -> f64 {
+    if interval_secs <= 0.0 {
+        return 0.0;
+    }
+    (bytes as f64 * 8.0) / (interval_secs * 1_000_000.0)
 }

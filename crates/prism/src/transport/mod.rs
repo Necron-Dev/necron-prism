@@ -16,15 +16,13 @@ use crate::hooks::{LoginResult, PrismHooks};
 use crate::outbound::connect_addr as connect_outbound_addr;
 use crate::players::PlayerState;
 use crate::relay::relay_bidirectional;
-use crate::session::{ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
+use crate::session::{ConnectionKind, ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
 
 pub async fn handle_connection<H: PrismHooks>(
     ctx: PrismContext<H>,
     client: tokio::net::TcpStream,
     session: ConnectionSession,
 ) {
-    let logging_conn = session.clone();
-    let _guard = logging_conn.enter_stage("CONNECT/LIFECYCLE");
     let started_at = Instant::now();
 
     match handle_client(client, &ctx, &session).await {
@@ -38,18 +36,60 @@ pub async fn handle_connection<H: PrismHooks>(
                 ctx.hooks().on_connection_finished(&session, &report);
                 let _settled = ctx.runtime().totals.record_finished_connection(traffic);
                 let remaining = ctx.runtime().players.remove_connection(session.id);
-                warn!(
-                    connection_id = session.id,
-                    error = %error,
-                    elapsed_ms = started_at.elapsed().as_millis() as u64,
-                    upload_bytes = traffic.upload_bytes,
-                    download_bytes = traffic.download_bytes,
-                    active_remaining = remaining,
-                    "[CONNECT/LIFECYCLE] connection failed"
-                );
+                let tag = session.kind().tag();
+                let is_expected_disconnect = is_expected_disconnect(&error);
+                let is_motd = session.kind() == ConnectionKind::Motd;
+                if is_expected_disconnect {
+                    let level = if is_motd { tracing::Level::DEBUG } else { tracing::Level::INFO };
+                    tracing::event!(
+                        level,
+                        connection_id = session.id,
+                        error = %error,
+                        elapsed_ms = started_at.elapsed().as_millis() as u64,
+                        upload_bytes = traffic.upload_bytes,
+                        download_bytes = traffic.download_bytes,
+                        active_remaining = remaining,
+                        "[{tag}] connection closed"
+                    );
+                } else {
+                    warn!(
+                        connection_id = session.id,
+                        error = %error,
+                        elapsed_ms = started_at.elapsed().as_millis() as u64,
+                        upload_bytes = traffic.upload_bytes,
+                        download_bytes = traffic.download_bytes,
+                        active_remaining = remaining,
+                        "[{tag}] connection closed"
+                    );
+                } else {
+                    warn!(
+                        connection_id = session.id,
+                        error = %error,
+                        elapsed_ms = started_at.elapsed().as_millis() as u64,
+                        upload_bytes = traffic.upload_bytes,
+                        download_bytes = traffic.download_bytes,
+                        active_remaining = remaining,
+                        "[{tag}] connection failed"
+                    );
+                }
             }
         }
     }
+}
+
+fn is_expected_disconnect(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            matches!(
+                io_err.kind(),
+                std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::BrokenPipe
+                    | std::io::ErrorKind::UnexpectedEof
+            )
+        } else {
+            false
+        }
+    })
 }
 
 async fn handle_client<H: PrismHooks>(
@@ -57,13 +97,11 @@ async fn handle_client<H: PrismHooks>(
     ctx: &PrismContext<H>,
     session: &ConnectionSession,
 ) -> anyhow::Result<ConnectionReport> {
-    let logging_conn = session.clone();
-    let _guard = logging_conn.enter_stage("CONNECT/TRANSPORT");
     let started_at = Instant::now();
 
     debug!(
         elapsed_ms = started_at.elapsed().as_millis(),
-        "[CONNECT/TRANSPORT] connection handling started"
+        "[CONNECT] connection handling started"
     );
 
     let config = ctx.config();
@@ -87,10 +125,11 @@ async fn handle_client<H: PrismHooks>(
     trace!(
         elapsed_ms = started_at.elapsed().as_millis(),
         first_byte = first_byte[0],
-        "[CONNECT/TRANSPORT] read first byte from client"
+        "[CONNECT] read first byte from client"
     );
 
     if first_byte[0] == 0xFE {
+        session.set_kind(ConnectionKind::Motd);
         let _motd_guard = session.enter_stage("CONNECT/MOTD");
         info!(connection_id = session.id, "[CONNECT/MOTD] detected legacy ping (0xFE)");
         let online_count = ctx.runtime().players.current_online_count();
@@ -137,10 +176,11 @@ async fn handle_client<H: PrismHooks>(
         original_port = handshake.server_port,
         handshake_wire_bytes = handshake_packet.wire_len,
         elapsed_ms = started_at.elapsed().as_millis(),
-        "[CONNECT/TRANSPORT] handshake packet decoded"
+        "[CONNECT] handshake packet decoded"
     );
 
     if handshake.next_state == INTENT_STATUS {
+        session.set_kind(ConnectionKind::Motd);
         let _motd_guard = session.enter_stage("CONNECT/MOTD");
         let online_count = ctx.runtime().players.current_online_count();
         let config = ctx.config();
@@ -151,6 +191,8 @@ async fn handle_client<H: PrismHooks>(
         return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
     }
 
+    session.set_kind(ConnectionKind::Proxy);
+
     let login_start_packet = packet_io
         .read_frame(&mut client, MAX_LOGIN_PACKET_SIZE)
         .await
@@ -158,7 +200,7 @@ async fn handle_client<H: PrismHooks>(
 
     debug!(
         elapsed_ms = started_at.elapsed().as_millis() as u64,
-        "[CONNECT/TRANSPORT] read login start packet"
+        "[CONNECT/LOGIN] read login start packet"
     );
 
     let online_count = ctx.runtime().players.current_online_count();
@@ -277,19 +319,23 @@ async fn proxy_connection<H: PrismHooks>(
 fn finish_success<H: PrismHooks>(ctx: &PrismContext<H>, session: &ConnectionSession, started_at: Instant, report: ConnectionReport) {
     let _settled = ctx.runtime().totals.record_finished_connection(report.connection_traffic);
     let remaining = ctx.runtime().players.remove_connection(session.id);
+    let tag = session.kind().tag();
 
     if let Some(mode) = report.relay_mode {
-        debug!(relay_mode = %mode, "[CONNECT/LIFECYCLE] relay completed");
+        debug!(relay_mode = %mode, "[{tag}] relay completed");
     }
 
-    info!(
+    let is_motd = session.kind() == ConnectionKind::Motd;
+    let level = if is_motd { tracing::Level::DEBUG } else { tracing::Level::INFO };
+    tracing::event!(
+        level,
         elapsed_ms = started_at.elapsed().as_millis() as u64,
         upload_bytes = report.connection_traffic.upload_bytes,
         download_bytes = report.connection_traffic.download_bytes,
         total_connections = ctx.runtime().stats.total_connections(),
         active_remaining = remaining,
         target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
-        "[CONNECT/LIFECYCLE] connection closed"
+        "[{tag}] connection closed"
     );
 }
 

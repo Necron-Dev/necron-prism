@@ -5,6 +5,7 @@ use std::thread;
 use dashmap::DashMap;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
+use tracing::Instrument;
 
 use crate::proxy::api::ApiService;
 use prism::config::ApiConfig;
@@ -40,6 +41,8 @@ impl TrafficReporter {
         connection_id: u64,
         external_connection_id: &str,
         session: ConnectionSession,
+        player_name: Option<Arc<str>>,
+        player_uuid: Option<Arc<str>>,
         closer: Option<std::net::TcpStream>,
     ) {
         let external_connection_id: Arc<str> = external_connection_id.to_owned().into();
@@ -48,6 +51,8 @@ impl TrafficReporter {
             TrafficRecord {
                 external_connection_id: Arc::clone(&external_connection_id),
                 session,
+                player_name,
+                player_uuid,
                 last_sent: ConnectionTraffic::default(),
             },
         );
@@ -63,16 +68,15 @@ impl TrafficReporter {
             if let Some((_, record)) = reporter.sessions.remove(&connection_id) {
                 reporter.closers.remove(record.external_connection_id.as_ref());
 
-                {
-                    let _span = tracing::info_span!("traffic").entered();
-                    info!(
-                        cid = %record.external_connection_id,
-                        connection_id,
-                        upload_bytes = totals.upload_bytes,
-                        download_bytes = totals.download_bytes,
-                        "[TRAFFIC] connection closed"
-                    );
-                }
+                info!(
+                    cid = %record.external_connection_id,
+                    connection_id,
+                    player_name = record.player_name.as_deref().unwrap_or("-"),
+                    player_uuid = record.player_uuid.as_deref().unwrap_or("-"),
+                    upload_bytes = totals.upload_bytes,
+                    download_bytes = totals.download_bytes,
+                    "[TRAFFIC] connection closed"
+                );
 
                 if let Err(error) = reporter
                     .api
@@ -135,13 +139,15 @@ impl TrafficReporter {
                                 upload_bytes: upload,
                                 download_bytes: download,
                             };
-                            snapshot.push((
-                                entry.external_connection_id.clone(),
-                                delta_upload,
-                                delta_download,
-                                upload,
-                                download,
-                            ));
+                            snapshot.push(PlayerTraffic {
+                                cid: entry.external_connection_id.clone(),
+                                player_name: entry.player_name.clone(),
+                                player_uuid: entry.player_uuid.clone(),
+                                upload_bytes: upload,
+                                download_bytes: download,
+                                delta_upload_bytes: delta_upload,
+                                delta_download_bytes: delta_download,
+                            });
                         }
 
                         if snapshot.is_empty() {
@@ -149,40 +155,32 @@ impl TrafficReporter {
                         }
 
                         {
-                            let _span = tracing::info_span!("traffic").entered();
+                            let players: Vec<String> = snapshot.iter().map(|p| {
+                                let name = p.player_name.as_deref().unwrap_or("-");
+                                let uuid = p.player_uuid.as_deref().unwrap_or("-");
+                                format!("{}(uuid={},up={}B,down={}B)", name, uuid, p.upload_bytes, p.download_bytes)
+                            }).collect();
                             info!(
+                                upload_mbps = bytes_to_mbps(aggregate_delta.upload_bytes, interval_secs),
+                                download_mbps = bytes_to_mbps(aggregate_delta.download_bytes, interval_secs),
                                 total_upload_bytes = aggregate.upload_bytes,
                                 total_download_bytes = aggregate.download_bytes,
-                                total_upload_mbps = bytes_to_mbps(aggregate_delta.upload_bytes, interval_secs),
-                                total_download_mbps = bytes_to_mbps(aggregate_delta.download_bytes, interval_secs),
-                                active_connections = snapshot.len(),
-                                "[TRAFFIC] aggregate"
+                                active = snapshot.len(),
+                                players = ?players,
+                                "[TRAFFIC] report"
                             );
-
-                            for (cid, delta_up, delta_down, total_up, total_down) in &snapshot {
-                                info!(
-                                    cid = %cid,
-                                    delta_upload_bytes = delta_up,
-                                    delta_download_bytes = delta_down,
-                                    upload_mbps = bytes_to_mbps(*delta_up, interval_secs),
-                                    download_mbps = bytes_to_mbps(*delta_down, interval_secs),
-                                    total_upload_bytes = total_up,
-                                    total_download_bytes = total_down,
-                                    "[TRAFFIC] periodic report"
-                                );
-                            }
                         }
 
-                        for (cid, delta_up, delta_down, _, _) in snapshot {
-                            match reporter.api.traffic_single(&cid, delta_up, delta_down).await {
+                        for player in &snapshot {
+                            match reporter.api.traffic_single(&player.cid, player.delta_upload_bytes, player.delta_download_bytes).await {
                                 Ok(connections_to_close) => {
                                     if !connections_to_close.is_empty() {
                                         close_connections(&reporter.closers, &connections_to_close);
-                                        warn!(cid = %cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
+                                        warn!(cid = %player.cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
                                     }
                                 }
                                 Err(error) => {
-                                    warn!(error = %error, cid = %cid, "failed to report traffic api event")
+                                    warn!(error = %error, cid = %player.cid, "failed to report traffic api event")
                                 }
                             }
                         }
@@ -197,12 +195,23 @@ impl TrafficReporter {
     }
 }
 
+struct PlayerTraffic {
+    cid: Arc<str>,
+    player_name: Option<Arc<str>>,
+    player_uuid: Option<Arc<str>>,
+    upload_bytes: u64,
+    download_bytes: u64,
+    delta_upload_bytes: u64,
+    delta_download_bytes: u64,
+}
+
 fn spawn_background<F>(future: F)
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        handle.spawn(future);
+        let span = tracing::info_span!("traffic");
+        handle.spawn(future.instrument(span));
         return;
     }
 
@@ -230,6 +239,8 @@ fn close_connections(
 struct TrafficRecord {
     external_connection_id: Arc<str>,
     session: ConnectionSession,
+    player_name: Option<Arc<str>>,
+    player_uuid: Option<Arc<str>>,
     last_sent: ConnectionTraffic,
 }
 

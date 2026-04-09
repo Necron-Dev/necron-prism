@@ -48,7 +48,7 @@ fn mock_mode_keeps_active_traffic_totals() {
     let session = ConnectionSession::new(1, None);
     let closer = connected_stream();
 
-    reporter.register(1, "mock-1", session.clone(), Some(closer));
+    reporter.register(1, "mock-1", session.clone(), None, None, Some(closer));
     session.add_upload(128);
     session.add_download(256);
 
@@ -74,8 +74,8 @@ fn active_totals_sums_multiple_sessions() {
     let s1 = ConnectionSession::new(1, None);
     let s2 = ConnectionSession::new(2, None);
 
-    reporter.register(1, "mock-1", s1.clone(), None);
-    reporter.register(2, "mock-2", s2.clone(), None);
+    reporter.register(1, "mock-1", s1.clone(), None, None, None);
+    reporter.register(2, "mock-2", s2.clone(), None, None, None);
 
     s1.add_upload(100);
     s1.add_download(200);
@@ -95,7 +95,7 @@ fn finish_removes_session_from_active_totals() {
     let reporter = mock_reporter();
     let session = ConnectionSession::new(1, None);
 
-    reporter.register(1, "mock-1", session.clone(), None);
+    reporter.register(1, "mock-1", session.clone(), None, None, None);
     session.add_upload(500);
     session.add_download(600);
 
@@ -131,7 +131,7 @@ fn finish_for_unknown_id_is_noop() {
 fn register_without_closer_works() {
     let reporter = mock_reporter();
     let session = ConnectionSession::new(1, None);
-    reporter.register(1, "mock-1", session.clone(), None);
+    reporter.register(1, "mock-1", session.clone(), None, None, None);
     session.add_upload(42);
     let totals = reporter.active_totals();
     assert_eq!(totals.upload_bytes, 42);
@@ -142,7 +142,7 @@ fn register_without_closer_works() {
 fn shared_session_updates_reflected_in_reporter() {
     let reporter = mock_reporter();
     let session = ConnectionSession::new(1, None);
-    reporter.register(1, "mock-1", session.clone(), None);
+    reporter.register(1, "mock-1", session.clone(), None, None, None);
 
     session.add_upload(100);
     assert_eq!(reporter.active_totals().upload_bytes, 100);
@@ -150,5 +150,23 @@ fn shared_session_updates_reflected_in_reporter() {
     session.add_upload(200);
     assert_eq!(reporter.active_totals().upload_bytes, 300);
 
+    reporter.shutdown();
+}
+
+#[test]
+fn register_with_player_info() {
+    let reporter = mock_reporter();
+    let session = ConnectionSession::new(1, None);
+    reporter.register(
+        1,
+        "mock-1",
+        session.clone(),
+        Some(Arc::<str>::from("TestPlayer")),
+        Some(Arc::<str>::from("550e8400-e29b-41d4-a716-446655440000")),
+        None,
+    );
+    session.add_upload(1000);
+    let totals = reporter.active_totals();
+    assert_eq!(totals.upload_bytes, 1000);
     reporter.shutdown();
 }

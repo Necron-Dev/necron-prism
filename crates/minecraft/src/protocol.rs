@@ -92,7 +92,18 @@ pub fn decode_login_hello(frame: &FramedPacket) -> Result<LoginHelloInfo, Protoc
 
     let mut cursor = Cursor::new(frame.frame.body.as_ref());
     let username = decode_mc_string(&mut cursor, 16)?;
-    let profile_id = if frame.frame.body.len() > cursor.position() as usize {
+
+    let remaining = frame.frame.body.len() - cursor.position() as usize;
+    let profile_id = if remaining >= 16 {
+        let first_byte = frame.frame.body[cursor.position() as usize];
+        if remaining == 17 && (first_byte == 0 || first_byte == 1) {
+            decode_uuid_with_flag(&mut cursor).ok()
+        } else {
+            let mut uuid = [0u8; 16];
+            cursor.read_exact(&mut uuid).map_err(ProtocolError::decode)?;
+            Some(Uuid::from_bytes(uuid))
+        }
+    } else if remaining > 0 {
         decode_uuid_with_flag(&mut cursor).ok()
     } else {
         None

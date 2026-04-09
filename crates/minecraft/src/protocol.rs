@@ -130,7 +130,9 @@ fn decode_uuid_with_flag(cursor: &mut Cursor<&[u8]>) -> Result<Uuid, ProtocolErr
 }
 
 pub fn encode_raw_frame(frame: &FramedPacket) -> Result<Vec<u8>, ProtocolError> {
-    let mut output = Vec::new();
+    let packet_len = VarInt(frame.frame.id).written_size() + frame.frame.body.len();
+    let wire_len = VarInt(packet_len as i32).written_size() + packet_len;
+    let mut output = Vec::with_capacity(wire_len);
     let packet_len = VarInt(frame.frame.id).written_size() + frame.frame.body.len();
     VarInt(packet_len as i32)
         .encode(&mut output)

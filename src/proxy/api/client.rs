@@ -4,7 +4,7 @@ use reqwest::{StatusCode, Url};
 use serde::Deserialize;
 use anyhow::{anyhow, Result};
 
-use crate::proxy::config::ApiConfig;
+use prism::config::ApiConfig;
 use crate::proxy::routing::{JoinDecision, JoinTarget};
 
 use super::types::TrafficBody;

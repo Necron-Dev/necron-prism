@@ -37,7 +37,6 @@ impl PlayerRegistry {
         self.sessions.insert(
             connection_id,
             PlayerSession {
-                external_connection_id: None,
                 protocol_version: None,
                 next_state: None,
                 username: None,
@@ -66,25 +65,6 @@ impl PlayerRegistry {
             session.username = Some(username);
             session.uuid = uuid;
         });
-    }
-
-    pub fn update_external_connection_id(
-        &self,
-        connection_id: u64,
-        external_connection_id: Arc<str>,
-    ) {
-        self.update(connection_id, |session| {
-            session.external_connection_id = Some(external_connection_id);
-        });
-    }
-
-    pub fn with_external_connection_id<R, F>(&self, connection_id: u64, f: F) -> Option<R>
-    where
-        F: FnOnce(&str) -> R,
-    {
-        self.sessions
-            .get(&connection_id)
-            .and_then(|session| session.external_connection_id.as_deref().map(f))
     }
 
     pub fn update_outbound(&self, connection_id: u64, outbound_name: Arc<str>) {

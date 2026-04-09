@@ -5,7 +5,7 @@ version = "0.0.0"
 
 [features]
 default = []
-linux-accel = ["dep:rustix", "dep:tokio-uring", "dep:libc"]
+linux-accel = ["dep:rustix", "dep:tokio-uring"]
 schema = ["dep:schemars"]
 benchmark = ["dep:criterion", "dep:nerd-font-symbols"]
 
@@ -35,7 +35,7 @@ nerd-font-symbols = { version = "0.3", optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { version = "1.1", default-features = false, features = ["pipe", "std"], optional = true }
 tokio-uring = { version = "0.5", optional = true }
-libc = { version = "0.2", optional = true }
+libc = { version = "0.2" }
 
 [[bin]]
 name = "generate_config_schema"

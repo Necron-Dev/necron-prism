@@ -7,12 +7,12 @@ use std::time::Duration;
 #[cfg(all(target_os = "linux", feature = "linux-accel"))]
 use std::os::unix::io::AsRawFd;
 
-#[cfg(all(target_os = "linux", feature = "linux-accel"))]
+#[cfg(target_os = "linux")]
 pub(super) fn is_connect_in_progress(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::WouldBlock || error.raw_os_error() == Some(libc::EINPROGRESS)
 }
 
-#[cfg(not(all(target_os = "linux", feature = "linux-accel")))]
+#[cfg(not(target_os = "linux"))]
 pub(super) fn is_connect_in_progress(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::WouldBlock
 }

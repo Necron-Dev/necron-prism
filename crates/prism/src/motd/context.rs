@@ -35,18 +35,18 @@ impl<'a> StatusContext<'a> {
         }
     }
 
-    pub async fn open_upstream(&self) -> anyhow::Result<Option<UpstreamStatusSession>> {
+    pub async fn open_upstream(&self, status_request_wire: &[u8]) -> anyhow::Result<Option<UpstreamStatusSession>> {
         let Some(target_addr) = self.upstream_target_addr() else {
             return Ok(None);
         };
 
         let needs_status_json = self.status_response_needs_upstream();
-        let needs_ping = self.config.ping_mode == StatusPingMode::Passthrough;
 
         UpstreamStatusSession::connect(
             target_addr.clone(),
             self.rewrite_addr(&target_addr)?,
             self.handshake,
+            status_request_wire,
             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
             self.service,
             needs_status_json,
@@ -132,6 +132,7 @@ impl<'a> StatusContext<'a> {
                             target_addr.clone(),
                             self.rewrite_addr(&target_addr)?,
                             self.handshake,
+                            &[1, 0],
                             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
                             self.service,
                             true,

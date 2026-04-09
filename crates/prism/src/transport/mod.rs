@@ -40,27 +40,27 @@ pub async fn handle_connection<H: PrismHooks>(
                 let is_expected_disconnect = is_expected_disconnect(&error);
                 let is_motd = session.kind() == ConnectionKind::Motd;
                 if is_expected_disconnect {
-                    let level = if is_motd { tracing::Level::DEBUG } else { tracing::Level::INFO };
-                    tracing::event!(
-                        level,
-                        connection_id = session.id,
-                        error = %error,
-                        elapsed_ms = started_at.elapsed().as_millis() as u64,
-                        upload_bytes = traffic.upload_bytes,
-                        download_bytes = traffic.download_bytes,
-                        active_remaining = remaining,
-                        "[{tag}] connection closed"
-                    );
-                } else {
-                    warn!(
-                        connection_id = session.id,
-                        error = %error,
-                        elapsed_ms = started_at.elapsed().as_millis() as u64,
-                        upload_bytes = traffic.upload_bytes,
-                        download_bytes = traffic.download_bytes,
-                        active_remaining = remaining,
-                        "[{tag}] connection closed"
-                    );
+                    if is_motd {
+                        debug!(
+                            connection_id = session.id,
+                            error = %error,
+                            elapsed_ms = started_at.elapsed().as_millis() as u64,
+                            upload_bytes = traffic.upload_bytes,
+                            download_bytes = traffic.download_bytes,
+                            active_remaining = remaining,
+                            "[{tag}] connection closed"
+                        );
+                    } else {
+                        info!(
+                            connection_id = session.id,
+                            error = %error,
+                            elapsed_ms = started_at.elapsed().as_millis() as u64,
+                            upload_bytes = traffic.upload_bytes,
+                            download_bytes = traffic.download_bytes,
+                            active_remaining = remaining,
+                            "[{tag}] connection closed"
+                        );
+                    }
                 } else {
                     warn!(
                         connection_id = session.id,
@@ -283,8 +283,12 @@ async fn proxy_connection<H: PrismHooks>(
     info!(target_addr = %route.target_addr, "[CONNECT/OUTBOUND] upstream connected");
 
     if let Some(external_connection_id) = &route.external_connection_id {
-        ctx.hooks()
-            .on_connection_established(session, external_connection_id);
+        ctx.hooks().on_connection_established(
+            session,
+            external_connection_id,
+            route.player_name.as_deref(),
+            route.player_uuid.as_deref(),
+        );
     }
 
     let encoded_login_start = encode_raw_frame(&login_start_packet)
@@ -325,18 +329,26 @@ fn finish_success<H: PrismHooks>(ctx: &PrismContext<H>, session: &ConnectionSess
         debug!(relay_mode = %mode, "[{tag}] relay completed");
     }
 
-    let is_motd = session.kind() == ConnectionKind::Motd;
-    let level = if is_motd { tracing::Level::DEBUG } else { tracing::Level::INFO };
-    tracing::event!(
-        level,
-        elapsed_ms = started_at.elapsed().as_millis() as u64,
-        upload_bytes = report.connection_traffic.upload_bytes,
-        download_bytes = report.connection_traffic.download_bytes,
-        total_connections = ctx.runtime().stats.total_connections(),
-        active_remaining = remaining,
-        target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
-        "[{tag}] connection closed"
-    );
+    if session.kind() == ConnectionKind::Motd {
+        debug!(
+            elapsed_ms = started_at.elapsed().as_millis() as u64,
+            upload_bytes = report.connection_traffic.upload_bytes,
+            download_bytes = report.connection_traffic.download_bytes,
+            total_connections = ctx.runtime().stats.total_connections(),
+            active_remaining = remaining,
+            "[{tag}] connection closed"
+        );
+    } else {
+        info!(
+            elapsed_ms = started_at.elapsed().as_millis() as u64,
+            upload_bytes = report.connection_traffic.upload_bytes,
+            download_bytes = report.connection_traffic.download_bytes,
+            total_connections = ctx.runtime().stats.total_connections(),
+            active_remaining = remaining,
+            target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
+            "[{tag}] connection closed"
+        );
+    }
 }
 
 #[derive(Debug)]

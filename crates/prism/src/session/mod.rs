@@ -62,6 +62,7 @@ impl ConnectionSession {
             connection_id = id,
             peer_addr = ?peer_addr,
             player_name = Empty,
+            player_uuid = Empty,
         );
 
         Self {
@@ -78,8 +79,9 @@ impl ConnectionSession {
         &self.root_span
     }
 
-    pub fn record_player_name(&self, player_name: &str) {
+    pub fn record_player_identity(&self, player_name: &str, player_uuid: &str) {
         self.root_span.record("player_name", player_name);
+        self.root_span.record("player_uuid", player_uuid);
     }
 
     pub fn set_kind(&self, kind: ConnectionKind) {
@@ -127,6 +129,8 @@ pub struct ConnectionRoute {
     pub target_addr: RuntimeAddress,
     pub rewrite_addr: Option<RuntimeAddress>,
     pub external_connection_id: Option<Arc<str>>,
+    pub player_name: Option<Arc<str>>,
+    pub player_uuid: Option<Arc<str>>,
 }
 
 #[derive(Clone, Debug)]

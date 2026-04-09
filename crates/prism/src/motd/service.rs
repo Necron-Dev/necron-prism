@@ -1,5 +1,5 @@
 use necron_prism_minecraft::{
-    decode_status_request, ping_response_packet, status_response_packet, HandshakeInfo, PacketIo,
+    decode_status_request, encode_raw_frame, ping_response_packet, status_response_packet, HandshakeInfo, PacketIo,
     MAX_STATUS_PACKET_SIZE,
 };
 use crate::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
@@ -9,7 +9,7 @@ use crate::session::ConnectionSession;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tracing::{debug, info};
+use tracing::info;
 
 use super::context::StatusContext;
 use super::rewrite::rewrite_json;
@@ -37,12 +37,14 @@ impl MotdService {
         let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
         decode_status_request(&status_request).map_err(anyhow::Error::from)?;
 
+        let status_request_wire = encode_raw_frame(&status_request).map_err(anyhow::Error::from)?;
+
         let context = StatusContext::new(motd_config, relay, handshake, self);
         let mut upstream = if motd_config.mode == MotdMode::Upstream
             || motd_config.favicon.mode == MotdFaviconMode::Passthrough
             || motd_config.ping_mode == StatusPingMode::Passthrough
         {
-            context.open_upstream().await?
+            context.open_upstream(&status_request_wire).await?
         } else {
             None
         };
@@ -72,7 +74,7 @@ impl MotdService {
             }
         };
 
-        debug!(
+        info!(
             motd_mode = ?motd_config.mode,
             ping_mode = ?motd_config.ping_mode,
             status_request_bytes = status_request.wire_len,
@@ -81,7 +83,7 @@ impl MotdService {
             pong_bytes = outcome.pong_bytes,
             pong_payload = ?outcome.pong_payload,
             upstream_ping_ms = ?outcome.upstream_ping_ms,
-            "[MOTD] status served to client"
+            "[CONNECT/MOTD] status served to client"
         );
 
         Ok(())

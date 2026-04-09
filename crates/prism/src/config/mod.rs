@@ -99,6 +99,10 @@ impl ConfigLoader {
                 let relay = &mut config.network.relay;
                 let mut suppressed = Vec::new();
 
+                if socket.multipath_tcp {
+                    socket.multipath_tcp = false;
+                    suppressed.push("multipath_tcp");
+                }
                 if socket.tcp_fastopen {
                     socket.tcp_fastopen = false;
                     suppressed.push("tcp_fastopen");

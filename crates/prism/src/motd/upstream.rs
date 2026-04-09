@@ -5,7 +5,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use necron_prism_minecraft::{
-    decode_ping_request, decode_status_response, encode_handshake, ping_response_packet,
+    decode_ping_request, decode_status_response, ping_response_packet,
     HandshakeInfo, PacketIo, RuntimeAddress, MAX_STATUS_PACKET_SIZE,
 };
 
@@ -22,6 +22,7 @@ impl UpstreamStatusSession {
         target_addr: RuntimeAddress,
         rewrite_addr: RuntimeAddress,
         client_handshake: &HandshakeInfo,
+        status_request_wire: &[u8],
         timeout_duration: Duration,
         _service: &MotdService,
         read_json: bool,
@@ -38,11 +39,13 @@ impl UpstreamStatusSession {
         let mut handshake = client_handshake.clone();
         handshake.rewrite_addr(&rewrite_addr).map_err(|e| anyhow::anyhow!(e))?;
 
-        let handshake_packet = encode_handshake(&handshake).map_err(anyhow::Error::from)?;
-        stream.write_all(&handshake_packet).await?;
+        let handshake_packet = necron_prism_minecraft::encode_handshake(&handshake)
+            .map_err(anyhow::Error::from)?;
 
-        let status_request = [1_u8, 0];
-        stream.write_all(&status_request).await?;
+        let mut combined = Vec::with_capacity(handshake_packet.len() + status_request_wire.len());
+        combined.extend_from_slice(&handshake_packet);
+        combined.extend_from_slice(status_request_wire);
+        stream.write_all(&combined).await?;
 
         let mut packet_io = PacketIo::new();
         let status_json = if read_json {

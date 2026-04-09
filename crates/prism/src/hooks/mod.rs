@@ -40,6 +40,8 @@ pub trait PrismHooks: Send + Sync + 'static {
         &self,
         session: &ConnectionSession,
         external_connection_id: &str,
+        player_name: Option<&str>,
+        player_uuid: Option<&str>,
     );
 
     fn on_connection_finished(

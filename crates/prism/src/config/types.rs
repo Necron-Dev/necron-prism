@@ -107,7 +107,7 @@ impl Default for NetworkSocketConfig {
             tcp_fastopen: true,
             tcp_fastopen_queue: None,
             tcp_quickack: true,
-            ip_tos: Some(0x10),
+            ip_tos: Some(0xB8),
             congestion_control: None,
             bind_interface: None,
             fwmark: None,

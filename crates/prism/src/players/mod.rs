@@ -17,7 +17,7 @@ pub enum PlayerState {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct PlayerSession {
+pub struct PlayerSession {
     pub username: Option<String>,
     pub uuid: Option<Uuid>,
     pub outbound_name: Option<Arc<str>>,
@@ -123,6 +123,13 @@ impl PlayerRegistry {
 
     pub fn active_count(&self) -> usize {
         self.sessions.len()
+    }
+
+    pub fn with_session<R, F>(&self, connection_id: u64, f: F) -> Option<R>
+    where
+        F: FnOnce(&PlayerSession) -> R,
+    {
+        self.sessions.get(&connection_id).map(|s| f(s.value()))
     }
 
     fn update<F>(&self, connection_id: u64, update: F)

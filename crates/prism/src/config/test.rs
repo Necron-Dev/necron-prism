@@ -227,6 +227,6 @@ fn connection_session_keeps_identity_fields() {
     assert_eq!(context.id, 42);
     assert_eq!(context.peer_addr, Some(peer_addr));
 
-    context.record_player_name("alex");
+    context.record_player_identity("alex", "550e8400-e29b-41d4-a716-446655440000");
     let _entered = context.enter_stage("relay");
 }

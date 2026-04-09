@@ -5,7 +5,7 @@ use std::net::TcpListener;
 use anyhow::Result;
 use socket2::SockRef;
 use tokio::net::lookup_host;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 use crate::config::Config;
 use crate::context::PrismContext;

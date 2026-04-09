@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use tracing::{field::Empty, info_span, Span};
@@ -27,10 +27,29 @@ impl ConnectionTraffic {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ConnectionKind {
+    Unknown = 0,
+    Motd = 1,
+    Proxy = 2,
+}
+
+impl ConnectionKind {
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::Unknown => "CONNECT",
+            Self::Motd => "CONNECT/MOTD",
+            Self::Proxy => "CONNECT/LIFECYCLE",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ConnectionSession {
     pub id: u64,
     pub peer_addr: Option<SocketAddr>,
+    kind: Arc<AtomicU8>,
     root_span: Span,
     upload_bytes: Arc<AtomicU64>,
     download_bytes: Arc<AtomicU64>,
@@ -48,6 +67,7 @@ impl ConnectionSession {
         Self {
             id,
             peer_addr,
+            kind: Arc::new(AtomicU8::new(ConnectionKind::Unknown as u8)),
             root_span,
             upload_bytes: Arc::new(AtomicU64::new(0)),
             download_bytes: Arc::new(AtomicU64::new(0)),
@@ -60,6 +80,18 @@ impl ConnectionSession {
 
     pub fn record_player_name(&self, player_name: &str) {
         self.root_span.record("player_name", player_name);
+    }
+
+    pub fn set_kind(&self, kind: ConnectionKind) {
+        self.kind.store(kind as u8, Ordering::Relaxed);
+    }
+
+    pub fn kind(&self) -> ConnectionKind {
+        match self.kind.load(Ordering::Relaxed) {
+            1 => ConnectionKind::Motd,
+            2 => ConnectionKind::Proxy,
+            _ => ConnectionKind::Unknown,
+        }
     }
 
     pub fn enter_stage(&self, _stage: &str) -> tracing::span::Entered<'_> {

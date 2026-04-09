@@ -9,6 +9,7 @@ use self::default::ConfigDefaults;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
+use tracing::warn;
 
 pub struct ConfigLoader;
 
@@ -38,18 +39,56 @@ impl ConfigLoader {
         {
             let socket = &mut config.network.socket;
             let relay = &mut config.network.relay;
+            let mut suppressed = Vec::new();
 
-            socket.multipath_tcp = false;
-            socket.tcp_fastopen = false;
-            socket.tcp_fastopen_queue = None;
-            socket.tcp_quickack = false;
-            socket.ip_tos = None;
-            socket.congestion_control = None;
-            socket.bind_interface = None;
-            socket.fwmark = None;
-            socket.reuse_port = false;
+            if socket.multipath_tcp {
+                socket.multipath_tcp = false;
+                suppressed.push("multipath_tcp");
+            }
+            if socket.tcp_fastopen {
+                socket.tcp_fastopen = false;
+                suppressed.push("tcp_fastopen");
+            }
+            if socket.tcp_fastopen_queue.is_some() {
+                socket.tcp_fastopen_queue = None;
+                suppressed.push("tcp_fastopen_queue");
+            }
+            if socket.tcp_quickack {
+                socket.tcp_quickack = false;
+                suppressed.push("tcp_quickack");
+            }
+            if socket.ip_tos.is_some() {
+                socket.ip_tos = None;
+                suppressed.push("ip_tos");
+            }
+            if socket.congestion_control.is_some() {
+                socket.congestion_control = None;
+                suppressed.push("congestion_control");
+            }
+            if socket.bind_interface.is_some() {
+                socket.bind_interface = None;
+                suppressed.push("bind_interface");
+            }
+            if socket.fwmark.is_some() {
+                socket.fwmark = None;
+                suppressed.push("fwmark");
+            }
+            if socket.reuse_port {
+                socket.reuse_port = false;
+                suppressed.push("reuse_port");
+            }
+            if relay.mode != RelayMode::Async {
+                relay.mode = RelayMode::Async;
+                suppressed.push("relay.mode");
+            }
 
-            relay.mode = RelayMode::Async;
+            if !suppressed.is_empty() {
+                warn!(
+                    options = ?suppressed,
+                    reason = "not available on non-Linux platforms",
+                    "config options force-disabled"
+                );
+            }
         }
 
         #[cfg(target_os = "linux")]
@@ -58,16 +97,48 @@ impl ConfigLoader {
             {
                 let socket = &mut config.network.socket;
                 let relay = &mut config.network.relay;
+                let mut suppressed = Vec::new();
 
-                socket.tcp_fastopen = false;
-                socket.tcp_fastopen_queue = None;
-                socket.tcp_quickack = false;
-                socket.ip_tos = None;
-                socket.congestion_control = None;
-                socket.bind_interface = None;
-                socket.fwmark = None;
+                if socket.tcp_fastopen {
+                    socket.tcp_fastopen = false;
+                    suppressed.push("tcp_fastopen");
+                }
+                if socket.tcp_fastopen_queue.is_some() {
+                    socket.tcp_fastopen_queue = None;
+                    suppressed.push("tcp_fastopen_queue");
+                }
+                if socket.tcp_quickack {
+                    socket.tcp_quickack = false;
+                    suppressed.push("tcp_quickack");
+                }
+                if socket.ip_tos.is_some() {
+                    socket.ip_tos = None;
+                    suppressed.push("ip_tos");
+                }
+                if socket.congestion_control.is_some() {
+                    socket.congestion_control = None;
+                    suppressed.push("congestion_control");
+                }
+                if socket.bind_interface.is_some() {
+                    socket.bind_interface = None;
+                    suppressed.push("bind_interface");
+                }
+                if socket.fwmark.is_some() {
+                    socket.fwmark = None;
+                    suppressed.push("fwmark");
+                }
+                if relay.mode != RelayMode::Async {
+                    relay.mode = RelayMode::Async;
+                    suppressed.push("relay.mode");
+                }
 
-                relay.mode = RelayMode::Async;
+                if !suppressed.is_empty() {
+                    warn!(
+                        options = ?suppressed,
+                        reason = "linux-accel feature not enabled",
+                        "config options force-disabled"
+                    );
+                }
             }
         }
     }

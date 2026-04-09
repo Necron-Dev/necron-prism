@@ -9,7 +9,7 @@ use crate::session::ConnectionSession;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tracing::debug;
+use tracing::{debug, info};
 
 use super::context::StatusContext;
 use super::rewrite::rewrite_json;

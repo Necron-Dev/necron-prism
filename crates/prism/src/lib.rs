@@ -19,5 +19,5 @@ pub use context::PrismContext;
 pub use hooks::{LoginResult, PrismHooks};
 pub use players::PlayerState;
 pub use relay::RelayMode;
-pub use session::{ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
+pub use session::{ConnectionKind, ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
 pub use stats::{ConnectionStats, ConnectionTotals};

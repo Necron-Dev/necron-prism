@@ -52,13 +52,13 @@ async fn accept_loop<H: PrismHooks>(listener: tokio::net::TcpListener, ctx: Pris
         let ctx = ctx.clone();
         tokio::spawn(async move {
             let logging_conn = session.clone();
-            let _guard = logging_conn.enter_stage("CONNECT/TRANSPORT");
+            let _guard = logging_conn.root_span().enter();
             let active = ctx.runtime().players.register_connection(connection_id);
-            info!(
+            debug!(
                 connection_id,
                 active,
                 total_accepted = accepted,
-                "[CONNECT/TRANSPORT] accepted inbound connection"
+                "[CONNECT] accepted inbound connection"
             );
             handle_connection(ctx, stream, session).await;
         });

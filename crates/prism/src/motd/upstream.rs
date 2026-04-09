@@ -24,8 +24,7 @@ impl UpstreamStatusSession {
         client_handshake: &HandshakeInfo,
         timeout_duration: Duration,
         _service: &MotdService,
-        read_status: bool,
-        read_ping: bool,
+        read_json: bool,
     ) -> anyhow::Result<Self> {
         let mut stream = tokio::time::timeout(
             timeout_duration,
@@ -46,15 +45,13 @@ impl UpstreamStatusSession {
         stream.write_all(&status_request).await?;
 
         let mut packet_io = PacketIo::new();
-        let status_json = if read_status {
+        let status_json = if read_json {
             let frame = packet_io.read_frame(&mut stream, MAX_STATUS_PACKET_SIZE).await?;
             let json = decode_status_response(&frame).map_err(anyhow::Error::from)?;
             Some(Arc::<str>::from(json))
         } else {
             None
         };
-
-        let _ = (read_ping,);
 
         Ok(Self {
             stream,

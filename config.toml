@@ -7,23 +7,26 @@ first_packet_timeout_ms = 5000
 tcp_nodelay = true
 tcp_keepalive = true
 keepalive_secs = 30
+reuse_address = true
 reuse_port = true
+listen_backlog = 1024
+tcp_fastopen = true
+tcp_quickack = true
+ip_tos = 16
 
 [network.relay]
-mode = "async"
-io_uring = true
+mode = "io_uring"
 
 [motd]
 mode = "local"
 local_json = '{"version":{"name":"§bnecron-prism §7status","protocol":-1},"players":{"max":100,"online":{online_player},"sample":[{"name":"§7mode §8> §f{relay_mode}","id":"00000000-0000-0000-0000-000000000001"},{"name":"§7ping §8> §b{ping_mode}","id":"00000000-0000-0000-0000-000000000002"},{"name":"§7target §8> §f{motd_target_addr}","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"§bnecron-prism §8» §fclean minecraft relay\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}"}}'
 upstream_addr = "mc.hypixel.net:25565"
 protocol = "client"
-ping_mode = "zero_ms"
+ping_mode = "local"
 upstream_ping_timeout_ms = 1500
 
 [motd.favicon]
-mode = "remove"
-target_addr = "mc.hypixel.net:25565"
+mode = "json"
 
 [api]
 mode = "mock"
@@ -33,12 +36,7 @@ mock_target_addr = "mc.hypixel.net:25565"
 mock_connection_id_prefix = "debug"
 
 [logging]
-level = "info"
+level = "debug"
 format = "pretty"
 async_enabled = true
 stats_log_interval_secs = 10
-
-[logging.file]
-path = "data/logs/latest.log"
-mode = "compress"
-archive_pattern = "{date}-{index}.log.gz"

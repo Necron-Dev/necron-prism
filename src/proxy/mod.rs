@@ -1,22 +1,8 @@
-mod api;
-pub mod config;
-mod context;
-mod inbound;
-mod lifecycle;
+pub mod api;
+mod hooks;
 mod logging;
-mod motd;
-mod network;
-mod outbound;
-mod players;
-mod routing;
-mod stats;
-mod template;
+pub mod routing;
 pub mod traffic;
-pub(crate) mod transport;
-
-pub use context::Context;
-pub(crate) use self::stats::ConnectionSession;
-pub use self::transport::relay::RelayMode;
 
 use std::fs;
 use std::path::Path;
@@ -25,9 +11,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 use tracing::{info, warn};
 
-use self::config::ConfigLoader;
-use self::inbound::run as run_inbound;
-use self::logging::{init_tracing, rotate_log_file, LogHandle};
+use prism::{PrismContext, Config, ConfigLoader};
+use logging::{init_tracing, reload_log_filter, rotate_log_file, ReloadHandle};
+
+use self::hooks::NecronPrismHooks;
+use self::traffic::TrafficReporter;
+
+type Context = PrismContext<NecronPrismHooks>;
 
 #[tokio::main]
 pub async fn run() -> Result<()> {
@@ -37,17 +27,20 @@ pub async fn run() -> Result<()> {
 
     info!(version = env!("CARGO_PKG_VERSION"), "starting necron-prism proxy");
 
-    let ctx = Context::new(config)?;
+    let (hooks, traffic) = build_hooks(&config)?;
+    let ctx = Context::new(config, hooks);
 
     tokio::spawn(watch_reload_file(ctx.clone(), log_handle.clone()));
+    let _traffic_guard = traffic;
 
     tokio::select! {
-        res = run_inbound(ctx) => res?,
+        res = prism::inbound::run(ctx) => res?,
         _ = shutdown_signal() => info!("received shutdown signal, initiating graceful shutdown..."),
     }
 
     info!("flushing logs and compressing active log file...");
     drop(guards);
+    drop(_traffic_guard);
 
     if let Some(file_config) = &log_config.file {
         if let Err(e) = rotate_log_file(&file_config.path, file_config.mode, &file_config.archive_pattern) {
@@ -59,7 +52,18 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
-async fn watch_reload_file(ctx: Context, log_handle: LogHandle) {
+fn build_hooks(config: &Config) -> Result<(NecronPrismHooks, TrafficReporter)> {
+    let api = std::sync::Arc::new(crate::proxy::api::ApiService::new(
+        &config.api,
+        std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+    )?);
+    let motd = std::sync::Arc::new(prism::motd::MotdService::new());
+    let traffic = TrafficReporter::new(api.clone(), &config.api);
+
+    Ok((NecronPrismHooks::new(api, motd, traffic.clone()), traffic))
+}
+
+async fn watch_reload_file(ctx: Context, log_handle: ReloadHandle) {
     let path = Path::new(".reload");
     let mut last = mtime(path);
 
@@ -69,11 +73,22 @@ async fn watch_reload_file(ctx: Context, log_handle: LogHandle) {
         if now > last {
             last = now;
             info!("detected .reload file touch, reloading...");
-            if let Err(e) = ctx.reload(&log_handle) {
+            if let Err(e) = reload_config(&ctx, &log_handle) {
                 warn!("reload failed: {e}");
             }
         }
     }
+}
+
+fn reload_config(ctx: &Context, log_handle: &ReloadHandle) -> Result<()> {
+    let new_config = ConfigLoader::load_default()?;
+    new_config.validate()?;
+
+    reload_log_filter(log_handle, new_config.logging.level.as_filter_directive())?;
+
+    ctx.update_config(new_config);
+
+    Ok(())
 }
 
 async fn shutdown_signal() {

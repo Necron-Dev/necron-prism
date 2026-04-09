@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "http-api")]
 use super::client::ApiClient;
-use crate::proxy::config::{ApiConfig, ApiMode};
+use prism::config::{ApiConfig, ApiMode};
 use crate::proxy::routing::{JoinDecision, JoinTarget};
 
 pub enum ApiService {

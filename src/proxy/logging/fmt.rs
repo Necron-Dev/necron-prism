@@ -7,10 +7,15 @@ use tracing_subscriber::fmt::FormattedFields;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent};
 use tracing_subscriber::registry::LookupSpan;
 
+use prism::config::LogRotation;
+
+#[allow(dead_code)]
 pub struct AnsiFormatter;
 
+#[allow(dead_code)]
 const PATH_COLUMN_WIDTH: usize = 28;
 
+#[allow(dead_code)]
 mod theme {
     use owo_colors::Style;
     pub const BLUE: Style = Style::new().truecolor(91, 206, 250);
@@ -18,6 +23,7 @@ mod theme {
     pub const WHITE: Style = Style::new().truecolor(255, 255, 255);
 }
 
+#[allow(dead_code)]
 impl AnsiFormatter {
     pub const fn new() -> Self {
         Self
@@ -190,6 +196,7 @@ impl AnsiFormatter {
 }
 
 #[derive(Default)]
+#[allow(dead_code)]
 struct EventVisitor {
     message: Option<String>,
     fields: Vec<(String, String)>,
@@ -246,6 +253,34 @@ impl tracing::field::Visit for EventVisitor {
             self.message = Some(trimmed.to_string());
         } else {
             self.fields.push((field.name().to_string(), val));
+        }
+    }
+}
+
+pub fn rotate_log_file(path: &std::path::Path, mode: LogRotation, _archive_pattern: &str) -> anyhow::Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    match mode {
+        LogRotation::None => Ok(()),
+        LogRotation::Rename => {
+            let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+            let renamed = path.with_extension(format!("{timestamp}.log"));
+            std::fs::rename(path, renamed)?;
+            Ok(())
+        }
+        LogRotation::Compress => {
+            let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+            let gz_path = path.with_extension(format!("{timestamp}.log.gz"));
+            let input = std::fs::read(path)?;
+            let output = std::fs::File::create(&gz_path)?;
+            let mut encoder = flate2::write::GzEncoder::new(output, flate2::Compression::default());
+            use std::io::Write;
+            encoder.write_all(&input)?;
+            encoder.finish()?;
+            std::fs::remove_file(path)?;
+            Ok(())
         }
     }
 }

@@ -40,17 +40,21 @@
       "$ref": "#/$defs/NetworkConfig",
       "default": {
         "relay": {
-          "io_uring": false,
           "mode": "async"
         },
         "socket": {
           "first_packet_timeout_ms": 5000,
+          "ip_tos": 16,
           "keepalive_secs": 30,
           "listen_addr": "0.0.0.0:25565",
-          "multipath_tcp": false,
-          "reuse_port": false,
+          "listen_backlog": 1024,
+          "multipath_tcp": true,
+          "reuse_address": true,
+          "reuse_port": true,
+          "tcp_fastopen": true,
           "tcp_keepalive": true,
-          "tcp_nodelay": true
+          "tcp_nodelay": true,
+          "tcp_quickack": true
         }
       }
     }
@@ -291,7 +295,6 @@
         "relay": {
           "$ref": "#/$defs/RelayConfig",
           "default": {
-            "io_uring": false,
             "mode": "async"
           }
         },
@@ -299,12 +302,17 @@
           "$ref": "#/$defs/NetworkSocketConfig",
           "default": {
             "first_packet_timeout_ms": 5000,
+            "ip_tos": 16,
             "keepalive_secs": 30,
             "listen_addr": "0.0.0.0:25565",
-            "multipath_tcp": false,
-            "reuse_port": false,
+            "listen_backlog": 1024,
+            "multipath_tcp": true,
+            "reuse_address": true,
+            "reuse_port": true,
+            "tcp_fastopen": true,
             "tcp_keepalive": true,
-            "tcp_nodelay": true
+            "tcp_nodelay": true,
+            "tcp_quickack": true
           }
         }
       }
@@ -312,10 +320,40 @@
     "NetworkSocketConfig": {
       "type": "object",
       "properties": {
+        "bind_interface": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "congestion_control": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "first_packet_timeout_ms": {
           "type": "integer",
           "format": "uint64",
           "default": 5000,
+          "minimum": 0
+        },
+        "fwmark": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "ip_tos": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "default": 16,
+          "maximum": 255,
           "minimum": 0
         },
         "keepalive_secs": {
@@ -332,9 +370,15 @@
           "default": "0.0.0.0:25565",
           "minLength": 1
         },
+        "listen_backlog": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 1024,
+          "minimum": 0
+        },
         "multipath_tcp": {
           "type": "boolean",
-          "default": false
+          "default": true
         },
         "recv_buffer_size": {
           "type": [
@@ -344,9 +388,13 @@
           "format": "uint",
           "minimum": 0
         },
+        "reuse_address": {
+          "type": "boolean",
+          "default": true
+        },
         "reuse_port": {
           "type": "boolean",
-          "default": false
+          "default": true
         },
         "send_buffer_size": {
           "type": [
@@ -356,11 +404,27 @@
           "format": "uint",
           "minimum": 0
         },
+        "tcp_fastopen": {
+          "type": "boolean",
+          "default": true
+        },
+        "tcp_fastopen_queue": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "tcp_keepalive": {
           "type": "boolean",
           "default": true
         },
         "tcp_nodelay": {
+          "type": "boolean",
+          "default": true
+        },
+        "tcp_quickack": {
           "type": "boolean",
           "default": true
         }
@@ -369,20 +433,17 @@
     "RelayConfig": {
       "type": "object",
       "properties": {
-        "io_uring": {
-          "type": "boolean",
-          "default": false
-        },
         "mode": {
-          "$ref": "#/$defs/RelayDataMode",
+          "$ref": "#/$defs/RelayMode",
           "default": "async"
         }
       }
     },
-    "RelayDataMode": {
+    "RelayMode": {
       "type": "string",
       "enum": [
         "async",
+        "io_uring",
         "splice"
       ]
     },

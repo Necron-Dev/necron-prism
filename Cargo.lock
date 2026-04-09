@@ -1137,17 +1137,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "io-uring"
-version = "0.7.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdd7bddefd0a8833b88a4b68f90dae22c7450d11b354198baee3874fd811b344"
-dependencies = [
- "bitflags 2.11.0",
- "cfg-if",
- "libc",
-]
-
-[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1352,38 +1341,21 @@ name = "necron-prism"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "arc-swap",
- "base64 0.22.1",
  "chrono",
- "criterion",
  "dashmap",
  "flate2",
  "http",
- "libc",
- "mime_guess",
  "necron-prism-minecraft",
- "nerd-font-symbols",
  "owo-colors",
- "parking_lot",
- "regex",
+ "prism",
  "reqwest",
- "rustix",
- "schemars",
  "serde",
  "serde_json",
- "socket2 0.6.3",
- "strum",
- "thiserror 2.0.18",
- "tinytemplate",
  "tokio",
- "tokio-uring",
  "tokio-util",
- "toml",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "valence_protocol",
- "validator",
 ]
 
 [[package]]
@@ -1577,6 +1549,36 @@ checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
 dependencies = [
  "proc-macro2",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "prism"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "base64 0.22.1",
+ "criterion",
+ "dashmap",
+ "libc",
+ "mime_guess",
+ "necron-prism-minecraft",
+ "nerd-font-symbols",
+ "parking_lot",
+ "rustix",
+ "schemars",
+ "serde",
+ "serde_json",
+ "socket2 0.6.3",
+ "strum",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-uring",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "valence_protocol",
+ "validator",
 ]
 
 [[package]]
@@ -2377,12 +2379,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27ad5e34374e03cfffefc301becb44e9dc3c17584f414349ebe29ed26661822d"
 dependencies = [
  "bytes",
- "io-uring 0.7.11",
  "libc",
  "mio",
  "pin-project-lite",
  "signal-hook-registry",
- "slab",
  "socket2 0.6.3",
  "tokio-macros",
  "windows-sys 0.61.2",
@@ -2416,7 +2416,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "748482e3e13584a34664a710168ad5068e8cb1d968aa4ffa887e83ca6dd27967"
 dependencies = [
  "futures-util",
- "io-uring 0.6.4",
+ "io-uring",
  "libc",
  "slab",
  "socket2 0.4.10",

@@ -15,6 +15,10 @@ use super::api::ApiService;
 use super::routing::JoinDecision;
 use super::traffic::TrafficReporter;
 
+fn offline_uuid(username: &str) -> uuid::Uuid {
+    uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, format!("OfflinePlayer:{username}").as_bytes())
+}
+
 pub struct NecronPrismHooks {
     api: Arc<ApiService>,
     motd: Arc<prism::motd::MotdService>,
@@ -86,11 +90,15 @@ impl PrismHooks for NecronPrismHooks {
             .map_err(anyhow::Error::from)
             .context("decode login hello")?;
 
-        session.record_player_name(&login_hello.username);
+        let player_uuid = login_hello
+            .profile_id
+            .unwrap_or_else(|| offline_uuid(&login_hello.username));
+
+        session.record_player_identity(&login_hello.username, &player_uuid.to_string());
 
         debug!(
             player_name = %login_hello.username,
-            player_uuid = ?login_hello.profile_id,
+            player_uuid = %player_uuid,
             login_start_bytes = login_start_packet.wire_len,
             "[CONNECT/LOGIN] parsed login hello"
         );
@@ -99,11 +107,7 @@ impl PrismHooks for NecronPrismHooks {
             .api
             .join(
                 Some(&login_hello.username),
-                login_hello
-                    .profile_id
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .as_deref(),
+                Some(&player_uuid.to_string()),
                 peer_addr.as_ref().map(ToString::to_string).as_deref(),
                 online_count,
             )
@@ -127,11 +131,12 @@ impl PrismHooks for NecronPrismHooks {
                     .map_err(anyhow::Error::msg)
                     .context("parse login rewrite address")?;
                 let external_connection_id = target.connection_id.map(|id| Arc::<str>::from(id));
-
                 Ok(LoginResult::Allow(ConnectionRoute {
                     target_addr,
                     rewrite_addr,
                     external_connection_id,
+                    player_name: Some(Arc::<str>::from(login_hello.username.clone())),
+                    player_uuid: Some(Arc::<str>::from(player_uuid.to_string())),
                 }))
             }
             Ok(JoinDecision::Deny { kick_reason }) => {
@@ -149,9 +154,17 @@ impl PrismHooks for NecronPrismHooks {
         &self,
         session: &ConnectionSession,
         external_connection_id: &str,
+        player_name: Option<&str>,
+        player_uuid: Option<&str>,
     ) {
-        self.traffic
-            .register(session.id, external_connection_id, session.clone(), None);
+        self.traffic.register(
+            session.id,
+            external_connection_id,
+            session.clone(),
+            player_name.map(|n| Arc::<str>::from(n.to_owned())),
+            player_uuid.map(|u| Arc::<str>::from(u.to_owned())),
+            None,
+        );
     }
 
     fn on_connection_finished(

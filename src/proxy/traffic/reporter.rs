@@ -4,7 +4,7 @@ use std::thread;
 
 use dashmap::DashMap;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{info, trace, warn};
 use tracing::Instrument;
 
 use crate::proxy::api::ApiService;
@@ -14,7 +14,7 @@ use prism::{ConnectionSession, ConnectionTraffic};
 #[derive(Clone)]
 pub struct TrafficReporter {
     api: Arc<ApiService>,
-    sessions: Arc<DashMap<u64, TrafficRecord>>,
+    sessions: Arc<DashMap<String, TrafficRecord>>,
     closers: Arc<DashMap<Arc<str>, std::net::TcpStream>>,
     cancel_token: CancellationToken,
 }
@@ -38,18 +38,17 @@ impl TrafficReporter {
 
     pub fn register(
         &self,
-        connection_id: u64,
-        external_connection_id: &str,
+        connection_id: &str,
         session: ConnectionSession,
         player_name: Option<Arc<str>>,
         player_uuid: Option<Arc<str>>,
         closer: Option<std::net::TcpStream>,
     ) {
-        let external_connection_id: Arc<str> = external_connection_id.to_owned().into();
+        let cid: Arc<str> = connection_id.to_owned().into();
         self.sessions.insert(
-            connection_id,
+            connection_id.to_string(),
             TrafficRecord {
-                external_connection_id: Arc::clone(&external_connection_id),
+                connection_id: Arc::clone(&cid),
                 session,
                 player_name,
                 player_uuid,
@@ -58,19 +57,19 @@ impl TrafficReporter {
         );
 
         if let Some(closer) = closer {
-            self.closers.insert(external_connection_id, closer);
+            self.closers.insert(cid, closer);
         }
     }
 
-    pub fn finish(&self, connection_id: u64, totals: ConnectionTraffic) {
+    pub fn finish(&self, connection_id: &str, totals: ConnectionTraffic) {
         let reporter = self.clone();
+        let cid = connection_id.to_string();
         spawn_background(async move {
-            if let Some((_, record)) = reporter.sessions.remove(&connection_id) {
-                reporter.closers.remove(record.external_connection_id.as_ref());
+            if let Some((_, record)) = reporter.sessions.remove(&cid) {
+                reporter.closers.remove(record.connection_id.as_ref());
 
                 info!(
-                    cid = %record.external_connection_id,
-                    connection_id,
+                    cid = %record.connection_id,
                     player_name = record.player_name.as_deref().unwrap_or("-"),
                     player_uuid = record.player_uuid.as_deref().unwrap_or("-"),
                     upload_bytes = totals.upload_bytes,
@@ -81,7 +80,7 @@ impl TrafficReporter {
                 if let Err(error) = reporter
                     .api
                     .closed(
-                        &record.external_connection_id,
+                        &record.connection_id,
                         totals.upload_bytes,
                         totals.download_bytes,
                     )
@@ -89,8 +88,7 @@ impl TrafficReporter {
                 {
                     warn!(
                         error = %error,
-                        cid = %record.external_connection_id,
-                        connection_id,
+                        cid = %record.connection_id,
                         "failed to report closed api event"
                     );
                 }
@@ -140,7 +138,7 @@ impl TrafficReporter {
                                 download_bytes: download,
                             };
                             snapshot.push(PlayerTraffic {
-                                cid: entry.external_connection_id.clone(),
+                                cid: entry.connection_id.clone(),
                                 player_name: entry.player_name.clone(),
                                 player_uuid: entry.player_uuid.clone(),
                                 upload_bytes: upload,
@@ -186,7 +184,7 @@ impl TrafficReporter {
                         }
                     }
                     _ = cancel_token.cancelled() => {
-                        debug!("traffic reporter loop received shutdown signal, exiting");
+                        trace!("traffic reporter loop received shutdown signal, exiting");
                         break;
                     }
                 }
@@ -237,7 +235,7 @@ fn close_connections(
 }
 
 struct TrafficRecord {
-    external_connection_id: Arc<str>,
+    connection_id: Arc<str>,
     session: ConnectionSession,
     player_name: Option<Arc<str>>,
     player_uuid: Option<Arc<str>>,

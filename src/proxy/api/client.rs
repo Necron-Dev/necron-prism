@@ -1,13 +1,17 @@
 #![cfg(feature = "http-api")]
 
 use reqwest::{StatusCode, Url};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use anyhow::{anyhow, Result};
 
 use prism::config::ApiConfig;
 use crate::proxy::routing::{JoinDecision, JoinTarget};
 
-use super::types::TrafficBody;
+#[derive(Clone, Debug, Serialize)]
+struct TrafficBody {
+    send_bytes: u64,
+    recv_bytes: u64,
+}
 
 pub struct ApiClient {
     inner: reqwest::Client,

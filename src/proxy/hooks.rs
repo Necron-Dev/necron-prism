@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use tracing::{debug, info};
+use tracing::{info, trace};
 
 use necron_prism_minecraft::{
     decode_login_hello, FramedPacket, HandshakeInfo, PacketIo, RuntimeAddress,
@@ -39,16 +39,17 @@ impl PrismHooks for NecronPrismHooks {
     async fn on_legacy_ping(
         &self,
         client: &mut tokio::net::TcpStream,
-        session: &ConnectionSession,
+        _session: &ConnectionSession,
         config: &Config,
         online_count: i32,
     ) -> Result<()> {
+        // MOTD 请求不需要 connection_id
         prism::motd::serve_legacy_ping(
             client,
             &config.motd,
             &config.network.relay,
             &self.motd,
-            session.id,
+            0, // legacy ping 不需要 connection_id
             online_count,
         )
         .await
@@ -96,7 +97,7 @@ impl PrismHooks for NecronPrismHooks {
 
         session.record_player_identity(&login_hello.username, &player_uuid.to_string());
 
-        debug!(
+        trace!(
             player_name = %login_hello.username,
             player_uuid = %player_uuid,
             login_start_bytes = login_start_packet.wire_len,
@@ -130,11 +131,11 @@ impl PrismHooks for NecronPrismHooks {
                     .transpose()
                     .map_err(anyhow::Error::msg)
                     .context("parse login rewrite address")?;
-                let external_connection_id = target.connection_id.map(|id| Arc::<str>::from(id));
+                let connection_id = target.connection_id.map(Arc::<str>::from);
                 Ok(LoginResult::Allow(ConnectionRoute {
                     target_addr,
                     rewrite_addr,
-                    external_connection_id,
+                    connection_id,
                     player_name: Some(Arc::<str>::from(login_hello.username.clone())),
                     player_uuid: Some(Arc::<str>::from(player_uuid.to_string())),
                 }))
@@ -153,13 +154,12 @@ impl PrismHooks for NecronPrismHooks {
     fn on_connection_established(
         &self,
         session: &ConnectionSession,
-        external_connection_id: &str,
+        connection_id: &str,
         player_name: Option<&str>,
         player_uuid: Option<&str>,
     ) {
         self.traffic.register(
-            session.id,
-            external_connection_id,
+            connection_id,
             session.clone(),
             player_name.map(|n| Arc::<str>::from(n.to_owned())),
             player_uuid.map(|u| Arc::<str>::from(u.to_owned())),
@@ -172,6 +172,8 @@ impl PrismHooks for NecronPrismHooks {
         session: &ConnectionSession,
         report: &ConnectionReport,
     ) {
-        self.traffic.finish(session.id, report.connection_traffic);
+        if let Some(cid) = &session.id {
+            self.traffic.finish(cid, report.connection_traffic);
+        }
     }
 }

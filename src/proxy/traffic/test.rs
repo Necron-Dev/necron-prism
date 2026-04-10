@@ -45,10 +45,10 @@ fn connected_stream() -> TcpStream {
 #[test]
 fn mock_mode_keeps_active_traffic_totals() {
     let reporter = mock_reporter();
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     let closer = connected_stream();
 
-    reporter.register(1, "mock-1", session.clone(), None, None, Some(closer));
+    reporter.register("mock-1", session.clone(), None, None, Some(closer));
     session.add_upload(128);
     session.add_download(256);
 
@@ -71,11 +71,11 @@ fn active_totals_empty_when_no_sessions() {
 #[test]
 fn active_totals_sums_multiple_sessions() {
     let reporter = mock_reporter();
-    let s1 = ConnectionSession::new(1, None);
-    let s2 = ConnectionSession::new(2, None);
+    let s1 = ConnectionSession::new(None);
+    let s2 = ConnectionSession::new(None);
 
-    reporter.register(1, "mock-1", s1.clone(), None, None, None);
-    reporter.register(2, "mock-2", s2.clone(), None, None, None);
+    reporter.register("mock-1", s1.clone(), None, None, None);
+    reporter.register("mock-2", s2.clone(), None, None, None);
 
     s1.add_upload(100);
     s1.add_download(200);
@@ -93,9 +93,9 @@ fn active_totals_sums_multiple_sessions() {
 #[test]
 fn finish_removes_session_from_active_totals() {
     let reporter = mock_reporter();
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
 
-    reporter.register(1, "mock-1", session.clone(), None, None, None);
+    reporter.register("mock-1", session.clone(), None, None, None);
     session.add_upload(500);
     session.add_download(600);
 
@@ -103,10 +103,13 @@ fn finish_removes_session_from_active_totals() {
     assert_eq!(before.upload_bytes, 500);
     assert_eq!(before.download_bytes, 600);
 
-    reporter.finish(1, ConnectionTraffic {
-        upload_bytes: 500,
-        download_bytes: 600,
-    });
+    reporter.finish(
+        "mock-1",
+        ConnectionTraffic {
+            upload_bytes: 500,
+            download_bytes: 600,
+        },
+    );
 
     thread::sleep(std::time::Duration::from_millis(50));
 
@@ -120,18 +123,21 @@ fn finish_removes_session_from_active_totals() {
 #[test]
 fn finish_for_unknown_id_is_noop() {
     let reporter = mock_reporter();
-    reporter.finish(999, ConnectionTraffic {
-        upload_bytes: 0,
-        download_bytes: 0,
-    });
+    reporter.finish(
+        "unknown-id",
+        ConnectionTraffic {
+            upload_bytes: 0,
+            download_bytes: 0,
+        },
+    );
     reporter.shutdown();
 }
 
 #[test]
 fn register_without_closer_works() {
     let reporter = mock_reporter();
-    let session = ConnectionSession::new(1, None);
-    reporter.register(1, "mock-1", session.clone(), None, None, None);
+    let session = ConnectionSession::new(None);
+    reporter.register("mock-1", session.clone(), None, None, None);
     session.add_upload(42);
     let totals = reporter.active_totals();
     assert_eq!(totals.upload_bytes, 42);
@@ -141,8 +147,8 @@ fn register_without_closer_works() {
 #[test]
 fn shared_session_updates_reflected_in_reporter() {
     let reporter = mock_reporter();
-    let session = ConnectionSession::new(1, None);
-    reporter.register(1, "mock-1", session.clone(), None, None, None);
+    let session = ConnectionSession::new(None);
+    reporter.register("mock-1", session.clone(), None, None, None);
 
     session.add_upload(100);
     assert_eq!(reporter.active_totals().upload_bytes, 100);
@@ -156,9 +162,8 @@ fn shared_session_updates_reflected_in_reporter() {
 #[test]
 fn register_with_player_info() {
     let reporter = mock_reporter();
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     reporter.register(
-        1,
         "mock-1",
         session.clone(),
         Some(Arc::<str>::from("TestPlayer")),

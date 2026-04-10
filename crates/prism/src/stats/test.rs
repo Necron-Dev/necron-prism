@@ -1,26 +1,6 @@
 use super::*;
 
 #[test]
-fn stats_connection_opened_increments() {
-    let stats = ConnectionStats::default();
-    assert_eq!(stats.total_connections(), 0);
-    let n = stats.connection_opened();
-    assert_eq!(n, 1);
-    assert_eq!(stats.total_connections(), 1);
-    let n = stats.connection_opened();
-    assert_eq!(n, 2);
-    assert_eq!(stats.total_connections(), 2);
-}
-
-#[test]
-fn stats_clone_shares_counter() {
-    let stats = ConnectionStats::default();
-    let clone = stats.clone();
-    stats.connection_opened();
-    assert_eq!(clone.total_connections(), 1);
-}
-
-#[test]
 fn totals_starts_at_zero() {
     let totals = ConnectionTotals::default();
     let traffic = totals.settled_totals();

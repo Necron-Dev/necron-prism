@@ -4,21 +4,6 @@ use std::sync::Arc;
 use crate::session::ConnectionTraffic;
 
 #[derive(Clone, Default)]
-pub struct ConnectionStats {
-    total_connections: Arc<AtomicU64>,
-}
-
-impl ConnectionStats {
-    pub fn connection_opened(&self) -> u64 {
-        self.total_connections.fetch_add(1, Ordering::Relaxed) + 1
-    }
-
-    pub fn total_connections(&self) -> u64 {
-        self.total_connections.load(Ordering::Relaxed)
-    }
-}
-
-#[derive(Clone, Default)]
 pub struct ConnectionTotals {
     settled_upload_bytes: Arc<AtomicU64>,
     settled_download_bytes: Arc<AtomicU64>,

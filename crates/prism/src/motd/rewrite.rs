@@ -32,13 +32,11 @@ pub fn rewrite_json(
             }
         }
         MotdFaviconMode::Passthrough => {
-            if let Some(upstream) = upstream_json {
-                if let Ok(upstream_value) = serde_json::from_str::<serde_json::Value>(upstream) {
-                    if let Some(favicon) = upstream_value.get("favicon") {
+            if let Some(upstream) = upstream_json
+                && let Ok(upstream_value) = serde_json::from_str::<serde_json::Value>(upstream)
+                    && let Some(favicon) = upstream_value.get("favicon") {
                         value["favicon"] = favicon.clone();
                     }
-                }
-            }
         }
         MotdFaviconMode::Remove => {
             if let Some(obj) = value.as_object_mut() {

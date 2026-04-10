@@ -176,6 +176,8 @@ mod imp {
         pipes: SplicePipes,
         session: ConnectionSession,
     ) -> io::Result<RelayStats> {
+        tracing::trace!("[CONNECT/RELAY] starting linux-splice relay");
+
         let client_read = client.try_clone()?;
         let client_write = client;
         let upstream_read = upstream.try_clone()?;
@@ -193,6 +195,7 @@ mod imp {
                 true,
             )?;
             shutdown_write(&upstream_write);
+            tracing::trace!(direction = "upload", bytes = copied, "[CONNECT/RELAY] direction finished");
             Ok(copied)
         })?;
 
@@ -205,6 +208,7 @@ mod imp {
             false,
         )?;
         shutdown_write(&client_write);
+        tracing::trace!(direction = "download", bytes = download_bytes, "[CONNECT/RELAY] direction finished");
 
         let upload_bytes = upload
             .join()
@@ -334,29 +338,39 @@ mod imp {
         session: ConnectionSession,
         upload_direction: bool,
     ) -> io::Result<u64> {
+        let direction = if upload_direction { "upload" } else { "download" };
         let mut total = 0_u64;
         let mut buf = vec![0_u8; IO_URING_RELAY_BUFFER_SIZE];
 
         loop {
             let (read_result, next_buf) = reader.read(buf).await;
             buf = next_buf;
-            let read = read_result?;
-            if read == 0 {
-                writer.shutdown(std::net::Shutdown::Write)?;
-                return Ok(total);
-            }
+            match read_result {
+                Ok(0) => {
+                    let _ = writer.shutdown(std::net::Shutdown::Write);
+                    tracing::trace!(direction, bytes = total, "[CONNECT/RELAY] direction finished (EOF)");
+                    return Ok(total);
+                }
+                Ok(read) => {
+                    let (write_result, next_buf) = writer.write_all(buf.slice(..read)).await;
+                    if let Err(error) = write_result {
+                        tracing::trace!(direction, bytes = total, error = %error, "[CONNECT/RELAY] direction write failed");
+                        return Err(error);
+                    }
+                    buf = next_buf.into_inner();
 
-
-            let (write_result, next_buf) = writer.write_all(buf.slice(..read)).await;
-            write_result?;
-            buf = next_buf.into_inner();
-
-            let bytes = read as u64;
-            total += bytes;
-            if upload_direction {
-                session.add_upload(bytes);
-            } else {
-                session.add_download(bytes);
+                    let bytes = read as u64;
+                    total += bytes;
+                    if upload_direction {
+                        session.add_upload(bytes);
+                    } else {
+                        session.add_download(bytes);
+                    }
+                }
+                Err(error) => {
+                    tracing::trace!(direction, bytes = total, error = %error, "[CONNECT/RELAY] direction read failed");
+                    return Err(error);
+                }
             }
         }
     }
@@ -366,6 +380,8 @@ mod imp {
         upstream: TcpStream,
         session: ConnectionSession,
     ) -> io::Result<RelayStats> {
+        tracing::trace!("[CONNECT/RELAY] starting io-uring relay");
+
         let client = tokio_uring::net::TcpStream::from_std(client);
         let upstream = tokio_uring::net::TcpStream::from_std(upstream);
         let client = Arc::new(client);

@@ -1,18 +1,13 @@
 use super::*;
 use crate::config::{
-    MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdProtocol, RelayConfig,
-    RelayMode, StatusPingMode,
+    MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdProtocol, RelayConfig, RelayMode,
+    StatusPingMode,
 };
-use crate::players::PlayerRegistry;
 use serde_json::Value;
 
 #[test]
 fn render_replaces_all_supported_placeholders() {
-    let players = PlayerRegistry::default();
-    players.register_connection(1);
-    players.register_connection(2);
-    players.update_outbound(1, "alpha:25565".into());
-
+    // Template tests don't need ConnectionRegistry anymore
     let config = MotdConfig {
         mode: MotdMode::Local,
         local_json: "{online_player}|{motd_target_addr}|{ping_target_addr}|{favicon_target_addr}|{relay_mode}|{ping_mode}|{favicon_mode}|{upstream_addr}".to_owned(),

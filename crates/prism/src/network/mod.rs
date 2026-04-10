@@ -22,7 +22,7 @@ fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> 
     if multipath_tcp {
         match Socket::new(domain, Type::STREAM, Some(Protocol::MPTCP)) {
             Ok(socket) => {
-                tracing::debug!("multipath tcp enabled");
+                tracing::trace!("multipath tcp enabled");
                 return Ok(socket);
             }
             Err(error)
@@ -43,7 +43,7 @@ fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> 
 #[cfg(not(all(target_os = "linux", feature = "linux-accel")))]
 fn create_tcp_socket(domain: Domain, multipath_tcp: bool) -> io::Result<Socket> {
     if multipath_tcp {
-        tracing::debug!("multipath tcp requested but only linux kernels support it; falling back to tcp");
+        tracing::trace!("multipath tcp requested but only linux kernels support it; falling back to tcp");
     }
 
     Socket::new(domain, Type::STREAM, Some(Protocol::TCP))
@@ -72,7 +72,7 @@ pub fn create_listener(address: SocketAddr, config: &Config) -> io::Result<TcpLi
     apply_socket_options_pre_bind(&socket, config)?;
 
     socket.bind(&address.into())?;
-    tracing::debug!(listen_addr = %address, multipath_tcp = config.network.socket.multipath_tcp, "bound listener to socket address");
+    tracing::info!(listen_addr = %address, multipath_tcp = config.network.socket.multipath_tcp, "bound listener to socket address");
     socket.listen(config.network.socket.listen_backlog as i32)?;
 
     apply_socket_options_post_listen(&socket, config)?;
@@ -115,13 +115,12 @@ pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result
     socket.set_tcp_nodelay(config.network.socket.tcp_nodelay)?;
     socket.set_keepalive(config.network.socket.tcp_keepalive)?;
 
-    if config.network.socket.tcp_keepalive {
-        if let Some(keepalive_secs) = config.network.socket.keepalive_secs.filter(|secs| *secs > 0) {
+    if config.network.socket.tcp_keepalive
+        && let Some(keepalive_secs) = config.network.socket.keepalive_secs.filter(|secs| *secs > 0) {
             socket.set_tcp_keepalive(
                 &TcpKeepalive::new().with_time(Duration::from_secs(keepalive_secs)),
             )?;
         }
-    }
 
     #[cfg(all(target_os = "linux", feature = "linux-accel"))]
     {
@@ -158,7 +157,7 @@ fn apply_socket_options_pre_bind(socket: &Socket, config: &Config) -> io::Result
         if ret < 0 {
             return Err(io::Error::last_os_error());
         }
-        tracing::info!(interface = %iface, "bound socket to network interface");
+        tracing::debug!(interface = %iface, "bound socket to network interface");
     }
 
     if let Some(fwmark) = config.network.socket.fwmark {
@@ -167,7 +166,7 @@ fn apply_socket_options_pre_bind(socket: &Socket, config: &Config) -> io::Result
         if ret < 0 {
             return Err(io::Error::last_os_error());
         }
-        tracing::info!(fwmark, "set socket fwmark for policy routing");
+        tracing::debug!(fwmark, "set socket fwmark for policy routing");
     }
 
     Ok(())
@@ -187,7 +186,7 @@ fn apply_socket_options_post_listen(socket: &Socket, config: &Config) -> io::Res
         if ret < 0 {
             tracing::warn!(error = %io::Error::last_os_error(), queue, "failed to set TCP_FASTOPEN, continuing without TFO");
         } else {
-            tracing::info!(queue, "TCP Fast Open enabled on listener");
+            tracing::debug!(queue, "TCP Fast Open enabled on listener");
         }
     }
 
@@ -200,7 +199,7 @@ fn apply_socket_options_post_listen(socket: &Socket, config: &Config) -> io::Res
         if ret < 0 {
             tracing::warn!(error = %io::Error::last_os_error(), algorithm = %algo, "failed to set TCP_CONGESTION");
         } else {
-            tracing::info!(algorithm = %algo, "set congestion control algorithm");
+            tracing::debug!(algorithm = %algo, "set congestion control algorithm");
         }
     }
 
@@ -223,7 +222,7 @@ fn apply_socket_options_pre_connect(socket: &Socket, config: &Config) -> io::Res
         if ret < 0 {
             return Err(io::Error::last_os_error());
         }
-        tracing::debug!(interface = %iface, "bound outbound socket to network interface");
+        tracing::trace!(interface = %iface, "bound outbound socket to network interface");
     }
 
     if let Some(fwmark) = config.network.socket.fwmark {
@@ -232,7 +231,7 @@ fn apply_socket_options_pre_connect(socket: &Socket, config: &Config) -> io::Res
         if ret < 0 {
             return Err(io::Error::last_os_error());
         }
-        tracing::debug!(fwmark, "set outbound socket fwmark");
+        tracing::trace!(fwmark, "set outbound socket fwmark");
     }
 
     if let Some(ref algo) = config.network.socket.congestion_control {
@@ -244,7 +243,7 @@ fn apply_socket_options_pre_connect(socket: &Socket, config: &Config) -> io::Res
         if ret < 0 {
             tracing::warn!(error = %io::Error::last_os_error(), algorithm = %algo, "failed to set outbound TCP_CONGESTION");
         } else {
-            tracing::debug!(algorithm = %algo, "set outbound congestion control algorithm");
+            tracing::trace!(algorithm = %algo, "set outbound congestion control algorithm");
         }
     }
 
@@ -255,7 +254,7 @@ fn apply_socket_options_pre_connect(socket: &Socket, config: &Config) -> io::Res
         if ret < 0 {
             tracing::warn!(error = %io::Error::last_os_error(), "failed to set TCP_FASTOPEN_CONNECT on outbound socket");
         } else {
-            tracing::debug!("TCP Fast Open Connect enabled on outbound socket");
+            tracing::trace!("TCP Fast Open Connect enabled on outbound socket");
         }
     }
 

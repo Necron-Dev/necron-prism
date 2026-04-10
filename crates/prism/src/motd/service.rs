@@ -9,7 +9,7 @@ use crate::session::ConnectionSession;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
-use tracing::info;
+use tracing::debug;
 
 use super::context::StatusContext;
 use super::rewrite::rewrite_json;
@@ -74,7 +74,7 @@ impl MotdService {
             }
         };
 
-        info!(
+        debug!(
             motd_mode = ?motd_config.mode,
             ping_mode = ?motd_config.ping_mode,
             status_request_bytes = status_request.wire_len,

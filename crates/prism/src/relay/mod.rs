@@ -60,7 +60,7 @@ pub async fn relay_bidirectional(
     let _ = apply_sockref_options(SockRef::from(&client), config);
     let _ = apply_sockref_options(SockRef::from(&upstream), config);
 
-    tracing::debug!(relay_mode = config.network.relay.label(), "[CONNECT/RELAY] starting bidirectional relay");
+    tracing::trace!(relay_mode = config.network.relay.label(), "[CONNECT/RELAY] starting bidirectional relay");
 
     #[cfg(all(target_os = "linux", feature = "linux-accel"))]
     {
@@ -167,12 +167,12 @@ where
         match reader.read(&mut buf).await {
             Ok(0) => {
                 let _ = writer.shutdown().await;
-                tracing::debug!(direction, bytes = total, "[CONNECT/RELAY] direction finished (EOF)");
+                tracing::trace!(direction, bytes = total, "[CONNECT/RELAY] direction finished (EOF)");
                 return Ok(total);
             }
             Ok(read) => {
                 if let Err(error) = writer.write_all(&buf[..read]).await {
-                    tracing::debug!(direction, bytes = total, error = %error, "[CONNECT/RELAY] direction write failed");
+                    tracing::trace!(direction, bytes = total, error = %error, "[CONNECT/RELAY] direction write failed");
                     return Err(error);
                 }
                 let bytes = read as u64;
@@ -184,7 +184,7 @@ where
                 }
             }
             Err(error) => {
-                tracing::debug!(direction, bytes = total, error = %error, "[CONNECT/RELAY] direction read failed");
+                tracing::trace!(direction, bytes = total, error = %error, "[CONNECT/RELAY] direction read failed");
                 return Err(error);
             }
         }
@@ -216,7 +216,7 @@ fn relay_with_copy(
     upstream: TcpStream,
     session: ConnectionSession,
 ) -> io::Result<RelayStats> {
-    tracing::debug!("[CONNECT/RELAY] falling back to standard-copy relay");
+    tracing::trace!("[CONNECT/RELAY] falling back to standard-copy relay");
 
     let mut client_read = client.try_clone()?;
     let mut client_write = client;
@@ -232,7 +232,7 @@ fn relay_with_copy(
             let copied = io::copy(&mut client_read, &mut upstream_write)?;
             upload_session.add_upload(copied);
             let _ = upstream_write.shutdown(Shutdown::Write);
-            tracing::debug!(direction = "upload", bytes = copied, "[CONNECT/RELAY] direction finished");
+            tracing::trace!(direction = "upload", bytes = copied, "[CONNECT/RELAY] direction finished");
             Ok::<u64, io::Error>(copied)
         })
         .map_err(|error| io::Error::other(format!("spawn relay-upload thread: {error}")))?;
@@ -240,7 +240,7 @@ fn relay_with_copy(
     let download_bytes = io::copy(&mut upstream_read, &mut client_write)?;
     download_session.add_download(download_bytes);
     let _ = client_write.shutdown(Shutdown::Write);
-    tracing::debug!(direction = "download", bytes = download_bytes, "[CONNECT/RELAY] direction finished");
+    tracing::trace!(direction = "download", bytes = download_bytes, "[CONNECT/RELAY] direction finished");
 
     let upload_bytes = upload
         .join()

@@ -11,7 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 use tracing::{info, warn};
 
-use prism::{PrismContext, Config, ConfigLoader};
+use prism::{PrismContext, Config};
+use crate::config::{ConfigLoader, canonicalize_runtime_config};
 use logging::{init_tracing, reload_log_filter, rotate_log_file, ReloadHandle};
 
 use self::hooks::NecronPrismHooks;
@@ -21,11 +22,13 @@ type Context = PrismContext<NecronPrismHooks>;
 
 #[tokio::main]
 pub async fn run() -> Result<()> {
-    let config = ConfigLoader::load_default()?;
+    let mut config = ConfigLoader::load_default()?;
     let log_config = config.logging.clone();
-    let (guards, log_handle) = init_tracing(&log_config)?;
+    let (guards, resolved_log_path, log_handle) = init_tracing(&log_config)?;
 
     info!(version = env!("CARGO_PKG_VERSION"), "starting necron-prism proxy");
+
+    canonicalize_runtime_config(&mut config);
 
     let (hooks, traffic) = build_hooks(&config)?;
     let ctx = Context::new(config, hooks);
@@ -42,8 +45,9 @@ pub async fn run() -> Result<()> {
     drop(guards);
     drop(_traffic_guard);
 
-    if let Some(file_config) = &log_config.file {
-        if let Err(e) = rotate_log_file(&file_config.path, file_config.mode, &file_config.archive_pattern) {
+    if let Some(resolved_path) = resolved_log_path {
+        let file_config = log_config.file.as_ref().unwrap();
+        if let Err(e) = rotate_log_file(&resolved_path, file_config.mode, &file_config.archive_pattern) {
             eprintln!("failed to rotate log file on shutdown: {e}");
         }
     }
@@ -81,8 +85,9 @@ async fn watch_reload_file(ctx: Context, log_handle: ReloadHandle) {
 }
 
 fn reload_config(ctx: &Context, log_handle: &ReloadHandle) -> Result<()> {
-    let new_config = ConfigLoader::load_default()?;
-    new_config.validate()?;
+    let mut new_config = ConfigLoader::load_default()?;
+
+    canonicalize_runtime_config(&mut new_config);
 
     reload_log_filter(log_handle, new_config.logging.level.as_filter_directive())?;
 

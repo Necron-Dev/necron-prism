@@ -17,7 +17,7 @@ pub type ReloadHandle = tracing_subscriber::reload::Handle<EnvFilter, InnerSubsc
 
 pub fn init_tracing(
     config: &LoggingConfig,
-) -> anyhow::Result<(Option<LogHandle>, ReloadHandle)> {
+) -> anyhow::Result<(Option<LogHandle>, Option<std::path::PathBuf>, ReloadHandle)> {
     let filter = EnvFilter::new(config.level.as_filter_directive());
 
     let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(filter);
@@ -60,6 +60,8 @@ pub fn init_tracing(
             std::fs::create_dir_all(parent)?;
         }
 
+        let path = resolve_log_path(path);
+
         let file_appender = tracing_appender::rolling::never(
             path.parent().unwrap_or(std::path::Path::new(".")),
             path.file_name().unwrap_or_default(),
@@ -81,17 +83,52 @@ pub fn init_tracing(
         let subscriber = subscriber.with(file_layer);
         tracing::subscriber::set_global_default(subscriber)?;
 
-        Some(guard)
+        Some((guard, Some(path)))
     } else {
         tracing::subscriber::set_global_default(subscriber)?;
         None
     };
 
-    Ok((guard, reload_handle))
+    let (guard, resolved_path) = match guard {
+        Some((g, p)) => (Some(g), p),
+        None => (None, None),
+    };
+
+    Ok((guard, resolved_path, reload_handle))
 }
 
 pub fn reload_log_filter(handle: &ReloadHandle, directive: &str) -> anyhow::Result<()> {
     let filter = EnvFilter::new(directive);
     handle.modify(|f| *f = filter)?;
     Ok(())
+}
+
+fn resolve_log_path(path: &std::path::Path) -> std::path::PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+
+    match std::fs::OpenOptions::new()
+        
+        .append(true)
+        .open(path)
+    {
+        Ok(file) => {
+            drop(file);
+            path.to_path_buf()
+        }
+        Err(_) => {
+            let pid = std::process::id();
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("latest");
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("log");
+            let new_name = format!("{stem}-{pid}.{ext}");
+            path.with_file_name(new_name)
+        }
+    }
 }

@@ -5,7 +5,7 @@ use anyhow::Result;
 use socket2::SockRef;
 use tokio::net::TcpStream;
 use tokio::net::lookup_host;
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 use necron_prism_minecraft::RuntimeAddress;
 
@@ -20,7 +20,7 @@ pub async fn connect_addr(
 ) -> Result<TcpStream> {
     let _guard = session.enter_stage("CONNECT/OUTBOUND");
     let started = Instant::now();
-    debug!(target_addr = %target_addr, "[CONNECT/OUTBOUND] starting upstream connection");
+    trace!(target_addr = %target_addr, "[CONNECT/OUTBOUND] starting upstream connection");
 
     let mut last_error = None;
     let mut resolved_any = false;
@@ -42,7 +42,7 @@ pub async fn connect_addr(
                 return Ok(stream);
             }
             Err(error) => {
-                debug!(
+                trace!(
                     target_addr = %target_addr,
                     resolved_addr = %address,
                     error = %error,
@@ -55,7 +55,7 @@ pub async fn connect_addr(
 
     if !resolved_any {
         let error = io::Error::new(io::ErrorKind::AddrNotAvailable, "no socket address resolved");
-        debug!(target_addr = %target_addr, error = %error, "[CONNECT/OUTBOUND] no upstream socket address resolved");
+        trace!(target_addr = %target_addr, error = %error, "[CONNECT/OUTBOUND] no upstream socket address resolved");
         return Err(error.into());
     }
 
@@ -64,7 +64,7 @@ pub async fn connect_addr(
     });
     let connect_ms = started.elapsed().as_millis();
 
-    debug!(
+    warn!(
         target_addr = %target_addr,
         connect_ms,
         error = %error,

@@ -1,27 +1,14 @@
-#[cfg(feature = "schema")]
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use strum::Display;
-use validator::Validate;
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
-#[validate(schema(function = "Self::validate_schema"))]
+#[derive(Clone, Debug)]
 pub struct Config {
-    #[validate(nested)]
     pub network: NetworkConfig,
-    #[validate(nested)]
     pub motd: MotdConfig,
-    #[validate(nested)]
     pub api: ApiConfig,
-    #[validate(nested)]
     pub logging: LoggingConfig,
-
-    #[serde(skip)]
     pub source_path: PathBuf,
-    #[serde(skip)]
     pub requested_relay: RelayConfig,
 }
 
@@ -38,55 +25,33 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
+#[derive(Default)]
 pub struct NetworkConfig {
-    #[validate(nested)]
     pub socket: NetworkSocketConfig,
-    #[validate(nested)]
     pub relay: RelayConfig,
 }
 
-impl Default for NetworkConfig {
-    fn default() -> Self {
-        Self {
-            socket: NetworkSocketConfig::default(),
-            relay: RelayConfig::default(),
-        }
-    }
-}
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct NetworkSocketConfig {
-    #[validate(length(min = 1, message = "listen_addr cannot be empty"))]
     pub listen_addr: String,
     pub multipath_tcp: bool,
     pub first_packet_timeout_ms: u64,
     pub tcp_nodelay: bool,
     pub tcp_keepalive: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub keepalive_secs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub recv_buffer_size: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub send_buffer_size: Option<usize>,
     pub reuse_address: bool,
     pub reuse_port: bool,
     pub listen_backlog: u32,
     pub tcp_fastopen: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub tcp_fastopen_queue: Option<u32>,
     pub tcp_quickack: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_tos: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub congestion_control: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub bind_interface: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub fwmark: Option<u32>,
 }
 
@@ -115,21 +80,15 @@ impl Default for NetworkSocketConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct MotdConfig {
     pub mode: MotdMode,
-    #[validate(length(min = 1, message = "local_json cannot be empty"))]
     pub local_json: String,
-    #[validate(length(min = 1, message = "upstream_addr cannot be empty"))]
     pub upstream_addr: String,
     pub protocol: MotdProtocol,
     pub ping_mode: StatusPingMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub ping_target_addr: Option<String>,
     pub upstream_ping_timeout_ms: u64,
-    #[validate(nested)]
     pub favicon: MotdFaviconConfig,
 }
 
@@ -148,23 +107,16 @@ impl Default for MotdConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct ApiConfig {
     pub mode: ApiMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub bearer_token: Option<String>,
     pub timeout_ms: u64,
     pub traffic_interval_ms: u64,
-    #[validate(length(min = 1, message = "mock_target_addr cannot be empty"))]
     pub mock_target_addr: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub mock_rewrite_addr: Option<String>,
     pub mock_connection_id_prefix: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub mock_kick_reason: Option<String>,
 }
 
@@ -184,31 +136,23 @@ impl Default for ApiConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct LoggingConfig {
     pub level: LogLevel,
     pub format: LogFormat,
     pub async_enabled: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub stats_log_interval_secs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[validate(nested)]
     pub file: Option<LogFileConfig>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct LogFileConfig {
     pub path: PathBuf,
     pub mode: LogRotation,
     pub archive_pattern: String,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogRotation {
     #[default]
@@ -239,14 +183,10 @@ impl Default for LogFileConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct MotdFaviconConfig {
     pub mode: MotdFaviconMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<PathBuf>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_addr: Option<String>,
 }
 
@@ -260,8 +200,7 @@ impl Default for MotdFaviconConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Trace,
@@ -284,8 +223,7 @@ impl LogLevel {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogFormat {
     #[default]
@@ -294,8 +232,7 @@ pub enum LogFormat {
     Json,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApiMode {
     Http,
@@ -303,8 +240,7 @@ pub enum ApiMode {
     Mock,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum RelayMode {
@@ -314,9 +250,7 @@ pub enum RelayMode {
     Splice,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Validate)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct RelayConfig {
     pub mode: RelayMode,
 }
@@ -347,8 +281,7 @@ impl RelayConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MotdMode {
@@ -357,8 +290,7 @@ pub enum MotdMode {
     Upstream,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MotdProtocol {
@@ -368,8 +300,7 @@ pub enum MotdProtocol {
     NegativeOne,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum StatusPingMode {
@@ -381,8 +312,7 @@ pub enum StatusPingMode {
     Disconnect,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default, Display)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MotdFaviconMode {
@@ -391,20 +321,4 @@ pub enum MotdFaviconMode {
     Path,
     Passthrough,
     Remove,
-}
-
-impl Config {
-    pub fn validate(&self) -> anyhow::Result<()> {
-        Validate::validate(self).map_err(|e| anyhow::anyhow!(e))
-    }
-
-    fn validate_schema(&self) -> Result<(), validator::ValidationError> {
-        if self.api.mode == ApiMode::Http && self.api.base_url.is_none() {
-            return Err(validator::ValidationError::new("api_base_url_required"));
-        }
-        if self.motd.favicon.mode == MotdFaviconMode::Path && self.motd.favicon.path.is_none() {
-            return Err(validator::ValidationError::new("favicon_path_required"));
-        }
-        Ok(())
-    }
 }

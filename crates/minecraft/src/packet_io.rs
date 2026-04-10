@@ -15,6 +15,12 @@ pub struct FramedPacket {
     pub frame: PacketFrame,
 }
 
+impl Default for PacketIo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PacketIo {
     pub fn new() -> Self {
         Self {

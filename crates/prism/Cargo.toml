@@ -6,7 +6,6 @@ version = "0.0.0"
 [features]
 default = []
 linux-accel = ["dep:rustix", "dep:tokio-uring"]
-schema = ["dep:schemars"]
 benchmark = ["dep:criterion", "dep:nerd-font-symbols"]
 
 [dependencies]
@@ -24,11 +23,8 @@ valence_protocol = "0.2.0-alpha.1"
 strum = { version = "0.28.0", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "1.0.7"
-validator = { version = "0.20", features = ["derive"] }
 base64 = "0.22"
 mime_guess = { version = "2.0", default-features = false }
-schemars = { version = "1.0", features = ["derive"], optional = true }
 criterion = { version = "0.8.2", features = ["html_reports"], optional = true }
 nerd-font-symbols = { version = "0.3", optional = true }
 
@@ -36,8 +32,3 @@ nerd-font-symbols = { version = "0.3", optional = true }
 rustix = { version = "1.1", default-features = false, features = ["pipe", "std"], optional = true }
 tokio-uring = { version = "0.5", optional = true }
 libc = { version = "0.2" }
-
-[[bin]]
-name = "generate_config_schema"
-path = "src/bin/generate_config_schema.rs"
-required-features = ["schema"]

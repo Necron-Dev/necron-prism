@@ -3,10 +3,21 @@ use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 
 use tracing::{field::Empty, info_span, Span};
+use valence_protocol::uuid::Uuid;
 
 use necron_prism_minecraft::RuntimeAddress;
 
 use crate::relay::RelayMode;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlayerState {
+    Connected,
+    Routing,
+    Login,
+    StatusServedLocally,
+    LoginRejectedLocally,
+    Proxying,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ConnectionTraffic {
@@ -47,8 +58,18 @@ impl ConnectionKind {
 
 #[derive(Clone, Debug)]
 pub struct ConnectionSession {
-    pub id: u64,
+    pub id: Option<String>,
     pub peer_addr: Option<SocketAddr>,
+    
+    // Player/connection state fields (merged from PlayerSession)
+    pub username: Option<String>,
+    pub uuid: Option<Uuid>,
+    pub outbound_name: Option<Arc<str>>,
+    pub protocol_version: Option<i32>,
+    pub next_state: Option<i32>,
+    pub state: PlayerState,
+    
+    // Connection tracking fields
     kind: Arc<AtomicU8>,
     root_span: Span,
     upload_bytes: Arc<AtomicU64>,
@@ -56,23 +77,34 @@ pub struct ConnectionSession {
 }
 
 impl ConnectionSession {
-    pub fn new(id: u64, peer_addr: Option<SocketAddr>) -> Self {
+    pub fn new(peer_addr: Option<SocketAddr>) -> Self {
         let root_span = info_span!(
             "connection",
-            connection_id = id,
+            connection_id = Empty,
             peer_addr = ?peer_addr,
             player_name = Empty,
             player_uuid = Empty,
         );
 
         Self {
-            id,
+            id: None,
             peer_addr,
+            username: None,
+            uuid: None,
+            outbound_name: None,
+            protocol_version: None,
+            next_state: None,
+            state: PlayerState::Connected,
             kind: Arc::new(AtomicU8::new(ConnectionKind::Unknown as u8)),
             root_span,
             upload_bytes: Arc::new(AtomicU64::new(0)),
             download_bytes: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    pub fn set_connection_id(&mut self, id: String) {
+        self.id = Some(id.clone());
+        self.root_span.record("connection_id", id.as_str());
     }
 
     pub fn root_span(&self) -> &Span {
@@ -128,7 +160,7 @@ impl ConnectionSession {
 pub struct ConnectionRoute {
     pub target_addr: RuntimeAddress,
     pub rewrite_addr: Option<RuntimeAddress>,
-    pub external_connection_id: Option<Arc<str>>,
+    pub connection_id: Option<Arc<str>>,
     pub player_name: Option<Arc<str>>,
     pub player_uuid: Option<Arc<str>>,
 }

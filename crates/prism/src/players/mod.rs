@@ -2,53 +2,24 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use valence_protocol::uuid::Uuid;
 
 use necron_prism_minecraft::{HandshakeInfo, INTENT_LOGIN, INTENT_STATUS};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PlayerState {
-    Connected,
-    Routing,
-    Login,
-    StatusServedLocally,
-    LoginRejectedLocally,
-    Proxying,
-}
-
-#[derive(Clone, Debug)]
-pub struct PlayerSession {
-    pub username: Option<String>,
-    pub uuid: Option<Uuid>,
-    pub outbound_name: Option<Arc<str>>,
-    pub protocol_version: Option<i32>,
-    pub next_state: Option<i32>,
-    pub state: PlayerState,
-}
+use crate::session::{ConnectionSession, PlayerState};
 
 #[derive(Clone, Default)]
-pub struct PlayerRegistry {
-    sessions: Arc<DashMap<u64, PlayerSession>>,
+pub struct ConnectionRegistry {
+    sessions: Arc<DashMap<String, ConnectionSession>>,
     online_count: Arc<AtomicI32>,
 }
 
-impl PlayerRegistry {
-    pub fn register_connection(&self, connection_id: u64) -> usize {
-        self.sessions.insert(
-            connection_id,
-            PlayerSession {
-                protocol_version: None,
-                next_state: None,
-                username: None,
-                uuid: None,
-                outbound_name: None,
-                state: PlayerState::Connected,
-            },
-        );
+impl ConnectionRegistry {
+    pub fn register(&self, session: ConnectionSession) -> usize {
+        let connection_id = session.id.as_ref().expect("session must have connection_id");
+        self.sessions.insert(connection_id.clone(), session);
         self.sessions.len()
     }
 
-    pub fn update_handshake(&self, connection_id: u64, handshake: &HandshakeInfo) {
+    pub fn update_handshake(&self, connection_id: &str, handshake: &HandshakeInfo) {
         self.update(connection_id, |session| {
             session.protocol_version = Some(handshake.protocol_version);
             session.next_state = Some(handshake.next_state);
@@ -60,17 +31,17 @@ impl PlayerRegistry {
         });
     }
 
-    pub fn update_login(&self, connection_id: u64, username: String, uuid: Option<Uuid>) {
+    pub fn update_login(&self, connection_id: &str, username: String, uuid: Option<valence_protocol::uuid::Uuid>) {
         self.update(connection_id, |session| {
             session.username = Some(username);
             session.uuid = uuid;
         });
     }
 
-    pub fn update_outbound(&self, connection_id: u64, outbound_name: Arc<str>) {
+    pub fn update_outbound(&self, connection_id: &str, outbound_name: Arc<str>) {
         let was_proxying = self
             .sessions
-            .get(&connection_id)
+            .get(connection_id)
             .map(|s| s.state == PlayerState::Proxying)
             .unwrap_or(false);
 
@@ -84,10 +55,10 @@ impl PlayerRegistry {
         }
     }
 
-    pub fn set_state(&self, connection_id: u64, state: PlayerState) {
+    pub fn set_state(&self, connection_id: &str, state: PlayerState) {
         let was_proxying = self
             .sessions
-            .get(&connection_id)
+            .get(connection_id)
             .map(|s| s.state == PlayerState::Proxying)
             .unwrap_or(false);
 
@@ -112,8 +83,8 @@ impl PlayerRegistry {
         self.online_count.load(Ordering::Relaxed)
     }
 
-    pub fn remove_connection(&self, connection_id: u64) -> usize {
-        if let Some((_, session)) = self.sessions.remove(&connection_id)
+    pub fn remove_connection(&self, connection_id: &str) -> usize {
+        if let Some((_, session)) = self.sessions.remove(connection_id)
             && session.state == PlayerState::Proxying
         {
             self.online_count.fetch_sub(1, Ordering::Relaxed);
@@ -125,18 +96,18 @@ impl PlayerRegistry {
         self.sessions.len()
     }
 
-    pub fn with_session<R, F>(&self, connection_id: u64, f: F) -> Option<R>
+    pub fn with_session<R, F>(&self, connection_id: &str, f: F) -> Option<R>
     where
-        F: FnOnce(&PlayerSession) -> R,
+        F: FnOnce(&ConnectionSession) -> R,
     {
-        self.sessions.get(&connection_id).map(|s| f(s.value()))
+        self.sessions.get(connection_id).map(|s| f(s.value()))
     }
 
-    fn update<F>(&self, connection_id: u64, update: F)
+    fn update<F>(&self, connection_id: &str, update: F)
     where
-        F: FnOnce(&mut PlayerSession),
+        F: FnOnce(&mut ConnectionSession),
     {
-        if let Some(mut session) = self.sessions.get_mut(&connection_id) {
+        if let Some(mut session) = self.sessions.get_mut(connection_id) {
             update(&mut session);
         }
     }

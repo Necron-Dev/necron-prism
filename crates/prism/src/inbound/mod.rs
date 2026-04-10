@@ -5,13 +5,12 @@ use std::net::TcpListener;
 use anyhow::Result;
 use socket2::SockRef;
 use tokio::net::lookup_host;
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 use crate::config::Config;
 use crate::context::PrismContext;
 use crate::hooks::PrismHooks;
 use crate::network::{apply_sockref_options, create_listener};
-use crate::session::ConnectionSession;
 use crate::transport::handle_connection;
 
 static ACCEPTED: AtomicU64 = AtomicU64::new(0);
@@ -40,11 +39,10 @@ async fn accept_loop<H: PrismHooks>(listener: tokio::net::TcpListener, ctx: Pris
         let (stream, _) = listener.accept().await?;
         let accepted = ACCEPTED.fetch_add(1, Ordering::Relaxed) + 1;
 
-        let config = ctx.config();
-        let connection_id = ctx.runtime().stats.connection_opened();
         let peer_addr = stream.peer_addr().ok();
-        let session = ConnectionSession::new(connection_id, peer_addr);
+        let session = crate::session::ConnectionSession::new(peer_addr);
 
+        let config = ctx.config();
         if let Err(error) = apply_sockref_options(SockRef::from(&stream), &config) {
             warn!(error = %error, "failed to apply inbound socket options");
         }
@@ -53,10 +51,7 @@ async fn accept_loop<H: PrismHooks>(listener: tokio::net::TcpListener, ctx: Pris
         tokio::spawn(async move {
             let logging_conn = session.clone();
             let _guard = logging_conn.root_span().enter();
-            let active = ctx.runtime().players.register_connection(connection_id);
-            debug!(
-                connection_id,
-                active,
+            trace!(
                 total_accepted = accepted,
                 "[CONNECT] accepted inbound connection"
             );

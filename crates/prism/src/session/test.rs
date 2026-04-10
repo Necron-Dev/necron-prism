@@ -37,7 +37,7 @@ fn traffic_total_bytes_sums_upload_and_download() {
 
 #[test]
 fn session_starts_with_zero_traffic() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     assert_eq!(session.upload(), 0);
     assert_eq!(session.download(), 0);
     let traffic = session.connection_traffic();
@@ -47,7 +47,7 @@ fn session_starts_with_zero_traffic() {
 
 #[test]
 fn session_add_upload_accumulates() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     session.add_upload(100);
     session.add_upload(200);
     assert_eq!(session.upload(), 300);
@@ -56,7 +56,7 @@ fn session_add_upload_accumulates() {
 
 #[test]
 fn session_add_download_accumulates() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     session.add_download(50);
     session.add_download(150);
     assert_eq!(session.upload(), 0);
@@ -65,7 +65,7 @@ fn session_add_download_accumulates() {
 
 #[test]
 fn session_clones_share_traffic_counters() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     let clone = session.clone();
     session.add_upload(100);
     clone.add_download(200);
@@ -77,7 +77,7 @@ fn session_clones_share_traffic_counters() {
 
 #[test]
 fn session_connection_traffic_returns_snapshot() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     session.add_upload(42);
     session.add_download(58);
     let traffic = session.connection_traffic();
@@ -88,7 +88,7 @@ fn session_connection_traffic_returns_snapshot() {
 
 #[test]
 fn session_concurrent_traffic_updates() {
-    let session = Arc::new(ConnectionSession::new(1, None));
+    let session = Arc::new(ConnectionSession::new(None));
     let mut handles = Vec::new();
     for i in 0..4 {
         let s = Arc::clone(&session);
@@ -119,15 +119,15 @@ fn report_new_captures_all_fields() {
 }
 
 #[test]
-fn route_carries_external_connection_id() {
+fn route_carries_connection_id() {
     let route = ConnectionRoute {
         target_addr: necron_prism_minecraft::RuntimeAddress::parse("127.0.0.1:25565").unwrap(),
         rewrite_addr: None,
-        external_connection_id: Some(Arc::<str>::from("mock-1")),
+        connection_id: Some(Arc::<str>::from("mock-1")),
         player_name: None,
         player_uuid: None,
     };
-    assert_eq!(route.external_connection_id.as_deref(), Some("mock-1"));
+    assert_eq!(route.connection_id.as_deref(), Some("mock-1"));
 }
 
 #[test]
@@ -135,37 +135,40 @@ fn route_carries_player_info() {
     let route = ConnectionRoute {
         target_addr: necron_prism_minecraft::RuntimeAddress::parse("127.0.0.1:25565").unwrap(),
         rewrite_addr: None,
-        external_connection_id: Some(Arc::<str>::from("mock-1")),
+        connection_id: Some(Arc::<str>::from("mock-1")),
         player_name: Some(Arc::<str>::from("TestPlayer")),
         player_uuid: Some(Arc::<str>::from("550e8400-e29b-41d4-a716-446655440000")),
     };
     assert_eq!(route.player_name.as_deref(), Some("TestPlayer"));
-    assert_eq!(route.player_uuid.as_deref(), Some("550e8400-e29b-41d4-a716-446655440000"));
+    assert_eq!(
+        route.player_uuid.as_deref(),
+        Some("550e8400-e29b-41d4-a716-446655440000")
+    );
 }
 
 #[test]
 fn session_starts_with_unknown_kind() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     assert_eq!(session.kind(), ConnectionKind::Unknown);
 }
 
 #[test]
 fn session_set_kind_motd() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     session.set_kind(ConnectionKind::Motd);
     assert_eq!(session.kind(), ConnectionKind::Motd);
 }
 
 #[test]
 fn session_set_kind_proxy() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     session.set_kind(ConnectionKind::Proxy);
     assert_eq!(session.kind(), ConnectionKind::Proxy);
 }
 
 #[test]
 fn session_kind_shared_across_clones() {
-    let session = ConnectionSession::new(1, None);
+    let session = ConnectionSession::new(None);
     let clone = session.clone();
     session.set_kind(ConnectionKind::Motd);
     assert_eq!(clone.kind(), ConnectionKind::Motd);

@@ -14,10 +14,10 @@ pub mod template;
 mod transport;
 
 pub use config::Config;
-pub use config::ConfigLoader;
 pub use context::PrismContext;
 pub use hooks::{LoginResult, PrismHooks};
-pub use players::PlayerState;
+pub use session::PlayerState;
+
 pub use relay::RelayMode;
 pub use session::{ConnectionKind, ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
-pub use stats::{ConnectionStats, ConnectionTotals};
+pub use stats::ConnectionTotals;

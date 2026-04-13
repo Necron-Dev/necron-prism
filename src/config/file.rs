@@ -18,7 +18,6 @@ pub struct FileConfig {
     pub logging: FileLoggingConfig,
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 #[derive(Default)]
@@ -26,7 +25,6 @@ pub struct FileNetworkConfig {
     pub socket: FileNetworkSocketConfig,
     pub relay: FileRelayConfig,
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -123,6 +121,7 @@ pub struct FileApiConfig {
     pub base_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bearer_token: Option<String>,
+    pub entry_node_key: Option<String>,
     pub timeout_ms: u64,
     pub traffic_interval_ms: u64,
     pub mock_target_addr: String,
@@ -140,6 +139,7 @@ impl Default for FileApiConfig {
             mode: defaults.mode,
             base_url: defaults.base_url,
             bearer_token: defaults.bearer_token,
+            entry_node_key: defaults.entry_node_key,
             timeout_ms: defaults.timeout_ms,
             traffic_interval_ms: defaults.traffic_interval_ms,
             mock_target_addr: defaults.mock_target_addr,
@@ -289,6 +289,7 @@ impl From<FileConfig> for Config {
                 mode: file.api.mode,
                 base_url: file.api.base_url,
                 bearer_token: file.api.bearer_token,
+                entry_node_key: file.api.entry_node_key,
                 timeout_ms: file.api.timeout_ms,
                 traffic_interval_ms: file.api.traffic_interval_ms,
                 mock_target_addr: file.api.mock_target_addr,
@@ -304,7 +305,7 @@ impl From<FileConfig> for Config {
                 file: file.logging.file.map(LogFileConfig::from),
             },
             source_path: PathBuf::new(),
-            requested_relay: RelayConfig::default()
+            requested_relay: RelayConfig::default(),
         }
     }
 }

@@ -130,6 +130,11 @@ pub fn canonicalize_runtime_config(config: &mut Config) {
             config.network.socket.multipath_tcp = false;
         }
     }
+
+    if config.api.mode == ApiMode::Http && config.api.entry_node_key == None {
+        warn!(option = "api.entry_node_key", reason = "ENTRY_NODE_KEY should be specific when API_MODE is HTTP", "config option suppressed");
+        config.api.entry_node_key = Some("default".to_string());
+    }
 }
 
 fn write_default_config_if_missing(path: &Path) -> Result<()> {

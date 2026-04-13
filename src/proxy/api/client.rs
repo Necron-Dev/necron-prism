@@ -47,7 +47,7 @@ impl ApiClient {
 
         Ok(Self {
             join_url: base_url
-                .join("v1/join")
+                .join("v1/open")
                 .map_err(|error| anyhow!("invalid join url: {error}"))?,
             traffic_url: base_url
                 .join("v1/traffic")
@@ -63,7 +63,9 @@ impl ApiClient {
         &self,
         name: Option<&str>,
         uuid: Option<&str>,
-        src: Option<&str>,
+        peer_addr: Option<&str>,
+        connect_host: Option<&str>,
+        entry_node_key: &str,
         load: i32,
     ) -> Result<JoinDecision> {
         let load = load.to_string();
@@ -71,10 +73,12 @@ impl ApiClient {
             .inner
             .get(self.join_url.as_str())
             .query(&[
-                ("name", name.unwrap_or_default()),
-                ("uuid", uuid.unwrap_or_default()),
-                ("src", src.unwrap_or_default()),
-                ("load", load.as_str()),
+                ("player_name", name.unwrap_or_default()),
+                ("player_uuid", uuid.unwrap_or_default()),
+                ("client_addr", peer_addr.unwrap_or_default()),
+                ("client_host", connect_host.unwrap_or_default()),
+                ("entry_node_key", entry_node_key),
+                ("prism_online", load.as_str()),
             ])
             .send()
             .await?;
@@ -83,9 +87,9 @@ impl ApiClient {
             StatusCode::OK => {
                 let body = response.json::<JoinOkResponse>().await?;
                 Ok(JoinDecision::Allow(JoinTarget {
-                    target_addr: body.data.target_addr,
-                    rewrite_addr: body.data.rewrite_addr,
-                    connection_id: body.data.connection_id,
+                    target_addr: body.data.host_addr,
+                    rewrite_addr: body.data.rewrite_host_addr,
+                    connection_id: body.data.connect_id,
                 }))
             }
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::SERVICE_UNAVAILABLE => {
@@ -121,7 +125,7 @@ impl ApiClient {
 
         let response = response.error_for_status()?;
         let body = response.json::<TrafficResponse>().await?;
-        Ok(body.data.connections_to_close)
+        Ok(body.data.connections_to_end)
     }
 
     pub async fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
@@ -145,9 +149,9 @@ struct JoinOkResponse {
 
 #[derive(Debug, Deserialize)]
 struct JoinOkData {
-    target_addr: String,
-    rewrite_addr: Option<String>,
-    connection_id: Option<String>,
+    host_addr: String,
+    rewrite_host_addr: Option<String>,
+    connect_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,5 +171,5 @@ struct TrafficResponse {
 
 #[derive(Debug, Deserialize)]
 struct TrafficResponseData {
-    connections_to_close: Vec<String>,
+    connections_to_end: Vec<String>,
 }

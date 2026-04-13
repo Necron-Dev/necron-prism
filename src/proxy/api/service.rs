@@ -38,13 +38,15 @@ impl ApiService {
         &self,
         name: Option<&str>,
         uuid: Option<&str>,
-        addr: Option<&str>,
+        peer_addr: Option<&str>,
+        connect_host: Option<&str>,
+        entry_node_key: &str,
         load: i32,
     ) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => service.join(name, uuid, addr, load).await,
-            Self::Mock(service) => service.join(name, uuid, addr, load).await,
+            Self::Http(service) => service.join(name, uuid, peer_addr, connect_host, entry_node_key, load).await,
+            Self::Mock(service) => service.join(name, uuid, peer_addr, connect_host, entry_node_key, load).await,
         }
     }
 
@@ -82,10 +84,12 @@ impl HttpApiService {
         &self,
         name: Option<&str>,
         uuid: Option<&str>,
-        addr: Option<&str>,
+        peer_addr: Option<&str>,
+        connect_host: Option<&str>,
+        entry_node_key: &str,
         load: i32,
     ) -> Result<JoinDecision> {
-        self.client.join(name, uuid, addr, load).await
+        self.client.join(name, uuid, peer_addr, connect_host, entry_node_key, load).await
             .map_err(|error| anyhow!("join api request failed: {error}"))
     }
 
@@ -114,7 +118,9 @@ impl MockApiService {
         &self,
         _name: Option<&str>,
         _uuid: Option<&str>,
-        _addr: Option<&str>,
+        _peer_addr: Option<&str>,
+        _connect_host: Option<&str>,
+        _entry_node_key: &str,
         _load: i32,
     ) -> Result<JoinDecision> {
         if let Some(kick_reason) = &self.config.mock_kick_reason {

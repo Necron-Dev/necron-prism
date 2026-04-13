@@ -30,6 +30,7 @@ pub trait PrismHooks: Send + Sync + 'static {
         &self,
         client: &mut tokio::net::TcpStream,
         session: &ConnectionSession,
+        handshake: &HandshakeInfo,
         login_packet: &FramedPacket,
         peer_addr: Option<SocketAddr>,
         config: &Config,
@@ -44,11 +45,7 @@ pub trait PrismHooks: Send + Sync + 'static {
         player_uuid: Option<&str>,
     );
 
-    fn on_connection_finished(
-        &self,
-        session: &ConnectionSession,
-        report: &ConnectionReport,
-    );
+    fn on_connection_finished(&self, session: &ConnectionSession, report: &ConnectionReport);
 }
 
 #[derive(Clone, Debug)]

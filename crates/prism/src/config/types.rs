@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use strum::Display;
 
 #[derive(Clone, Debug)]
@@ -25,13 +25,11 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct NetworkConfig {
     pub socket: NetworkSocketConfig,
     pub relay: RelayConfig,
 }
-
 
 #[derive(Clone, Debug)]
 pub struct NetworkSocketConfig {
@@ -112,6 +110,7 @@ pub struct ApiConfig {
     pub mode: ApiMode,
     pub base_url: Option<String>,
     pub bearer_token: Option<String>,
+    pub entry_node_key: Option<String>,
     pub timeout_ms: u64,
     pub traffic_interval_ms: u64,
     pub mock_target_addr: String,
@@ -126,6 +125,7 @@ impl Default for ApiConfig {
             mode: ApiMode::Mock,
             base_url: None,
             bearer_token: None,
+            entry_node_key: None,
             timeout_ms: 3_000,
             traffic_interval_ms: 5_000,
             mock_target_addr: "mc.hypixel.net:25565".to_string(),

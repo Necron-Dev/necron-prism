@@ -81,9 +81,10 @@ impl PrismHooks for NecronPrismHooks {
         &self,
         _client: &mut tokio::net::TcpStream,
         session: &ConnectionSession,
+        handshake: &HandshakeInfo,
         login_start_packet: &FramedPacket,
         peer_addr: Option<SocketAddr>,
-        _config: &Config,
+        config: &Config,
         online_count: i32,
     ) -> Result<LoginResult> {
         let _guard = session.enter_stage("CONNECT/LOGIN");
@@ -110,6 +111,8 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&login_hello.username),
                 Some(&player_uuid.to_string()),
                 peer_addr.as_ref().map(ToString::to_string).as_deref(),
+                Some(&handshake.server_address),
+                &config.api.entry_node_key.clone().unwrap_or("default".to_string()),
                 online_count,
             )
             .await

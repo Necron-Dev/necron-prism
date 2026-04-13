@@ -62,36 +62,39 @@ impl TrafficReporter {
     }
 
     pub fn finish(&self, connection_id: &str, totals: ConnectionTraffic) {
-        let reporter = self.clone();
-        let cid = connection_id.to_string();
+        let Some((_, record)) = self.sessions.remove(connection_id) else {
+            return;
+        };
+        self.closers.remove(record.connection_id.as_ref());
+
+        let api = Arc::clone(&self.api);
+        let connection_id = record.connection_id;
+        let player_name = record.player_name;
+        let player_uuid = record.player_uuid;
+
         spawn_background(async move {
-            if let Some((_, record)) = reporter.sessions.remove(&cid) {
-                reporter.closers.remove(record.connection_id.as_ref());
+            info!(
+                cid = %connection_id,
+                player_name = player_name.as_deref().unwrap_or("-"),
+                player_uuid = player_uuid.as_deref().unwrap_or("-"),
+                upload_bytes = totals.upload_bytes,
+                download_bytes = totals.download_bytes,
+                "[TRAFFIC] connection closed"
+            );
 
-                info!(
-                    cid = %record.connection_id,
-                    player_name = record.player_name.as_deref().unwrap_or("-"),
-                    player_uuid = record.player_uuid.as_deref().unwrap_or("-"),
-                    upload_bytes = totals.upload_bytes,
-                    download_bytes = totals.download_bytes,
-                    "[TRAFFIC] connection closed"
+            if let Err(error) = api
+                .closed(
+                    &connection_id,
+                    totals.upload_bytes,
+                    totals.download_bytes,
+                )
+                .await
+            {
+                warn!(
+                    error = %error,
+                    cid = %connection_id,
+                    "failed to report closed api event"
                 );
-
-                if let Err(error) = reporter
-                    .api
-                    .closed(
-                        &record.connection_id,
-                        totals.upload_bytes,
-                        totals.download_bytes,
-                    )
-                    .await
-                {
-                    warn!(
-                        error = %error,
-                        cid = %record.connection_id,
-                        "failed to report closed api event"
-                    );
-                }
             }
         });
     }
@@ -170,6 +173,9 @@ impl TrafficReporter {
                         }
 
                         for player in &snapshot {
+                            if player.delta_upload_bytes == 0 && player.delta_download_bytes == 0 {
+                                continue;
+                            }
                             match reporter.api.traffic_single(&player.cid, player.delta_upload_bytes, player.delta_download_bytes).await {
                                 Ok(connections_to_close) => {
                                     if !connections_to_close.is_empty() {

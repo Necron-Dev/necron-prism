@@ -17,6 +17,10 @@ use crate::outbound::connect_addr as connect_outbound_addr;
 use crate::relay::relay_bidirectional;
 use crate::session::{ConnectionKind, ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
 
+fn to_disconnect_json(message: &str) -> String {
+    serde_json::json!({ "text": message }).to_string()
+}
+
 pub async fn handle_connection<H: PrismHooks>(
     ctx: PrismContext<H>,
     client: tokio::net::TcpStream,
@@ -198,7 +202,7 @@ async fn handle_client<H: PrismHooks>(
     let config = ctx.config();
     let login_result = ctx
         .hooks()
-        .on_login(&mut client, session, &login_start_packet, session.peer_addr, &config, online_count)
+        .on_login(&mut client, session, &handshake, &login_start_packet, session.peer_addr, &config, online_count)
         .await?;
 
     let route = match login_result {
@@ -208,7 +212,7 @@ async fn handle_client<H: PrismHooks>(
                 kick_reason = %kick_reason,
                 "[CONNECT/LOGIN] player join denied"
             );
-            let kick_packet = necron_prism_minecraft::login_disconnect_packet(&kick_reason)
+            let kick_packet = necron_prism_minecraft::login_disconnect_packet(&to_disconnect_json(&kick_reason))
                 .map_err(anyhow::Error::from)
                 .context("build disconnect packet")?;
             client.write_all(&kick_packet).await?;

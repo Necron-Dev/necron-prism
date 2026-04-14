@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use tracing::{field::Empty, info_span, Span};
 use valence_protocol::uuid::Uuid;
@@ -58,9 +59,9 @@ impl ConnectionKind {
 
 #[derive(Clone, Debug)]
 pub struct ConnectionSession {
-    pub id: Option<String>,
+    connection_id: Arc<Mutex<Option<String>>>,
     pub peer_addr: Option<SocketAddr>,
-    
+
     // Player/connection state fields (merged from PlayerSession)
     pub username: Option<String>,
     pub uuid: Option<Uuid>,
@@ -68,7 +69,7 @@ pub struct ConnectionSession {
     pub protocol_version: Option<i32>,
     pub next_state: Option<i32>,
     pub state: PlayerState,
-    
+
     // Connection tracking fields
     kind: Arc<AtomicU8>,
     root_span: Span,
@@ -87,7 +88,7 @@ impl ConnectionSession {
         );
 
         Self {
-            id: None,
+            connection_id: Arc::new(Mutex::new(None)),
             peer_addr,
             username: None,
             uuid: None,
@@ -102,9 +103,19 @@ impl ConnectionSession {
         }
     }
 
-    pub fn set_connection_id(&mut self, id: String) {
-        self.id = Some(id.clone());
+    pub fn set_connection_id(&self, id: String) {
+        *self
+            .connection_id
+            .lock()
+            .expect("connection_id mutex poisoned") = Some(id.clone());
         self.root_span.record("connection_id", id.as_str());
+    }
+
+    pub fn connection_id(&self) -> Option<String> {
+        self.connection_id
+            .lock()
+            .expect("connection_id mutex poisoned")
+            .clone()
     }
 
     pub fn root_span(&self) -> &Span {

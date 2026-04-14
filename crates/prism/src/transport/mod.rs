@@ -257,7 +257,7 @@ async fn proxy_connection<H: PrismHooks>(
 
     // 登录成功，设置 connection_id 并注册到 Registry
     if let Some(cid) = &route.connection_id {
-        let mut session_mut = session.clone();
+        let session_mut = session.clone();
         session_mut.set_connection_id(cid.to_string());
         let remaining = ctx.runtime().connections.register(session_mut);
         ctx.runtime().connections.update_outbound(cid, route.target_addr.as_str().into());
@@ -327,8 +327,8 @@ fn finish_success<H: PrismHooks>(ctx: &PrismContext<H>, session: &ConnectionSess
     let _settled = ctx.runtime().totals.record_finished_connection(report.connection_traffic);
     
     // 如果 session 有 connection_id，从 Registry 移除
-    if let Some(cid) = &session.id {
-        let remaining = ctx.runtime().connections.remove_connection(cid);
+    if let Some(cid) = session.connection_id() {
+        let remaining = ctx.runtime().connections.remove_connection(&cid);
         trace!(active_remaining = remaining, "[FINISH] removed connection from registry");
     }
     

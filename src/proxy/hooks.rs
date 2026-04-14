@@ -175,8 +175,8 @@ impl PrismHooks for NecronPrismHooks {
         session: &ConnectionSession,
         report: &ConnectionReport,
     ) {
-        if let Some(cid) = &session.id {
-            self.traffic.finish(cid, report.connection_traffic);
+        if let Some(cid) = session.connection_id() {
+            self.traffic.finish(&cid, report.connection_traffic);
         }
     }
 }

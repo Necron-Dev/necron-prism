@@ -45,6 +45,8 @@ impl TrafficReporter {
         closer: Option<std::net::TcpStream>,
     ) {
         let cid: Arc<str> = connection_id.to_owned().into();
+        let log_player_name = player_name.clone();
+        let log_player_uuid = player_uuid.clone();
         self.sessions.insert(
             connection_id.to_string(),
             TrafficRecord {
@@ -56,16 +58,42 @@ impl TrafficReporter {
             },
         );
 
+        info!(
+            cid = %connection_id,
+            active = self.sessions.len(),
+            player_name = log_player_name.as_deref().unwrap_or("-"),
+            player_uuid = log_player_uuid.as_deref().unwrap_or("-"),
+            "[TRAFFIC] registered connection"
+        );
+
         if let Some(closer) = closer {
             self.closers.insert(cid, closer);
         }
     }
 
     pub fn finish(&self, connection_id: &str, totals: ConnectionTraffic) {
+        info!(
+            cid = %connection_id,
+            active_before = self.sessions.len(),
+            active_ids = ?self.sessions.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>(),
+            "[TRAFFIC] finish requested"
+        );
         let Some((_, record)) = self.sessions.remove(connection_id) else {
+            warn!(
+                cid = %connection_id,
+                active = self.sessions.len(),
+                active_ids = ?self.sessions.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>(),
+                "[TRAFFIC] finish could not find active connection"
+            );
             return;
         };
         self.closers.remove(record.connection_id.as_ref());
+
+        info!(
+            cid = %record.connection_id,
+            active_after = self.sessions.len(),
+            "[TRAFFIC] removed active connection"
+        );
 
         let api = Arc::clone(&self.api);
         let connection_id = record.connection_id;

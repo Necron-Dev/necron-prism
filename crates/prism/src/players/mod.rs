@@ -14,8 +14,8 @@ pub struct ConnectionRegistry {
 
 impl ConnectionRegistry {
     pub fn register(&self, session: ConnectionSession) -> usize {
-        let connection_id = session.id.as_ref().expect("session must have connection_id");
-        self.sessions.insert(connection_id.clone(), session);
+        let connection_id = session.connection_id().expect("session must have connection_id");
+        self.sessions.insert(connection_id, session);
         self.sessions.len()
     }
 

@@ -72,8 +72,12 @@ def run_build(config):
     if config["profile"] == "release":
         cmd.append("--release")
 
-    if config["features"] != "default":
-        cmd.extend(["--features", config["features"]])
+    features = config["features"]
+    if features == "default" and config["target_os"] == "linux":
+        features = "default,linux-accel"
+
+    if features != "default":
+        cmd.extend(["--features", features])
 
     run_command("Build", cmd, config["cpu"])
     print("\nBuild Successful!")

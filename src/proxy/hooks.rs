@@ -112,7 +112,7 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&player_uuid.to_string()),
                 peer_addr.as_ref().map(ToString::to_string).as_deref(),
                 Some(&handshake.server_address),
-                &config.api.entry_node_key.clone().unwrap_or("default".to_string()),
+                &config.api.entry_node_key.as_deref().unwrap_or("default"),
                 online_count,
             )
             .await

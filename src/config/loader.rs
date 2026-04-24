@@ -131,7 +131,7 @@ pub fn canonicalize_runtime_config(config: &mut Config) {
         }
     }
 
-    if config.api.mode == ApiMode::Http && config.api.entry_node_key == None {
+    if config.api.mode == ApiMode::Http && config.api.entry_node_key.is_none() {
         warn!(option = "api.entry_node_key", reason = "ENTRY_NODE_KEY should be specific when API_MODE is HTTP", "config option suppressed");
         config.api.entry_node_key = Some("default".to_string());
     }

@@ -28,49 +28,23 @@ pub async fn handle_connection<H: PrismHooks>(
 ) {
     let started_at = Instant::now();
 
-    match handle_client(client, &ctx, &session).await {
-        Ok(report) => finish_success(&ctx, &session, started_at, report),
-        Err(error) => {
-            if let Some(report) = error.downcast_ref::<HandledConnection>().map(|h| &h.0) {
-                finish_success(&ctx, &session, started_at, report.clone());
-            } else {
-                let traffic = session.connection_traffic();
-                let report = ConnectionReport::new(traffic, None, None, None);
-                ctx.hooks().on_connection_finished(&session, &report);
-                let _settled = ctx.runtime().totals.record_finished_connection(traffic);
-                let tag = session.kind().tag();
-                let is_expected_disconnect = is_expected_disconnect(&error);
-                let is_motd = session.kind() == ConnectionKind::Motd;
-                if is_expected_disconnect {
-                    if is_motd {
-                        debug!(
-                            error = %error,
-                            elapsed_ms = started_at.elapsed().as_millis() as u64,
-                            upload_bytes = traffic.upload_bytes,
-                            download_bytes = traffic.download_bytes,
-                            "[{tag}] connection closed"
-                        );
-                    } else {
-                        info!(
-                            error = %error,
-                            elapsed_ms = started_at.elapsed().as_millis() as u64,
-                            upload_bytes = traffic.upload_bytes,
-                            download_bytes = traffic.download_bytes,
-                            "[{tag}] connection closed"
-                        );
-                    }
-                } else {
-                    warn!(
-                        error = %error,
-                        elapsed_ms = started_at.elapsed().as_millis() as u64,
-                        upload_bytes = traffic.upload_bytes,
-                        download_bytes = traffic.download_bytes,
-                        "[{tag}] connection failed"
-                    );
+    let outcome = match handle_client(client, &ctx, &session).await {
+        Ok(report) => ConnectionOutcome::Completed(report),
+        Err(error) => match error.downcast::<HandledConnection>() {
+            Ok(handled) => ConnectionOutcome::Handled(handled.0),
+            Err(error) => {
+                let report = ConnectionReport::new(session.connection_traffic(), None, None, None);
+                let expected_disconnect = is_expected_disconnect(&error);
+                ConnectionOutcome::Failed {
+                    report,
+                    error,
+                    expected_disconnect,
                 }
             }
-        }
-    }
+        },
+    };
+
+    finalize_connection(&ctx, &session, started_at, outcome);
 }
 
 fn is_expected_disconnect(error: &anyhow::Error) -> bool {
@@ -318,43 +292,117 @@ async fn proxy_connection<H: PrismHooks>(
         route.rewrite_addr,
     );
 
-    ctx.hooks().on_connection_finished(session, &report);
-
     Ok(report)
 }
 
-fn finish_success<H: PrismHooks>(ctx: &PrismContext<H>, session: &ConnectionSession, started_at: Instant, report: ConnectionReport) {
-    let _settled = ctx.runtime().totals.record_finished_connection(report.connection_traffic);
-    
-    // 如果 session 有 connection_id，从 Registry 移除
+fn finalize_connection<H: PrismHooks>(
+    ctx: &PrismContext<H>,
+    session: &ConnectionSession,
+    started_at: Instant,
+    outcome: ConnectionOutcome,
+) {
+    let report = outcome.report().clone();
+    ctx.hooks().on_connection_finished(session, &report);
+    let _settled = ctx
+        .runtime()
+        .totals
+        .record_finished_connection(report.connection_traffic);
+
     if let Some(cid) = session.connection_id() {
         let remaining = ctx.runtime().connections.remove_connection(&cid);
-        trace!(active_remaining = remaining, "[FINISH] removed connection from registry");
+        trace!(
+            connection_id = %cid,
+            active_remaining = remaining,
+            "[FINISH] removed connection from registry"
+        );
     }
-    
+
     let tag = session.kind().tag();
+    let elapsed_ms = started_at.elapsed().as_millis() as u64;
+    let active_remaining = ctx.runtime().connections.active_count();
 
     if let Some(mode) = report.relay_mode {
         trace!(relay_mode = %mode, "[{tag}] relay completed");
     }
 
-    if session.kind() == ConnectionKind::Motd {
-        debug!(
-            elapsed_ms = started_at.elapsed().as_millis() as u64,
-            upload_bytes = report.connection_traffic.upload_bytes,
-            download_bytes = report.connection_traffic.download_bytes,
-            active_remaining = ctx.runtime().connections.active_count(),
-            "[{tag}] connection closed"
-        );
-    } else {
-        info!(
-            elapsed_ms = started_at.elapsed().as_millis() as u64,
-            upload_bytes = report.connection_traffic.upload_bytes,
-            download_bytes = report.connection_traffic.download_bytes,
-            active_remaining = ctx.runtime().connections.active_count(),
-            target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
-            "[{tag}] connection closed"
-        );
+    match outcome {
+        ConnectionOutcome::Completed(_) | ConnectionOutcome::Handled(_) => {
+            if session.kind() == ConnectionKind::Motd {
+                debug!(
+                    elapsed_ms,
+                    upload_bytes = report.connection_traffic.upload_bytes,
+                    download_bytes = report.connection_traffic.download_bytes,
+                    active_remaining,
+                    "[{tag}] connection closed"
+                );
+            } else {
+                info!(
+                    elapsed_ms,
+                    upload_bytes = report.connection_traffic.upload_bytes,
+                    download_bytes = report.connection_traffic.download_bytes,
+                    active_remaining,
+                    target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
+                    "[{tag}] connection closed"
+                );
+            }
+        }
+        ConnectionOutcome::Failed {
+            error,
+            expected_disconnect,
+            ..
+        } => {
+            if expected_disconnect {
+                if session.kind() == ConnectionKind::Motd {
+                    debug!(
+                        error = %error,
+                        elapsed_ms,
+                        upload_bytes = report.connection_traffic.upload_bytes,
+                        download_bytes = report.connection_traffic.download_bytes,
+                        active_remaining,
+                        "[{tag}] connection closed"
+                    );
+                } else {
+                    info!(
+                        error = %error,
+                        elapsed_ms,
+                        upload_bytes = report.connection_traffic.upload_bytes,
+                        download_bytes = report.connection_traffic.download_bytes,
+                        active_remaining,
+                        target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
+                        "[{tag}] connection closed"
+                    );
+                }
+            } else {
+                warn!(
+                    error = %error,
+                    elapsed_ms,
+                    upload_bytes = report.connection_traffic.upload_bytes,
+                    download_bytes = report.connection_traffic.download_bytes,
+                    active_remaining,
+                    target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
+                    "[{tag}] connection failed"
+                );
+            }
+        }
+    }
+}
+
+enum ConnectionOutcome {
+    Completed(ConnectionReport),
+    Handled(ConnectionReport),
+    Failed {
+        report: ConnectionReport,
+        error: anyhow::Error,
+        expected_disconnect: bool,
+    },
+}
+
+impl ConnectionOutcome {
+    fn report(&self) -> &ConnectionReport {
+        match self {
+            Self::Completed(report) | Self::Handled(report) => report,
+            Self::Failed { report, .. } => report,
+        }
     }
 }
 
@@ -368,3 +416,130 @@ impl std::fmt::Display for HandledConnection {
 }
 
 impl std::error::Error for HandledConnection {}
+
+#[cfg(test)]
+mod test {
+    use std::io;
+    use std::net::SocketAddr;
+
+    use anyhow::Result;
+    use necron_prism_minecraft::{FramedPacket, HandshakeInfo, PacketIo};
+
+    use super::*;
+    use crate::config::Config;
+    use crate::hooks::LoginResult;
+
+    struct NoopHooks;
+
+    impl PrismHooks for NoopHooks {
+        async fn on_legacy_ping(
+            &self,
+            _client: &mut tokio::net::TcpStream,
+            _session: &ConnectionSession,
+            _config: &Config,
+            _online_count: i32,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn on_status_request(
+            &self,
+            _packet_io: &mut PacketIo,
+            _client: &mut tokio::net::TcpStream,
+            _session: &ConnectionSession,
+            _handshake: &HandshakeInfo,
+            _config: &Config,
+            _online_count: i32,
+        ) -> Result<()> {
+            Ok(())
+        }
+
+        async fn on_login(
+            &self,
+            _client: &mut tokio::net::TcpStream,
+            _session: &ConnectionSession,
+            _handshake: &HandshakeInfo,
+            _login_packet: &FramedPacket,
+            _peer_addr: Option<SocketAddr>,
+            _config: &Config,
+            _online_count: i32,
+        ) -> Result<LoginResult> {
+            unreachable!()
+        }
+
+        fn on_connection_established(
+            &self,
+            _session: &ConnectionSession,
+            _external_connection_id: &str,
+            _player_name: Option<&str>,
+            _player_uuid: Option<&str>,
+        ) {
+        }
+
+        fn on_connection_finished(&self, _session: &ConnectionSession, _report: &ConnectionReport) {}
+    }
+
+    #[test]
+    fn finalize_removes_proxy_connection_for_expected_disconnect() {
+        let ctx = PrismContext::new(Config::default(), NoopHooks);
+        let session = ConnectionSession::new(None);
+        session.set_kind(ConnectionKind::Proxy);
+        session.set_connection_id("cid-1".to_string());
+
+        let remaining = ctx.runtime().connections.register(session.clone());
+        assert_eq!(remaining, 1);
+
+        ctx.runtime()
+            .connections
+            .update_outbound("cid-1", "server.example:25565".into());
+
+        assert_eq!(ctx.runtime().connections.current_online_count(), 1);
+        assert_eq!(ctx.runtime().connections.active_count(), 1);
+
+        let outcome = ConnectionOutcome::Failed {
+            report: ConnectionReport::new(session.connection_traffic(), None, None, None),
+            error: anyhow::Error::new(io::Error::new(io::ErrorKind::UnexpectedEof, "eof")),
+            expected_disconnect: true,
+        };
+
+        finalize_connection(&ctx, &session, Instant::now(), outcome);
+
+        assert_eq!(ctx.runtime().connections.current_online_count(), 0);
+        assert_eq!(ctx.runtime().connections.active_count(), 0);
+    }
+
+    #[test]
+    fn finalize_is_safe_when_connection_was_already_removed() {
+        let ctx = PrismContext::new(Config::default(), NoopHooks);
+        let session = ConnectionSession::new(None);
+        session.set_kind(ConnectionKind::Proxy);
+        session.set_connection_id("cid-2".to_string());
+
+        let remaining = ctx.runtime().connections.register(session.clone());
+        assert_eq!(remaining, 1);
+
+        ctx.runtime()
+            .connections
+            .update_outbound("cid-2", "server.example:25565".into());
+        assert_eq!(ctx.runtime().connections.current_online_count(), 1);
+
+        let remaining = ctx.runtime().connections.remove_connection("cid-2");
+        assert_eq!(remaining, 0);
+        assert_eq!(ctx.runtime().connections.current_online_count(), 0);
+
+        finalize_connection(
+            &ctx,
+            &session,
+            Instant::now(),
+            ConnectionOutcome::Completed(ConnectionReport::new(
+                session.connection_traffic(),
+                None,
+                None,
+                None,
+            )),
+        );
+
+        assert_eq!(ctx.runtime().connections.current_online_count(), 0);
+        assert_eq!(ctx.runtime().connections.active_count(), 0);
+    }
+}

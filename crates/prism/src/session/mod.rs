@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::sync::Mutex;
 
 use tracing::{field::Empty, info_span, Span};
 use valence_protocol::uuid::Uuid;

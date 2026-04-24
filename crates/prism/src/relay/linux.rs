@@ -16,7 +16,7 @@ mod imp {
 
     use crate::session::ConnectionSession;
 
-    use super::{shutdown_write, spawn_relay_worker, RelayMode, RelayStats};
+    use crate::relay::{shutdown_write, spawn_relay_worker, RelayMode, RelayStats};
 
     const PIPE_CHUNK_SIZE: usize = 64 * 1024;
     const SPLICE_FLAGS: SpliceFlags = SpliceFlags::MOVE.union(SpliceFlags::NONBLOCK);

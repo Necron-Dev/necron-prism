@@ -88,7 +88,7 @@ pub async fn relay_bidirectional(
             .await
             .map_err(|error| io::Error::other(format!("io_uring relay task panicked: {error}")))?;
 
-            return Ok(stats);
+            return Ok(stats?);
         }
 
         if config.network.relay.is_splice() {
@@ -109,7 +109,7 @@ pub async fn relay_bidirectional(
             .await
             .map_err(|error| io::Error::other(format!("splice relay task panicked: {error}")))?;
 
-            return Ok(stats);
+            return Ok(stats?);
         }
     }
 

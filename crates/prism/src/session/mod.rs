@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::sync::Mutex;
 
 use tracing::{field::Empty, info_span, Span};
@@ -59,7 +59,7 @@ impl ConnectionKind {
 
 #[derive(Clone, Debug)]
 pub struct ConnectionSession {
-    connection_id: Arc<Mutex<Option<String>>>,
+    connection_id: Arc<OnceLock<String>>,
     pub peer_addr: Option<SocketAddr>,
 
     // Player/connection state fields (merged from PlayerSession)
@@ -88,7 +88,7 @@ impl ConnectionSession {
         );
 
         Self {
-            connection_id: Arc::new(Mutex::new(None)),
+            connection_id: Arc::new(OnceLock::new()),
             peer_addr,
             username: None,
             uuid: None,
@@ -104,18 +104,13 @@ impl ConnectionSession {
     }
 
     pub fn set_connection_id(&self, id: String) {
-        *self
-            .connection_id
-            .lock()
-            .expect("connection_id mutex poisoned") = Some(id.clone());
-        self.root_span.record("connection_id", id.as_str());
+        if self.connection_id.set(id.clone()).is_ok() {
+            self.root_span.record("connection_id", id.as_str());
+        }
     }
 
     pub fn connection_id(&self) -> Option<String> {
-        self.connection_id
-            .lock()
-            .expect("connection_id mutex poisoned")
-            .clone()
+        self.connection_id.get().cloned()
     }
 
     pub fn root_span(&self) -> &Span {

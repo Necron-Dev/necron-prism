@@ -2,8 +2,8 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
 
+use crate::config::{ApiConfig, ApiMode};
 use crate::proxy::api::ApiService;
-use prism::config::{ApiConfig, ApiMode};
 use prism::{ConnectionSession, ConnectionTraffic};
 
 use super::TrafficReporter;
@@ -19,6 +19,7 @@ fn mock_config() -> ApiConfig {
         mock_rewrite_addr: Some("backend:25565".to_owned()),
         mock_connection_id_prefix: "mock".to_owned(),
         mock_kick_reason: None,
+        entry_node_key: None,
     }
 }
 

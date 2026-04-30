@@ -1,10 +1,10 @@
 #![cfg(feature = "http-api")]
 
+use anyhow::{Result, anyhow};
 use reqwest::{StatusCode, Url};
 use serde::{Deserialize, Serialize};
-use anyhow::{anyhow, Result};
 
-use prism::config::ApiConfig;
+use crate::config::ApiConfig;
 use crate::proxy::routing::{JoinDecision, JoinTarget};
 
 #[derive(Clone, Debug, Serialize)]
@@ -42,8 +42,8 @@ impl ApiClient {
             .base_url
             .as_deref()
             .ok_or_else(|| anyhow!("http api requires api.base_url"))?;
-        let base_url = Url::parse(base_url)
-            .map_err(|error| anyhow!("invalid api.base_url: {error}"))?;
+        let base_url =
+            Url::parse(base_url).map_err(|error| anyhow!("invalid api.base_url: {error}"))?;
 
         Ok(Self {
             join_url: base_url
@@ -134,7 +134,11 @@ impl ApiClient {
 
         self.inner
             .get(self.closed_url.as_str())
-            .query(&[("cid", cid), ("send", send.as_str()), ("recv", recv.as_str())])
+            .query(&[
+                ("cid", cid),
+                ("send", send.as_str()),
+                ("recv", recv.as_str()),
+            ])
             .send()
             .await?
             .error_for_status()?;

@@ -76,7 +76,11 @@ fn build_hooks(config: &NecronPrismConfig) -> Result<(NecronPrismHooks, TrafficR
             api,
             motd,
             traffic.clone(),
-            config.api.entry_node_key.clone(),
+            config
+                .api
+                .entry_node_key
+                .clone()
+                .unwrap_or_else(|| "default".to_string()),
         ),
         traffic,
     ))

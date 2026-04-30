@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
-use std::sync::atomic::{AtomicU64, Ordering};
+use anyhow::{Result, anyhow};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[cfg(feature = "http-api")]
 use super::client::ApiClient;
-use prism::config::{ApiConfig, ApiMode};
+use crate::config::{ApiConfig, ApiMode};
 use crate::proxy::routing::{JoinDecision, JoinTarget};
 
 pub enum ApiService {
@@ -30,7 +30,10 @@ impl ApiService {
             ApiMode::Http => Ok(Self::Http(Box::new(HttpApiService::new(config)?))),
             #[cfg(not(feature = "http-api"))]
             ApiMode::Http => Err(anyhow!("http api support is disabled at compile time")),
-            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(mock_counter, config.clone()))),
+            ApiMode::Mock => Ok(Self::Mock(MockApiService::new(
+                mock_counter,
+                config.clone(),
+            ))),
         }
     }
 
@@ -45,8 +48,16 @@ impl ApiService {
     ) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => service.join(name, uuid, peer_addr, connect_host, entry_node_key, load).await,
-            Self::Mock(service) => service.join(name, uuid, peer_addr, connect_host, entry_node_key, load).await,
+            Self::Http(service) => {
+                service
+                    .join(name, uuid, peer_addr, connect_host, entry_node_key, load)
+                    .await
+            }
+            Self::Mock(service) => {
+                service
+                    .join(name, uuid, peer_addr, connect_host, entry_node_key, load)
+                    .await
+            }
         }
     }
 
@@ -58,8 +69,16 @@ impl ApiService {
     ) -> Result<Vec<String>> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => service.traffic_single(connection_id, send_bytes, recv_bytes).await,
-            Self::Mock(service) => service.traffic_single(connection_id, send_bytes, recv_bytes).await,
+            Self::Http(service) => {
+                service
+                    .traffic_single(connection_id, send_bytes, recv_bytes)
+                    .await
+            }
+            Self::Mock(service) => {
+                service
+                    .traffic_single(connection_id, send_bytes, recv_bytes)
+                    .await
+            }
         }
     }
 
@@ -89,7 +108,9 @@ impl HttpApiService {
         entry_node_key: &str,
         load: i32,
     ) -> Result<JoinDecision> {
-        self.client.join(name, uuid, peer_addr, connect_host, entry_node_key, load).await
+        self.client
+            .join(name, uuid, peer_addr, connect_host, entry_node_key, load)
+            .await
             .map_err(|error| anyhow!("join api request failed: {error}"))
     }
 
@@ -99,12 +120,16 @@ impl HttpApiService {
         send_bytes: u64,
         recv_bytes: u64,
     ) -> Result<Vec<String>> {
-        self.client.traffic(connection_id, send_bytes, recv_bytes).await
+        self.client
+            .traffic(connection_id, send_bytes, recv_bytes)
+            .await
             .map_err(|error| anyhow!("traffic api request failed: {error}"))
     }
 
     async fn closed(&self, cid: &str, send: u64, recv: u64) -> Result<()> {
-        self.client.closed(cid, send, recv).await
+        self.client
+            .closed(cid, send, recv)
+            .await
             .map_err(|error| anyhow!("closed api request failed: {error}"))
     }
 }
@@ -133,7 +158,10 @@ impl MockApiService {
         Ok(JoinDecision::Allow(JoinTarget {
             target_addr: self.config.mock_target_addr.clone(),
             rewrite_addr: self.config.mock_rewrite_addr.clone(),
-            connection_id: Some(format!("{}-{sequence}", self.config.mock_connection_id_prefix)),
+            connection_id: Some(format!(
+                "{}-{sequence}",
+                self.config.mock_connection_id_prefix
+            )),
         }))
     }
 

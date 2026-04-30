@@ -4,25 +4,27 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tracing::{info, trace};
 
-use necron_prism_minecraft::{
-    decode_login_hello, FramedPacket, HandshakeInfo, PacketIo, RuntimeAddress,
-};
 use prism::{
     Config, ConnectionReport, ConnectionRoute, ConnectionSession, LoginResult, PrismHooks,
 };
+use prism_minecraft::{FramedPacket, HandshakeInfo, PacketIo, RuntimeAddress, decode_login_hello};
 
 use super::api::ApiService;
 use super::routing::JoinDecision;
 use super::traffic::TrafficReporter;
 
 fn offline_uuid(username: &str) -> uuid::Uuid {
-    uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_DNS, format!("OfflinePlayer:{username}").as_bytes())
+    uuid::Uuid::new_v3(
+        &uuid::Uuid::NAMESPACE_DNS,
+        format!("OfflinePlayer:{username}").as_bytes(),
+    )
 }
 
 pub struct NecronPrismHooks {
     api: Arc<ApiService>,
     motd: Arc<prism::motd::MotdService>,
     traffic: TrafficReporter,
+    entry_node_key: String,
 }
 
 impl NecronPrismHooks {
@@ -30,8 +32,14 @@ impl NecronPrismHooks {
         api: Arc<ApiService>,
         motd: Arc<prism::motd::MotdService>,
         traffic: TrafficReporter,
+        entry_node_key: String,
     ) -> Self {
-        Self { api, motd, traffic }
+        Self {
+            api,
+            motd,
+            traffic,
+            entry_node_key,
+        }
     }
 }
 
@@ -84,7 +92,7 @@ impl PrismHooks for NecronPrismHooks {
         handshake: &HandshakeInfo,
         login_start_packet: &FramedPacket,
         peer_addr: Option<SocketAddr>,
-        config: &Config,
+        _config: &Config,
         online_count: i32,
     ) -> Result<LoginResult> {
         let _guard = session.enter_stage("CONNECT/LOGIN");
@@ -112,7 +120,7 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&player_uuid.to_string()),
                 peer_addr.as_ref().map(ToString::to_string).as_deref(),
                 Some(&handshake.server_address),
-                &config.api.entry_node_key.as_deref().unwrap_or("default"),
+                &self.entry_node_key,
                 online_count,
             )
             .await
@@ -170,11 +178,7 @@ impl PrismHooks for NecronPrismHooks {
         );
     }
 
-    fn on_connection_finished(
-        &self,
-        session: &ConnectionSession,
-        report: &ConnectionReport,
-    ) {
+    fn on_connection_finished(&self, session: &ConnectionSession, report: &ConnectionReport) {
         if let Some(cid) = session.connection_id() {
             self.traffic.finish(&cid, report.connection_traffic);
         }

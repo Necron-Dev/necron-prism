@@ -1,12 +1,12 @@
 mod fmt;
 
-pub use fmt::rotate_log_file;
 pub use fmt::AnsiFormatter;
+pub use fmt::rotate_log_file;
 
 use prism::config::{LogFormat, LoggingConfig};
-use tracing_subscriber::layer::Layered;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::layer::Layered;
 use tracing_subscriber::prelude::*;
 
 pub type LogHandle = tracing_appender::non_blocking::WorkerGuard;
@@ -23,31 +23,27 @@ pub fn init_tracing(
     let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(filter);
 
     let fmt_layer: FmtLayer = match config.format {
-        LogFormat::Pretty | LogFormat::Compact => {
-            tracing_subscriber::fmt::Layer::default()
-                .with_target(false)
-                .with_file(false)
-                .with_line_number(false)
-                .with_thread_ids(false)
-                .with_thread_names(false)
-                .with_ansi(true)
-                .with_span_events(FmtSpan::NONE)
-                .event_format(AnsiFormatter::new())
-                .with_writer(std::io::stdout)
-                .boxed()
-        }
-        LogFormat::Json => {
-            tracing_subscriber::fmt::Layer::default()
-                .json()
-                .with_target(false)
-                .with_file(false)
-                .with_line_number(false)
-                .with_current_span(false)
-                .with_span_list(false)
-                .flatten_event(true)
-                .with_writer(std::io::stdout)
-                .boxed()
-        }
+        LogFormat::Pretty | LogFormat::Compact => tracing_subscriber::fmt::Layer::default()
+            .with_target(false)
+            .with_file(false)
+            .with_line_number(false)
+            .with_thread_ids(false)
+            .with_thread_names(false)
+            .with_ansi(true)
+            .with_span_events(FmtSpan::NONE)
+            .event_format(AnsiFormatter::new())
+            .with_writer(std::io::stdout)
+            .boxed(),
+        LogFormat::Json => tracing_subscriber::fmt::Layer::default()
+            .json()
+            .with_target(false)
+            .with_file(false)
+            .with_line_number(false)
+            .with_current_span(false)
+            .with_span_list(false)
+            .flatten_event(true)
+            .with_writer(std::io::stdout)
+            .boxed(),
     };
 
     let subscriber = tracing_subscriber::Registry::default()
@@ -108,11 +104,7 @@ fn resolve_log_path(path: &std::path::Path) -> std::path::PathBuf {
         return path.to_path_buf();
     }
 
-    match std::fs::OpenOptions::new()
-        
-        .append(true)
-        .open(path)
-    {
+    match std::fs::OpenOptions::new().append(true).open(path) {
         Ok(file) => {
             drop(file);
             path.to_path_buf()
@@ -123,10 +115,7 @@ fn resolve_log_path(path: &std::path::Path) -> std::path::PathBuf {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("latest");
-            let ext = path
-                .extension()
-                .and_then(|s| s.to_str())
-                .unwrap_or("log");
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("log");
             let new_name = format!("{stem}-{pid}.{ext}");
             path.with_file_name(new_name)
         }

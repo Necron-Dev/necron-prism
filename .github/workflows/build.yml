@@ -50,7 +50,7 @@ jobs:
         run: goreleaser build --snapshot --clean
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: necron-prism-builds
           path: dist/*

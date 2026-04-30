@@ -1,0 +1,130 @@
+version: 2
+
+project_name: necron-prism
+
+before:
+  hooks:
+    - rustup default stable
+    - cargo install cross
+
+builds:
+  # Linux AMD64 v2
+  - id: necron-prism-linux-amd64-v2
+    builder: rust
+    command: build
+    tool: cross
+    binary: necron-prism
+    targets:
+      - x86_64-unknown-linux-gnu
+    flags:
+      - --release
+      - -p=necron-prism
+      - --features=default,linux-accel
+    env:
+      - RUSTFLAGS=--cfg tokio_unstable -C target-cpu=x86-64-v2
+
+  # Linux AMD64 v3
+  - id: necron-prism-linux-amd64-v3
+    builder: rust
+    command: build
+    tool: cross
+    binary: necron-prism
+    targets:
+      - x86_64-unknown-linux-gnu
+    flags:
+      - --release
+      - -p=necron-prism
+      - --features=default,linux-accel
+    env:
+      - RUSTFLAGS=--cfg tokio_unstable -C target-cpu=x86-64-v3
+
+  # Linux ARM64
+  - id: necron-prism-linux-arm64
+    builder: rust
+    command: build
+    tool: cross
+    binary: necron-prism
+    targets:
+      - aarch64-unknown-linux-gnu
+    flags:
+      - --release
+      - -p=necron-prism
+      - --features=default,linux-accel
+    env:
+      - RUSTFLAGS=--cfg tokio_unstable
+
+  # Linux ARMv7
+  - id: necron-prism-linux-armv7
+    builder: rust
+    command: build
+    tool: cross
+    binary: necron-prism
+    targets:
+      - armv7-unknown-linux-gnueabihf
+    flags:
+      - --release
+      - -p=necron-prism
+      - --features=default,linux-accel
+    env:
+      - RUSTFLAGS=--cfg tokio_unstable
+
+  # Windows AMD64 v2
+  - id: necron-prism-windows-amd64-v2
+    builder: rust
+    command: build
+    tool: cross
+    binary: necron-prism
+    targets:
+      - x86_64-pc-windows-gnu
+    flags:
+      - --release
+      - -p=necron-prism
+    env:
+      - RUSTFLAGS=--cfg tokio_unstable -C target-cpu=x86-64-v2
+
+  # Windows AMD64 v3
+  - id: necron-prism-windows-amd64-v3
+    builder: rust
+    command: build
+    tool: cross
+    binary: necron-prism
+    targets:
+      - x86_64-pc-windows-gnu
+    flags:
+      - --release
+      - -p=necron-prism
+    env:
+      - RUSTFLAGS=--cfg tokio_unstable -C target-cpu=x86-64-v3
+
+
+archives:
+  - id: default
+    formats:
+      - zip
+    files:
+      - LICENSE
+      - README.md
+      - config.toml
+      - config.schema.json
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  github:
+    owner: Necron-Dev
+    name: necron-prism
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"

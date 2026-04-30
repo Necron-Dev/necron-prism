@@ -1,0 +1,73 @@
+# cargo-deny configuration
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+all-features = true
+
+# =====================
+# Advisories
+# =====================
+[advisories]
+ignore = [
+    # instant crate is unmaintained - transitive dep from bevy_utils
+    { id = "RUSTSEC-2024-0384", reason = "transitive dep from bevy/valence, no direct usage" },
+    # rand unsoundness with custom logger - transitive dep from quinn/reqwest
+    { id = "RUSTSEC-2026-0097", reason = "transitive dep from reqwest, we don't use custom logger" },
+]
+
+# =====================
+# Licenses
+# =====================
+[licenses]
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Zlib",
+    "Unicode-DFS-2016",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "CC-BY-NC-SA-4.0",
+]
+
+# Clarify license for workspace crates (they have LICENSE file but no Cargo.toml license field)
+[[licenses.clarify]]
+crate = "necron-prism"
+expression = "CC-BY-NC-SA-4.0"
+license-files = [
+    { path = "LICENSE", hash = 0x00000000 },
+]
+
+[[licenses.clarify]]
+crate = "prism-minecraft"
+expression = "CC-BY-NC-SA-4.0"
+license-files = [
+    { path = "../../LICENSE", hash = 0x00000000 },
+]
+
+[[licenses.clarify]]
+crate = "prism"
+expression = "CC-BY-NC-SA-4.0"
+license-files = [
+    { path = "../../LICENSE", hash = 0x00000000 },
+]
+
+# =====================
+# Bans
+# =====================
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+# =====================
+# Sources
+# =====================
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

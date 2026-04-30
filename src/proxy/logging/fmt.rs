@@ -2,8 +2,8 @@ use chrono::Local;
 use owo_colors::{CssColors, Style};
 use std::fmt;
 use tracing::{Event, Level, Subscriber};
-use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::FormattedFields;
+use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FmtContext, FormatEvent};
 use tracing_subscriber::registry::LookupSpan;
 
@@ -257,7 +257,11 @@ impl tracing::field::Visit for EventVisitor {
     }
 }
 
-pub fn rotate_log_file(path: &std::path::Path, mode: LogRotation, _archive_pattern: &str) -> anyhow::Result<()> {
+pub fn rotate_log_file(
+    path: &std::path::Path,
+    mode: LogRotation,
+    _archive_pattern: &str,
+) -> anyhow::Result<()> {
     if !path.exists() {
         return Ok(());
     }

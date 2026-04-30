@@ -1,32 +1,36 @@
 use std::net::Shutdown;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 
-use dashmap::DashMap;
+use flurry::HashMap;
+use rayon::prelude::*;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, trace, warn};
 use tracing::Instrument;
+use tracing::{info, trace, warn};
 
+use crate::config::ApiConfig;
 use crate::proxy::api::ApiService;
-use prism::config::ApiConfig;
 use prism::{ConnectionSession, ConnectionTraffic};
 
 #[derive(Clone)]
 pub struct TrafficReporter {
     api: Arc<ApiService>,
-    sessions: Arc<DashMap<String, TrafficRecord>>,
-    closers: Arc<DashMap<Arc<str>, std::net::TcpStream>>,
+    sessions: Arc<HashMap<String, TrafficRecord>>,
+    closers: Arc<HashMap<Arc<str>, std::net::TcpStream>>,
     cancel_token: CancellationToken,
+    background_handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
 }
 
 impl TrafficReporter {
     pub fn new(api: Arc<ApiService>, config: &ApiConfig) -> Self {
         let cancel_token = CancellationToken::new();
-        let reporter = Self {
+        let mut reporter = Self {
             api,
-            sessions: Arc::new(DashMap::new()),
-            closers: Arc::new(DashMap::new()),
+            sessions: Arc::new(HashMap::new()),
+            closers: Arc::new(HashMap::new()),
             cancel_token,
+            background_handle: Arc::new(Mutex::new(None)),
         };
         reporter.spawn_loop(std::time::Duration::from_millis(config.traffic_interval_ms));
         reporter
@@ -34,6 +38,11 @@ impl TrafficReporter {
 
     pub fn shutdown(&self) {
         self.cancel_token.cancel();
+        if let Ok(mut handle) = self.background_handle.lock()
+            && let Some(h) = handle.take()
+        {
+            let _ = h.join();
+        }
     }
 
     pub fn register(
@@ -47,6 +56,7 @@ impl TrafficReporter {
         let cid: Arc<str> = connection_id.to_owned().into();
         let log_player_name = player_name.clone();
         let log_player_uuid = player_uuid.clone();
+        let guard = self.sessions.guard();
         self.sessions.insert(
             connection_id.to_string(),
             TrafficRecord {
@@ -56,6 +66,7 @@ impl TrafficReporter {
                 player_uuid,
                 last_sent: ConnectionTraffic::default(),
             },
+            &guard,
         );
 
         info!(
@@ -67,7 +78,7 @@ impl TrafficReporter {
         );
 
         if let Some(closer) = closer {
-            self.closers.insert(cid, closer);
+            self.closers.insert(cid, closer, &guard);
         }
     }
 
@@ -75,19 +86,19 @@ impl TrafficReporter {
         info!(
             cid = %connection_id,
             active_before = self.sessions.len(),
-            active_ids = ?self.sessions.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>(),
             "[TRAFFIC] finish requested"
         );
-        let Some((_, record)) = self.sessions.remove(connection_id) else {
+        let guard = self.sessions.guard();
+        let Some(record) = self.sessions.remove(connection_id, &guard) else {
             warn!(
                 cid = %connection_id,
                 active = self.sessions.len(),
-                active_ids = ?self.sessions.iter().map(|entry| entry.key().clone()).collect::<Vec<_>>(),
                 "[TRAFFIC] finish could not find active connection"
             );
             return;
         };
-        self.closers.remove(record.connection_id.as_ref());
+        let guard = self.closers.guard();
+        self.closers.remove(record.connection_id.as_ref(), &guard);
 
         info!(
             cid = %record.connection_id,
@@ -96,9 +107,9 @@ impl TrafficReporter {
         );
 
         let api = Arc::clone(&self.api);
-        let connection_id = record.connection_id;
-        let player_name = record.player_name;
-        let player_uuid = record.player_uuid;
+        let connection_id = record.connection_id.clone();
+        let player_name = record.player_name.clone();
+        let player_uuid = record.player_uuid.clone();
 
         spawn_background(async move {
             info!(
@@ -111,11 +122,7 @@ impl TrafficReporter {
             );
 
             if let Err(error) = api
-                .closed(
-                    &connection_id,
-                    totals.upload_bytes,
-                    totals.download_bytes,
-                )
+                .closed(&connection_id, totals.upload_bytes, totals.download_bytes)
                 .await
             {
                 warn!(
@@ -128,63 +135,40 @@ impl TrafficReporter {
     }
 
     pub fn active_totals(&self) -> ConnectionTraffic {
-        let mut totals = ConnectionTraffic::default();
-        for entry in self.sessions.iter() {
-            totals = totals.combined_with(ConnectionTraffic {
-                upload_bytes: entry.session.upload(),
-                download_bytes: entry.session.download(),
-            });
-        }
-        totals
+        let guard = self.sessions.guard();
+        let entries: Vec<_> = self.sessions.iter(&guard).collect();
+
+        entries
+            .par_iter()
+            .map(|(_, record)| ConnectionTraffic {
+                upload_bytes: record.session.upload(),
+                download_bytes: record.session.download(),
+            })
+            .reduce(ConnectionTraffic::default, ConnectionTraffic::combined_with)
     }
 
-    fn spawn_loop(&self, interval: std::time::Duration) {
-        let reporter = self.clone();
+    fn spawn_loop(&mut self, interval: std::time::Duration) {
+        let reporter = Self {
+            api: self.api.clone(),
+            sessions: self.sessions.clone(),
+            closers: self.closers.clone(),
+            cancel_token: self.cancel_token.clone(),
+            background_handle: Arc::new(Mutex::new(None)),
+        };
         let cancel_token = self.cancel_token.clone();
         let interval_secs = interval.as_secs_f64();
-        spawn_background(async move {
+        let handle = spawn_background(async move {
             loop {
                 tokio::select! {
                     _ = tokio::time::sleep(interval) => {
-                        let mut snapshot = Vec::new();
-                        let mut aggregate = ConnectionTraffic::default();
-                        let mut aggregate_delta = ConnectionTraffic::default();
-                        for mut entry in reporter.sessions.iter_mut() {
-                            let upload = entry.session.upload();
-                            let download = entry.session.download();
-                            let delta_upload = upload.saturating_sub(entry.last_sent.upload_bytes);
-                            let delta_download = download.saturating_sub(entry.last_sent.download_bytes);
-
-                            aggregate = aggregate.combined_with(ConnectionTraffic {
-                                upload_bytes: upload,
-                                download_bytes: download,
-                            });
-                            aggregate_delta = aggregate_delta.combined_with(ConnectionTraffic {
-                                upload_bytes: delta_upload,
-                                download_bytes: delta_download,
-                            });
-
-                            entry.last_sent = ConnectionTraffic {
-                                upload_bytes: upload,
-                                download_bytes: download,
-                            };
-                            snapshot.push(PlayerTraffic {
-                                cid: entry.connection_id.clone(),
-                                player_name: entry.player_name.clone(),
-                                player_uuid: entry.player_uuid.clone(),
-                                upload_bytes: upload,
-                                download_bytes: download,
-                                delta_upload_bytes: delta_upload,
-                                delta_download_bytes: delta_download,
-                            });
-                        }
+                        let (snapshot, aggregate, aggregate_delta) = collect_traffic_snapshot(&reporter);
 
                         if snapshot.is_empty() {
                             continue;
                         }
 
                         {
-                            let players: Vec<String> = snapshot.iter().map(|p| {
+                            let players: Vec<String> = snapshot.par_iter().map(|p| {
                                 let name = p.player_name.as_deref().unwrap_or("-");
                                 let uuid = p.player_uuid.as_deref().unwrap_or("-");
                                 format!("{}(uuid={},up={}B,down={}B)", name, uuid, p.upload_bytes, p.download_bytes)
@@ -224,7 +208,66 @@ impl TrafficReporter {
                 }
             }
         });
+        if let Ok(mut h) = self.background_handle.lock() {
+            *h = handle;
+        }
     }
+}
+
+impl Drop for TrafficReporter {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+fn collect_traffic_snapshot(
+    reporter: &TrafficReporter,
+) -> (Vec<PlayerTraffic>, ConnectionTraffic, ConnectionTraffic) {
+    let guard = reporter.sessions.guard();
+    let entries: Vec<_> = reporter.sessions.iter(&guard).collect();
+
+    let results: Vec<(PlayerTraffic, ConnectionTraffic, ConnectionTraffic)> = entries
+        .par_iter()
+        .map(|(_, record)| {
+            let upload = record.session.upload();
+            let download = record.session.download();
+            let delta_upload = upload.saturating_sub(record.last_sent.upload_bytes);
+            let delta_download = download.saturating_sub(record.last_sent.download_bytes);
+
+            let player_traffic = PlayerTraffic {
+                cid: record.connection_id.clone(),
+                player_name: record.player_name.clone(),
+                player_uuid: record.player_uuid.clone(),
+                upload_bytes: upload,
+                download_bytes: download,
+                delta_upload_bytes: delta_upload,
+                delta_download_bytes: delta_download,
+            };
+
+            let traffic = ConnectionTraffic {
+                upload_bytes: upload,
+                download_bytes: download,
+            };
+            let delta = ConnectionTraffic {
+                upload_bytes: delta_upload,
+                download_bytes: delta_download,
+            };
+
+            (player_traffic, traffic, delta)
+        })
+        .collect();
+
+    let mut snapshot = Vec::with_capacity(results.len());
+    let mut aggregate = ConnectionTraffic::default();
+    let mut aggregate_delta = ConnectionTraffic::default();
+
+    for (player_traffic, traffic, delta) in results {
+        snapshot.push(player_traffic);
+        aggregate = aggregate.combined_with(traffic);
+        aggregate_delta = aggregate_delta.combined_with(delta);
+    }
+
+    (snapshot, aggregate, aggregate_delta)
 }
 
 struct PlayerTraffic {
@@ -237,31 +280,36 @@ struct PlayerTraffic {
     delta_download_bytes: u64,
 }
 
-fn spawn_background<F>(future: F)
+fn spawn_background<F>(future: F) -> Option<thread::JoinHandle<()>>
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         let span = tracing::info_span!("traffic");
         handle.spawn(future.instrument(span));
-        return;
+        return None;
     }
 
-    thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
+    Some(thread::spawn(
+        move || match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .expect("build background tokio runtime");
-        runtime.block_on(future);
-    });
+        {
+            Ok(runtime) => runtime.block_on(future),
+            Err(error) => {
+                tracing::error!(error = %error, "failed to build background tokio runtime")
+            }
+        },
+    ))
 }
 
 fn close_connections(
-    closers: &DashMap<Arc<str>, std::net::TcpStream>,
+    closers: &HashMap<Arc<str>, std::net::TcpStream>,
     connections_to_close: &[String],
 ) {
+    let guard = closers.guard();
     for close_id in connections_to_close {
-        if let Some((_, stream)) = closers.remove(close_id.as_str()) {
+        if let Some(stream) = closers.remove(close_id.as_str(), &guard) {
             let _ = stream.shutdown(Shutdown::Both);
             warn!(cid = %close_id, "closed connection requested by traffic api");
         }

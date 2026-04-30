@@ -11,9 +11,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::Result;
 use tracing::{info, warn};
 
-use prism::{PrismContext, Config};
-use crate::config::{ConfigLoader, canonicalize_runtime_config};
-use logging::{init_tracing, reload_log_filter, rotate_log_file, ReloadHandle};
+use crate::config::{ConfigLoader, NecronPrismConfig, canonicalize_runtime_config};
+use logging::{ReloadHandle, init_tracing, reload_log_filter, rotate_log_file};
+use prism::PrismContext;
 
 use self::hooks::NecronPrismHooks;
 use self::traffic::TrafficReporter;
@@ -23,15 +23,18 @@ type Context = PrismContext<NecronPrismHooks>;
 #[tokio::main]
 pub async fn run() -> Result<()> {
     let mut config = ConfigLoader::load_default()?;
-    let log_config = config.logging.clone();
+    let log_config = config.prism.logging.clone();
     let (guards, resolved_log_path, log_handle) = init_tracing(&log_config)?;
 
-    info!(version = env!("CARGO_PKG_VERSION"), "starting necron-prism proxy");
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "starting necron-prism proxy"
+    );
 
     canonicalize_runtime_config(&mut config);
 
     let (hooks, traffic) = build_hooks(&config)?;
-    let ctx = Context::new(config, hooks);
+    let ctx = Context::new(config.prism, hooks);
 
     tokio::spawn(watch_reload_file(ctx.clone(), log_handle.clone()));
     let _traffic_guard = traffic;
@@ -45,18 +48,22 @@ pub async fn run() -> Result<()> {
     drop(guards);
     drop(_traffic_guard);
 
-    if let Some(resolved_path) = resolved_log_path {
-        let file_config = log_config.file.as_ref().unwrap();
-        if let Err(e) = rotate_log_file(&resolved_path, file_config.mode, &file_config.archive_pattern) {
-            eprintln!("failed to rotate log file on shutdown: {e}");
-        }
+    if let Some(resolved_path) = resolved_log_path
+        && let Some(file_config) = log_config.file.as_ref()
+        && let Err(e) = rotate_log_file(
+            &resolved_path,
+            file_config.mode,
+            &file_config.archive_pattern,
+        )
+    {
+        eprintln!("failed to rotate log file on shutdown: {e}");
     }
 
     info!("necron-prism shutdown complete");
     Ok(())
 }
 
-fn build_hooks(config: &Config) -> Result<(NecronPrismHooks, TrafficReporter)> {
+fn build_hooks(config: &NecronPrismConfig) -> Result<(NecronPrismHooks, TrafficReporter)> {
     let api = std::sync::Arc::new(crate::proxy::api::ApiService::new(
         &config.api,
         std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -64,7 +71,15 @@ fn build_hooks(config: &Config) -> Result<(NecronPrismHooks, TrafficReporter)> {
     let motd = std::sync::Arc::new(prism::motd::MotdService::new());
     let traffic = TrafficReporter::new(api.clone(), &config.api);
 
-    Ok((NecronPrismHooks::new(api, motd, traffic.clone()), traffic))
+    Ok((
+        NecronPrismHooks::new(
+            api,
+            motd,
+            traffic.clone(),
+            config.api.entry_node_key.clone(),
+        ),
+        traffic,
+    ))
 }
 
 async fn watch_reload_file(ctx: Context, log_handle: ReloadHandle) {
@@ -89,9 +104,12 @@ fn reload_config(ctx: &Context, log_handle: &ReloadHandle) -> Result<()> {
 
     canonicalize_runtime_config(&mut new_config);
 
-    reload_log_filter(log_handle, new_config.logging.level.as_filter_directive())?;
+    reload_log_filter(
+        log_handle,
+        new_config.prism.logging.level.as_filter_directive(),
+    )?;
 
-    ctx.update_config(new_config);
+    ctx.update_config(new_config.prism);
 
     Ok(())
 }
@@ -115,5 +133,7 @@ async fn shutdown_signal() {
 }
 
 fn mtime(path: &Path) -> SystemTime {
-    fs::metadata(path).and_then(|m| m.modified()).unwrap_or(UNIX_EPOCH)
+    fs::metadata(path)
+        .and_then(|m| m.modified())
+        .unwrap_or(UNIX_EPOCH)
 }

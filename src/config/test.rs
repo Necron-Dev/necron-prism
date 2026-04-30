@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use prism::config::*;
 
-use crate::config::{ConfigLoader, canonicalize_runtime_config};
+use crate::config::{ApiMode, ConfigLoader, canonicalize_runtime_config};
 
 #[test]
 fn parse_minimal_config() {
@@ -23,13 +23,12 @@ fn parse_minimal_config() {
     canonicalize_runtime_config(&mut config);
 
     assert_eq!(config.api.mode, ApiMode::Mock);
-    assert_eq!(config.network.socket.listen_addr, "127.0.0.1:25565");
-    assert_eq!(config.network.relay.mode, RelayMode::Async);
+    assert_eq!(config.prism.network.socket.listen_addr, "127.0.0.1:25565");
+    assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
 }
 
 #[cfg_attr(miri, ignore)]
 #[test]
-fn loader_writes_default_config_when_missing() {
 fn loader_writes_default_config_when_missing() {
     struct TempConfigDir {
         path: std::path::PathBuf,
@@ -71,7 +70,7 @@ fn loader_writes_default_config_when_missing() {
     assert!(written.contains("[logging]"));
     assert!(written.contains("level = \"info\""));
     assert!(written.contains("stats_log_interval_secs = 10"));
-    assert_eq!(config.network.socket.listen_addr, "0.0.0.0:25565");
+    assert_eq!(config.prism.network.socket.listen_addr, "0.0.0.0:25565");
 }
 
 #[test]
@@ -109,11 +108,11 @@ fn parse_explicit_relay_config() {
     canonicalize_runtime_config(&mut config);
 
     #[cfg(target_os = "linux")]
-    assert_eq!(config.network.relay.mode, RelayMode::Splice);
+    assert_eq!(config.prism.network.relay.mode, RelayMode::Splice);
     #[cfg(not(target_os = "linux"))]
     {
-        assert_eq!(config.network.relay.mode, RelayMode::Async);
-        assert_eq!(config.requested_relay.mode, RelayMode::Splice);
+        assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
+        assert_eq!(config.prism.requested_relay.mode, RelayMode::Splice);
     }
 }
 
@@ -136,11 +135,11 @@ fn parse_io_uring_config() {
     canonicalize_runtime_config(&mut config);
 
     #[cfg(target_os = "linux")]
-    assert_eq!(config.network.relay.mode, RelayMode::IoUring);
+    assert_eq!(config.prism.network.relay.mode, RelayMode::IoUring);
     #[cfg(not(target_os = "linux"))]
     {
-        assert_eq!(config.network.relay.mode, RelayMode::Async);
-        assert_eq!(config.requested_relay.mode, RelayMode::IoUring);
+        assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
+        assert_eq!(config.prism.requested_relay.mode, RelayMode::IoUring);
     }
 }
 
@@ -160,7 +159,7 @@ fn parse_empty_relay_section_uses_defaults() {
     )
     .unwrap();
 
-    assert_eq!(config.network.relay.mode, RelayMode::Async);
+    assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
 }
 
 #[test]
@@ -180,10 +179,11 @@ fn parse_logging_stats_interval_config() {
     )
     .unwrap();
 
-    assert_eq!(config.logging.stats_log_interval_secs, Some(42));
+    assert_eq!(config.prism.logging.stats_log_interval_secs, Some(42));
 }
 
-
+#[test]
+fn canonicalize_updates_requested_relay_on_non_linux() {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -210,9 +210,9 @@ fn parse_logging_stats_interval_config() {
     let mut config = ConfigLoader::load_from_path(&config_path).unwrap();
     canonicalize_runtime_config(&mut config);
 
-    assert_eq!(config.network.relay.mode, RelayMode::Async);
-    assert_eq!(config.network.relay.label(), "async");
-    assert_eq!(config.requested_relay.mode, RelayMode::IoUring);
+    assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
+    assert_eq!(config.prism.network.relay.label(), "async");
+    assert_eq!(config.prism.requested_relay.mode, RelayMode::IoUring);
 
     let _ = fs::remove_file(config_path);
     let _ = fs::remove_dir(temp_dir);

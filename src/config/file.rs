@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "schema")]
 use schemars::JsonSchema;
 
+use crate::config::{ApiConfig, ApiMode, NecronPrismConfig};
 use prism::config::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -19,6 +20,7 @@ pub struct FileConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 #[derive(Default)]
 pub struct FileNetworkConfig {
@@ -27,6 +29,7 @@ pub struct FileNetworkConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileNetworkSocketConfig {
     pub listen_addr: String,
@@ -84,6 +87,7 @@ impl Default for FileNetworkSocketConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileMotdConfig {
     pub mode: MotdMode,
@@ -114,6 +118,7 @@ impl Default for FileMotdConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileApiConfig {
     pub mode: ApiMode,
@@ -151,6 +156,7 @@ impl Default for FileApiConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileLoggingConfig {
     pub level: LogLevel,
@@ -180,6 +186,7 @@ impl Default for FileLoggingConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileLogFileConfig {
     pub path: PathBuf,
@@ -209,6 +216,7 @@ impl From<FileLogFileConfig> for LogFileConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileMotdFaviconConfig {
     pub mode: MotdFaviconMode,
@@ -230,6 +238,7 @@ impl Default for FileMotdFaviconConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(default)]
 pub struct FileRelayConfig {
     pub mode: RelayMode,
@@ -243,47 +252,61 @@ impl Default for FileRelayConfig {
     }
 }
 
-impl From<FileConfig> for Config {
+impl From<FileConfig> for NecronPrismConfig {
     fn from(file: FileConfig) -> Self {
         Self {
-            network: NetworkConfig {
-                socket: NetworkSocketConfig {
-                    listen_addr: file.network.socket.listen_addr,
-                    multipath_tcp: file.network.socket.multipath_tcp,
-                    first_packet_timeout_ms: file.network.socket.first_packet_timeout_ms,
-                    tcp_nodelay: file.network.socket.tcp_nodelay,
-                    tcp_keepalive: file.network.socket.tcp_keepalive,
-                    keepalive_secs: file.network.socket.keepalive_secs,
-                    recv_buffer_size: file.network.socket.recv_buffer_size,
-                    send_buffer_size: file.network.socket.send_buffer_size,
-                    reuse_address: file.network.socket.reuse_address,
-                    reuse_port: file.network.socket.reuse_port,
-                    listen_backlog: file.network.socket.listen_backlog,
-                    tcp_fastopen: file.network.socket.tcp_fastopen,
-                    tcp_fastopen_queue: file.network.socket.tcp_fastopen_queue,
-                    tcp_quickack: file.network.socket.tcp_quickack,
-                    ip_tos: file.network.socket.ip_tos,
-                    congestion_control: file.network.socket.congestion_control,
-                    bind_interface: file.network.socket.bind_interface,
-                    fwmark: file.network.socket.fwmark,
+            prism: Config {
+                network: NetworkConfig {
+                    socket: NetworkSocketConfig {
+                        listen_addr: file.network.socket.listen_addr,
+                        multipath_tcp: file.network.socket.multipath_tcp,
+                        first_packet_timeout_ms: file.network.socket.first_packet_timeout_ms,
+                        tcp_nodelay: file.network.socket.tcp_nodelay,
+                        tcp_keepalive: file.network.socket.tcp_keepalive,
+                        keepalive_secs: file.network.socket.keepalive_secs,
+                        recv_buffer_size: file.network.socket.recv_buffer_size,
+                        send_buffer_size: file.network.socket.send_buffer_size,
+                        reuse_address: file.network.socket.reuse_address,
+                        reuse_port: file.network.socket.reuse_port,
+                        listen_backlog: file.network.socket.listen_backlog,
+                        tcp_fastopen: file.network.socket.tcp_fastopen,
+                        tcp_fastopen_queue: file.network.socket.tcp_fastopen_queue,
+                        tcp_quickack: file.network.socket.tcp_quickack,
+                        ip_tos: file.network.socket.ip_tos,
+                        congestion_control: file.network.socket.congestion_control,
+                        bind_interface: file.network.socket.bind_interface,
+                        fwmark: file.network.socket.fwmark,
+                        tcp_notsent_lowat: None,
+                        so_busy_poll: None,
+                    },
+                    relay: RelayConfig {
+                        mode: file.network.relay.mode,
+                    },
+                    buffer: BufferConfig::default(),
                 },
-                relay: RelayConfig {
-                    mode: file.network.relay.mode,
+                motd: MotdConfig {
+                    mode: file.motd.mode,
+                    local_json: file.motd.local_json,
+                    upstream_addr: file.motd.upstream_addr,
+                    protocol: file.motd.protocol,
+                    ping_mode: file.motd.ping_mode,
+                    ping_target_addr: file.motd.ping_target_addr,
+                    upstream_ping_timeout_ms: file.motd.upstream_ping_timeout_ms,
+                    favicon: MotdFaviconConfig {
+                        mode: file.motd.favicon.mode,
+                        path: file.motd.favicon.path,
+                        target_addr: file.motd.favicon.target_addr,
+                    },
                 },
-            },
-            motd: MotdConfig {
-                mode: file.motd.mode,
-                local_json: file.motd.local_json,
-                upstream_addr: file.motd.upstream_addr,
-                protocol: file.motd.protocol,
-                ping_mode: file.motd.ping_mode,
-                ping_target_addr: file.motd.ping_target_addr,
-                upstream_ping_timeout_ms: file.motd.upstream_ping_timeout_ms,
-                favicon: MotdFaviconConfig {
-                    mode: file.motd.favicon.mode,
-                    path: file.motd.favicon.path,
-                    target_addr: file.motd.favicon.target_addr,
+                logging: LoggingConfig {
+                    level: file.logging.level,
+                    format: file.logging.format,
+                    async_enabled: file.logging.async_enabled,
+                    stats_log_interval_secs: file.logging.stats_log_interval_secs,
+                    file: file.logging.file.map(LogFileConfig::from),
                 },
+                source_path: PathBuf::new(),
+                requested_relay: RelayConfig::default(),
             },
             api: ApiConfig {
                 mode: file.api.mode,
@@ -297,15 +320,6 @@ impl From<FileConfig> for Config {
                 mock_connection_id_prefix: file.api.mock_connection_id_prefix,
                 mock_kick_reason: file.api.mock_kick_reason,
             },
-            logging: LoggingConfig {
-                level: file.logging.level,
-                format: file.logging.format,
-                async_enabled: file.logging.async_enabled,
-                stats_log_interval_secs: file.logging.stats_log_interval_secs,
-                file: file.logging.file.map(LogFileConfig::from),
-            },
-            source_path: PathBuf::new(),
-            requested_relay: RelayConfig::default(),
         }
     }
 }

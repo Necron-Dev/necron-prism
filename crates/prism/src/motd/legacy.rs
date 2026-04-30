@@ -70,8 +70,7 @@ async fn fetch_upstream_status_json(config: &MotdConfig) -> anyhow::Result<Strin
         server_port,
         next_state: 1,
     };
-    let mut request =
-        prism_minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
+    let mut request = prism_minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
     request.extend_from_slice(&[1, 0]);
     stream.write_all(&request).await?;
 

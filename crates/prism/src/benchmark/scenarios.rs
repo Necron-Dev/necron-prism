@@ -1,7 +1,9 @@
-#![cfg_attr(not(feature = "benchmark"), allow(dead_code, unused_imports))]
+#![cfg_attr(not(feature = "benchmark"), allow(dead_code, unused_imports, unused))]
 
 #[cfg(feature = "benchmark")]
 mod imp {
+    #![allow(dead_code)]
+
     use super::super::harness::{RelayHarness, RelayImplementation, TrafficBurst, TrafficPlan};
     use criterion::{BenchmarkId, Criterion, SamplingMode, Throughput};
     use std::env;
@@ -147,4 +149,5 @@ mod imp {
 }
 
 #[cfg(feature = "benchmark")]
+#[allow(unused_imports)]
 pub use imp::*;

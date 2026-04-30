@@ -1378,6 +1378,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "schemars",
+ "seize",
  "serde",
  "serde_json",
  "tokio",

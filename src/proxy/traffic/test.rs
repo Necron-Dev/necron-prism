@@ -43,8 +43,8 @@ fn connected_stream() -> TcpStream {
     stream
 }
 
-#[test]
-fn mock_mode_keeps_active_traffic_totals() {
+#[tokio::test]
+async fn mock_mode_keeps_active_traffic_totals() {
     let reporter = mock_reporter();
     let session = ConnectionSession::new(None);
     let closer = connected_stream();

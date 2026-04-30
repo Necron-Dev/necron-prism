@@ -78,7 +78,8 @@ impl TrafficReporter {
         );
 
         if let Some(closer) = closer {
-            self.closers.insert(cid, closer, &guard);
+            let closers_guard = self.closers.guard();
+            self.closers.insert(cid, closer, &closers_guard);
         }
     }
 

@@ -1,6 +1,19 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
-  ]
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticPrefixFixDepsChoreOthers",
+    ":ignoreModulesAndTests",
+    ":automergeMinor",
+    ":automergePr",
+    ":automergeRequireAllStatusChecks",
+    ":rebaseStalePrs",
+    "group:monorepos",
+    "group:recommended",
+    "mergeConfidence:all-badges",
+    "replacements:all",
+    "workarounds:all"
+  ],
+  "autoApprove": true
 }

@@ -35,7 +35,7 @@ flate2 = "1.0"
 owo-colors = "4.3.0"
 uuid = { version = "1", features = ["v3"] }
 rayon = "1.10"
-seize = "0.3"
+seize = "0.5"
 
 [[bin]]
 name = "schema"

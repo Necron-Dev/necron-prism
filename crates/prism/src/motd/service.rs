@@ -1,10 +1,10 @@
-use necron_prism_minecraft::{
-    decode_status_request, encode_raw_frame, ping_response_packet, status_response_packet, HandshakeInfo, PacketIo,
-    MAX_STATUS_PACKET_SIZE,
-};
 use crate::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
-use crate::template;
 use crate::session::ConnectionSession;
+use crate::template;
+use prism_minecraft::{
+    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, decode_status_request, encode_raw_frame,
+    ping_response_packet, status_response_packet,
+};
 
 use std::path::Path;
 use std::sync::Arc;
@@ -50,7 +50,8 @@ impl MotdService {
         };
 
         let motd_json = context.build_json(online_count, upstream.as_mut()).await?;
-        let mut status_response = status_response_packet(&motd_json).map_err(anyhow::Error::from)?;
+        let mut status_response =
+            status_response_packet(&motd_json).map_err(anyhow::Error::from)?;
 
         let outcome = match motd_config.ping_mode {
             StatusPingMode::ZeroMs => {
@@ -93,8 +94,8 @@ impl MotdService {
         &self,
         path: &std::path::Path,
     ) -> anyhow::Result<std::sync::Arc<str>> {
-        use base64::Engine;
         use anyhow::Context;
+        use base64::Engine;
 
         let bytes = tokio::fs::read(path)
             .await

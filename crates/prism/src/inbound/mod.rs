@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::io;
 use std::net::TcpListener;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::Result;
 use socket2::SockRef;
@@ -16,15 +16,18 @@ use crate::transport::handle_connection;
 static ACCEPTED: AtomicU64 = AtomicU64::new(0);
 
 async fn bind_listener(config: &Config) -> io::Result<TcpListener> {
-    create_listener(lookup_host(&config.network.socket.listen_addr)
-                        .await?
-                        .next()
-                        .ok_or_else(|| {
-                            io::Error::new(
-                                io::ErrorKind::AddrNotAvailable,
-                                "no socket address resolved",
-                            )
-                        })?, config)
+    create_listener(
+        lookup_host(&config.network.socket.listen_addr)
+            .await?
+            .next()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::AddrNotAvailable,
+                    "no socket address resolved",
+                )
+            })?,
+        config,
+    )
 }
 
 pub async fn run<H: PrismHooks>(ctx: PrismContext<H>) -> Result<()> {
@@ -34,7 +37,10 @@ pub async fn run<H: PrismHooks>(ctx: PrismContext<H>) -> Result<()> {
     accept_loop(listener, ctx).await
 }
 
-async fn accept_loop<H: PrismHooks>(listener: tokio::net::TcpListener, ctx: PrismContext<H>) -> Result<()> {
+async fn accept_loop<H: PrismHooks>(
+    listener: tokio::net::TcpListener,
+    ctx: PrismContext<H>,
+) -> Result<()> {
     loop {
         let (stream, _) = listener.accept().await?;
         let accepted = ACCEPTED.fetch_add(1, Ordering::Relaxed) + 1;

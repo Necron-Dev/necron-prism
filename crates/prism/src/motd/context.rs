@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use tokio::io::AsyncWriteExt;
 
-use necron_prism_minecraft::{
-    decode_ping_request, ping_response_packet, HandshakeInfo, PacketIo, RuntimeAddress,
-    MAX_STATUS_PACKET_SIZE,
+use prism_minecraft::{
+    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, decode_ping_request,
+    ping_response_packet,
 };
 
 use super::rewrite::rewrite_json;
 use super::service::MotdService;
 use super::upstream::UpstreamStatusSession;
-use crate::config::{MotdFaviconMode, MotdMode, StatusPingMode, MotdConfig, RelayConfig};
+use crate::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
 use crate::template::{self, TemplateContext};
 
 pub struct StatusContext<'a> {
@@ -35,7 +35,10 @@ impl<'a> StatusContext<'a> {
         }
     }
 
-    pub async fn open_upstream(&self, status_request_wire: &[u8]) -> anyhow::Result<Option<UpstreamStatusSession>> {
+    pub async fn open_upstream(
+        &self,
+        status_request_wire: &[u8],
+    ) -> anyhow::Result<Option<UpstreamStatusSession>> {
         let Some(target_addr) = self.upstream_target_addr() else {
             return Ok(None);
         };
@@ -69,7 +72,8 @@ impl<'a> StatusContext<'a> {
         }
 
         let explicit_favicon = self.load_explicit_favicon_data_url().await?;
-        let template_context = TemplateContext::for_transport(self.config, self.relay, online_count);
+        let template_context =
+            TemplateContext::for_transport(self.config, self.relay, online_count);
 
         let base_json = match self.config.mode {
             MotdMode::Local => {
@@ -121,7 +125,8 @@ impl<'a> StatusContext<'a> {
             }
             StatusPingMode::Passthrough => {
                 let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
-                let client_payload = decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
+                let client_payload =
+                    decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
                 let (payload, measured_ms) = match upstream {
                     Some(session) => session.ping(client_payload).await,
                     None => {
@@ -148,11 +153,22 @@ impl<'a> StatusContext<'a> {
     }
 
     fn ping_target_addr(&self) -> Option<RuntimeAddress> {
-        self.parse_optional_addr(self.config.ping_target_addr.as_deref().or(Some(&self.config.upstream_addr)))
+        self.parse_optional_addr(
+            self.config
+                .ping_target_addr
+                .as_deref()
+                .or(Some(&self.config.upstream_addr)),
+        )
     }
 
     fn favicon_target_addr(&self) -> Option<RuntimeAddress> {
-        self.parse_optional_addr(self.config.favicon.target_addr.as_deref().or(Some(&self.config.upstream_addr)))
+        self.parse_optional_addr(
+            self.config
+                .favicon
+                .target_addr
+                .as_deref()
+                .or(Some(&self.config.upstream_addr)),
+        )
     }
 
     fn upstream_target_addr(&self) -> Option<RuntimeAddress> {

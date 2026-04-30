@@ -2,33 +2,43 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use strum::Display;
 
-#[derive(Clone, Debug)]
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
+
+// Network defaults
+const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:25565";
+const DEFAULT_FIRST_PACKET_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_KEEPALIVE_SECS: u64 = 30;
+const DEFAULT_LISTEN_BACKLOG: u32 = 1024;
+const DEFAULT_IP_TOS: u8 = 0xB8;
+const DEFAULT_TCP_NOTSENT_LOWAT: u32 = 16384;
+
+// Buffer defaults
+const DEFAULT_RELAY_BUFFER_SIZE: usize = 64 * 1024;
+const DEFAULT_IO_URING_BUFFER_SIZE: usize = 64 * 1024;
+const DEFAULT_SPLICE_PIPE_CHUNK_SIZE: usize = 64 * 1024;
+const DEFAULT_PACKET_READ_BUFFER_SIZE: usize = 16 * 1024;
+
+// MOTD defaults
+const DEFAULT_UPSTREAM_PING_TIMEOUT_MS: u64 = 1_500;
+
+// Logging defaults
+const DEFAULT_STATS_LOG_INTERVAL_SECS: u64 = 10;
+
+#[derive(Clone, Debug, Default)]
 pub struct Config {
     pub network: NetworkConfig,
     pub motd: MotdConfig,
-    pub api: ApiConfig,
     pub logging: LoggingConfig,
     pub source_path: PathBuf,
     pub requested_relay: RelayConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            network: NetworkConfig::default(),
-            motd: MotdConfig::default(),
-            api: ApiConfig::default(),
-            logging: LoggingConfig::default(),
-            source_path: PathBuf::new(),
-            requested_relay: RelayConfig::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct NetworkConfig {
     pub socket: NetworkSocketConfig,
     pub relay: RelayConfig,
+    pub buffer: BufferConfig,
 }
 
 #[derive(Clone, Debug)]
@@ -51,29 +61,52 @@ pub struct NetworkSocketConfig {
     pub congestion_control: Option<String>,
     pub bind_interface: Option<String>,
     pub fwmark: Option<u32>,
+    pub tcp_notsent_lowat: Option<u32>,
+    pub so_busy_poll: Option<u32>,
 }
 
 impl Default for NetworkSocketConfig {
     fn default() -> Self {
         Self {
-            listen_addr: "0.0.0.0:25565".to_string(),
+            listen_addr: DEFAULT_LISTEN_ADDR.to_string(),
             multipath_tcp: true,
-            first_packet_timeout_ms: 5_000,
+            first_packet_timeout_ms: DEFAULT_FIRST_PACKET_TIMEOUT_MS,
             tcp_nodelay: true,
             tcp_keepalive: true,
-            keepalive_secs: Some(30),
+            keepalive_secs: Some(DEFAULT_KEEPALIVE_SECS),
             recv_buffer_size: None,
             send_buffer_size: None,
             reuse_address: true,
             reuse_port: true,
-            listen_backlog: 1024,
+            listen_backlog: DEFAULT_LISTEN_BACKLOG,
             tcp_fastopen: true,
             tcp_fastopen_queue: None,
             tcp_quickack: true,
-            ip_tos: Some(0xB8),
+            ip_tos: Some(DEFAULT_IP_TOS),
             congestion_control: None,
             bind_interface: None,
             fwmark: None,
+            tcp_notsent_lowat: Some(DEFAULT_TCP_NOTSENT_LOWAT),
+            so_busy_poll: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BufferConfig {
+    pub relay_buffer_size: usize,
+    pub io_uring_buffer_size: usize,
+    pub splice_pipe_chunk_size: usize,
+    pub packet_read_buffer_size: usize,
+}
+
+impl Default for BufferConfig {
+    fn default() -> Self {
+        Self {
+            relay_buffer_size: DEFAULT_RELAY_BUFFER_SIZE,
+            io_uring_buffer_size: DEFAULT_IO_URING_BUFFER_SIZE,
+            splice_pipe_chunk_size: DEFAULT_SPLICE_PIPE_CHUNK_SIZE,
+            packet_read_buffer_size: DEFAULT_PACKET_READ_BUFFER_SIZE,
         }
     }
 }
@@ -99,39 +132,8 @@ impl Default for MotdConfig {
             protocol: MotdProtocol::Client,
             ping_mode: StatusPingMode::Local,
             ping_target_addr: None,
-            upstream_ping_timeout_ms: 1_500,
+            upstream_ping_timeout_ms: DEFAULT_UPSTREAM_PING_TIMEOUT_MS,
             favicon: MotdFaviconConfig::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ApiConfig {
-    pub mode: ApiMode,
-    pub base_url: Option<String>,
-    pub bearer_token: Option<String>,
-    pub entry_node_key: Option<String>,
-    pub timeout_ms: u64,
-    pub traffic_interval_ms: u64,
-    pub mock_target_addr: String,
-    pub mock_rewrite_addr: Option<String>,
-    pub mock_connection_id_prefix: String,
-    pub mock_kick_reason: Option<String>,
-}
-
-impl Default for ApiConfig {
-    fn default() -> Self {
-        Self {
-            mode: ApiMode::Mock,
-            base_url: None,
-            bearer_token: None,
-            entry_node_key: None,
-            timeout_ms: 3_000,
-            traffic_interval_ms: 5_000,
-            mock_target_addr: "mc.hypixel.net:25565".to_string(),
-            mock_rewrite_addr: None,
-            mock_connection_id_prefix: "debug".to_string(),
-            mock_kick_reason: None,
         }
     }
 }
@@ -153,6 +155,7 @@ pub struct LogFileConfig {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LogRotation {
     #[default]
@@ -167,7 +170,7 @@ impl Default for LoggingConfig {
             level: LogLevel::Info,
             format: LogFormat::Pretty,
             async_enabled: true,
-            stats_log_interval_secs: Some(10),
+            stats_log_interval_secs: Some(DEFAULT_STATS_LOG_INTERVAL_SECS),
             file: None,
         }
     }
@@ -201,6 +204,7 @@ impl Default for MotdFaviconConfig {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LogLevel {
     Trace,
@@ -224,6 +228,7 @@ impl LogLevel {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum LogFormat {
     #[default]
@@ -232,15 +237,8 @@ pub enum LogFormat {
     Json,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiMode {
-    Http,
-    #[default]
-    Mock,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum RelayMode {
@@ -282,6 +280,7 @@ impl RelayConfig {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MotdMode {
@@ -291,6 +290,7 @@ pub enum MotdMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MotdProtocol {
@@ -301,6 +301,7 @@ pub enum MotdProtocol {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum StatusPingMode {
@@ -313,6 +314,7 @@ pub enum StatusPingMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Display, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum MotdFaviconMode {

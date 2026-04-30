@@ -1,24 +1,27 @@
-use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
 
-use dashmap::DashMap;
+use anyhow::Result;
+use flurry::HashMap;
 
-use necron_prism_minecraft::{HandshakeInfo, INTENT_LOGIN, INTENT_STATUS};
 use crate::session::{ConnectionSession, PlayerState};
+use prism_minecraft::{HandshakeInfo, INTENT_LOGIN, INTENT_STATUS};
 
 #[derive(Clone, Default)]
 pub struct ConnectionRegistry {
-    sessions: Arc<DashMap<String, ConnectionSession>>,
+    sessions: Arc<HashMap<String, ConnectionSession>>,
     online_count: Arc<AtomicI32>,
 }
 
 impl ConnectionRegistry {
-    pub fn register(&self, session: ConnectionSession) -> usize {
-        let connection_id = session.connection_id().expect("session must have connection_id");
-        self.sessions.insert(connection_id, session);
-        self.sessions.len()
+    pub fn register(&self, session: ConnectionSession) -> Result<usize> {
+        let connection_id = session
+            .connection_id()
+            .ok_or_else(|| anyhow::anyhow!("session must have connection_id"))?;
+        let guard = self.sessions.guard();
+        self.sessions.insert(connection_id, session, &guard);
+        Ok(self.sessions.len())
     }
-
     pub fn update_handshake(&self, connection_id: &str, handshake: &HandshakeInfo) {
         self.update(connection_id, |session| {
             session.protocol_version = Some(handshake.protocol_version);
@@ -31,7 +34,12 @@ impl ConnectionRegistry {
         });
     }
 
-    pub fn update_login(&self, connection_id: &str, username: String, uuid: Option<valence_protocol::uuid::Uuid>) {
+    pub fn update_login(
+        &self,
+        connection_id: &str,
+        username: String,
+        uuid: Option<valence_protocol::uuid::Uuid>,
+    ) {
         self.update(connection_id, |session| {
             session.username = Some(username);
             session.uuid = uuid;
@@ -39,11 +47,13 @@ impl ConnectionRegistry {
     }
 
     pub fn update_outbound(&self, connection_id: &str, outbound_name: Arc<str>) {
-        let was_proxying = self
-            .sessions
-            .get(connection_id)
-            .map(|s| s.state == PlayerState::Proxying)
-            .unwrap_or(false);
+        let was_proxying = {
+            let guard = self.sessions.guard();
+            self.sessions
+                .get(connection_id, &guard)
+                .map(|s| s.state == PlayerState::Proxying)
+                .unwrap_or(false)
+        };
 
         self.update(connection_id, |session| {
             session.outbound_name = Some(outbound_name);
@@ -56,11 +66,13 @@ impl ConnectionRegistry {
     }
 
     pub fn set_state(&self, connection_id: &str, state: PlayerState) {
-        let was_proxying = self
-            .sessions
-            .get(connection_id)
-            .map(|s| s.state == PlayerState::Proxying)
-            .unwrap_or(false);
+        let was_proxying = {
+            let guard = self.sessions.guard();
+            self.sessions
+                .get(connection_id, &guard)
+                .map(|s| s.state == PlayerState::Proxying)
+                .unwrap_or(false)
+        };
 
         let will_be_proxying = state == PlayerState::Proxying;
 
@@ -84,31 +96,35 @@ impl ConnectionRegistry {
     }
 
     pub fn remove_connection(&self, connection_id: &str) -> usize {
-        if let Some((_, session)) = self.sessions.remove(connection_id)
+        let guard = self.sessions.guard();
+        if let Some(session) = self.sessions.remove(connection_id, &guard)
             && session.state == PlayerState::Proxying
         {
             self.online_count.fetch_sub(1, Ordering::Relaxed);
         }
         self.sessions.len()
     }
-
     pub fn active_count(&self) -> usize {
+        let _guard = self.sessions.guard();
         self.sessions.len()
     }
-
     pub fn with_session<R, F>(&self, connection_id: &str, f: F) -> Option<R>
     where
         F: FnOnce(&ConnectionSession) -> R,
     {
-        self.sessions.get(connection_id).map(|s| f(s.value()))
+        let guard = self.sessions.guard();
+        self.sessions.get(connection_id, &guard).map(f)
     }
-
     fn update<F>(&self, connection_id: &str, update: F)
     where
         F: FnOnce(&mut ConnectionSession),
     {
-        if let Some(mut session) = self.sessions.get_mut(connection_id) {
+        let guard = self.sessions.guard();
+        if let Some(session) = self.sessions.get(connection_id, &guard) {
+            let mut session = session.clone();
             update(&mut session);
+            self.sessions
+                .insert(connection_id.to_string(), session, &guard);
         }
     }
 }

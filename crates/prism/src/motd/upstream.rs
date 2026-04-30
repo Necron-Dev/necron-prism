@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
-use necron_prism_minecraft::{
-    decode_ping_request, decode_status_response, ping_response_packet,
-    HandshakeInfo, PacketIo, RuntimeAddress, MAX_STATUS_PACKET_SIZE,
+use prism_minecraft::{
+    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, decode_ping_request,
+    decode_status_response, ping_response_packet,
 };
 
 use super::service::MotdService;
@@ -27,29 +27,31 @@ impl UpstreamStatusSession {
         _service: &MotdService,
         read_json: bool,
     ) -> anyhow::Result<Self> {
-        let mut stream = tokio::time::timeout(
-            timeout_duration,
-            TcpStream::connect(target_addr.as_str()),
-        )
-        .await
-        .map_err(|_| anyhow::anyhow!("upstream status connection timed out"))??;
+        let mut stream =
+            tokio::time::timeout(timeout_duration, TcpStream::connect(target_addr.as_str()))
+                .await
+                .map_err(|_| anyhow::anyhow!("upstream status connection timed out"))??;
 
         stream.set_nodelay(true)?;
 
         let mut handshake = client_handshake.clone();
-        handshake.rewrite_addr(&rewrite_addr).map_err(|e| anyhow::anyhow!(e))?;
+        handshake
+            .rewrite_addr(&rewrite_addr)
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        let handshake_packet = necron_prism_minecraft::encode_handshake(&handshake)
-            .map_err(anyhow::Error::from)?;
+        let handshake_packet =
+            prism_minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
 
         let mut combined = Vec::with_capacity(handshake_packet.len() + status_request_wire.len());
         combined.extend_from_slice(&handshake_packet);
         combined.extend_from_slice(status_request_wire);
         stream.write_all(&combined).await?;
 
-        let mut packet_io = PacketIo::new();
+        let mut packet_io = PacketIo::default();
         let status_json = if read_json {
-            let frame = packet_io.read_frame(&mut stream, MAX_STATUS_PACKET_SIZE).await?;
+            let frame = packet_io
+                .read_frame(&mut stream, MAX_STATUS_PACKET_SIZE)
+                .await?;
             let json = decode_status_response(&frame).map_err(anyhow::Error::from)?;
             Some(Arc::<str>::from(json))
         } else {

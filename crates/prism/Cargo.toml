@@ -7,17 +7,19 @@ version = "0.0.0"
 default = []
 linux-accel = ["dep:rustix", "dep:tokio-uring"]
 benchmark = ["dep:criterion", "dep:nerd-font-symbols"]
+schema = ["dep:schemars"]
 
 [dependencies]
-necron-prism-minecraft = { path = "../minecraft" }
+prism-minecraft = { path = "../prism-minecraft" }
 arc-swap = "1.7"
+crossbeam-channel = "0.5"
+flurry = "0.5"
 socket2 = { version = "0.6", default-features = false, features = ["all"] }
 tokio = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs", "signal"] }
 tokio-util = "0.7"
 tracing = "0.1"
 anyhow = "1.0"
 thiserror = "2.0.18"
-dashmap = "6.1"
 parking_lot = "0.12"
 valence_protocol = "0.2.0-alpha.1"
 strum = { version = "0.28.0", features = ["derive"] }
@@ -27,6 +29,8 @@ base64 = "0.22"
 mime_guess = { version = "2.0", default-features = false }
 criterion = { version = "0.8.2", features = ["html_reports"], optional = true }
 nerd-font-symbols = { version = "0.3", optional = true }
+rayon = "1.10"
+schemars = { version = "1.0", features = ["derive"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { version = "1.1", default-features = false, features = ["pipe", "std"], optional = true }

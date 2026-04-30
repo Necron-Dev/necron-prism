@@ -2,16 +2,16 @@
 
 #[cfg(feature = "benchmark")]
 mod imp {
-    use crate::session::ConnectionSession;
     use crate::config::Config;
     use crate::relay::relay_bidirectional;
+    use crate::session::ConnectionSession;
     use parking_lot::Condvar;
     use parking_lot::Mutex;
     use std::io::{Read, Write};
     use std::net::{Shutdown, TcpListener, TcpStream};
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::thread;
 
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -214,16 +214,21 @@ mod imp {
             RelayImplementation::Prism => run_prism_relay(client_stream, upstream_stream),
             RelayImplementation::Sync => run_sync_relay(client_stream, upstream_stream),
             RelayImplementation::PlainCopy => run_plain_copy_relay(client_stream, upstream_stream),
-            RelayImplementation::TokioAsync => run_tokio_async_relay(client_stream, upstream_stream),
+            RelayImplementation::TokioAsync => {
+                run_tokio_async_relay(client_stream, upstream_stream)
+            }
             RelayImplementation::CustomRelay => run_custom_relay(client_stream, upstream_stream),
         }
     }
 
-    fn run_prism_relay(client_stream: TcpStream, upstream_stream: TcpStream) -> std::io::Result<()> {
+    fn run_prism_relay(
+        client_stream: TcpStream,
+        upstream_stream: TcpStream,
+    ) -> std::io::Result<()> {
         client_stream.set_nonblocking(true)?;
         upstream_stream.set_nonblocking(true)?;
 
-        let session = ConnectionSession::new(1, None);
+        let session = ConnectionSession::new(None);
         let config = Config::default();
         relay_runtime()?.block_on(async move {
             let client = tokio::net::TcpStream::from_std(client_stream)?;
@@ -264,15 +269,18 @@ mod imp {
             let (mut upstream_read, mut upstream_write) = upstream.into_split();
 
             tokio::try_join!(
-                custom_async_copy(&mut client_read, &mut upstream_write),
-                custom_async_copy(&mut upstream_read, &mut client_write),
+                buffered_copy(&mut client_read, &mut upstream_write, 256 * 1024),
+                buffered_copy(&mut upstream_read, &mut client_write, 256 * 1024),
             )?;
 
             Ok::<(), std::io::Error>(())
         })
     }
 
-    fn run_custom_relay(client_stream: TcpStream, upstream_stream: TcpStream) -> std::io::Result<()> {
+    fn run_custom_relay(
+        client_stream: TcpStream,
+        upstream_stream: TcpStream,
+    ) -> std::io::Result<()> {
         client_stream.set_nonblocking(true)?;
         upstream_stream.set_nonblocking(true)?;
 
@@ -283,8 +291,8 @@ mod imp {
             let (mut upstream_read, mut upstream_write) = upstream.into_split();
 
             tokio::try_join!(
-                custom_relay_copy(&mut client_read, &mut upstream_write),
-                custom_relay_copy(&mut upstream_read, &mut client_write),
+                buffered_copy(&mut client_read, &mut upstream_write, 1024 * 1024),
+                buffered_copy(&mut upstream_read, &mut client_write, 1024 * 1024),
             )?;
 
             Ok::<(), std::io::Error>(())
@@ -311,31 +319,13 @@ mod imp {
         Ok(())
     }
 
-    async fn custom_async_copy(
+    async fn buffered_copy(
         reader: &mut (impl tokio::io::AsyncRead + Unpin),
         writer: &mut (impl tokio::io::AsyncWrite + Unpin),
+        buf_size: usize,
     ) -> std::io::Result<u64> {
         let mut total = 0_u64;
-        let mut buf = vec![0_u8; 256 * 1024];
-
-        loop {
-            let read = reader.read(&mut buf).await?;
-            if read == 0 {
-                writer.shutdown().await?;
-                return Ok(total);
-            }
-
-            writer.write_all(&buf[..read]).await?;
-            total += read as u64;
-        }
-    }
-
-    async fn custom_relay_copy(
-        reader: &mut (impl tokio::io::AsyncRead + Unpin),
-        writer: &mut (impl tokio::io::AsyncWrite + Unpin),
-    ) -> std::io::Result<u64> {
-        let mut total = 0_u64;
-        let mut buf = vec![0_u8; 1024 * 1024];
+        let mut buf = vec![0_u8; buf_size];
 
         loop {
             let read = reader.read(&mut buf).await?;
@@ -358,7 +348,9 @@ mod imp {
                     .worker_threads(2)
                     .enable_io()
                     .build()
-                    .map_err(|error| std::io::Error::other(format!("build bench relay runtime: {error}")))
+                    .map_err(|error| {
+                        std::io::Error::other(format!("build bench relay runtime: {error}"))
+                    })
             })
             .as_ref()
             .map_err(|error| std::io::Error::new(error.kind(), error.to_string()))

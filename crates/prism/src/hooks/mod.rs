@@ -2,7 +2,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use necron_prism_minecraft::{FramedPacket, HandshakeInfo, PacketIo};
+use prism_minecraft::{FramedPacket, HandshakeInfo, PacketIo};
 
 use crate::config::Config;
 use crate::session::{ConnectionReport, ConnectionRoute, ConnectionSession};
@@ -26,6 +26,7 @@ pub trait PrismHooks: Send + Sync + 'static {
         online_count: i32,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    #[allow(clippy::too_many_arguments)]
     fn on_login(
         &self,
         client: &mut tokio::net::TcpStream,

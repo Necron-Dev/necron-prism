@@ -1,4 +1,5 @@
 use crate::config::{MotdConfig, RelayConfig};
+use rayon::prelude::*;
 use serde::Serialize;
 use std::borrow::Cow;
 
@@ -18,11 +19,7 @@ pub struct TemplateContext {
 }
 
 impl TemplateContext {
-    pub fn for_transport(
-        transport: &MotdConfig,
-        relay: &RelayConfig,
-        online_count: i32,
-    ) -> Self {
+    pub fn for_transport(transport: &MotdConfig, relay: &RelayConfig, online_count: i32) -> Self {
         let upstream_addr = transport.upstream_addr.clone();
         let ping_target_addr = transport
             .ping_target_addr
@@ -54,7 +51,6 @@ pub fn render<'a>(template_str: &'a str, context: &TemplateContext) -> Cow<'a, s
         return Cow::Borrowed(template_str);
     }
 
-    let mut rendered = template_str.to_owned();
     let replacements = [
         ("{online_player}", context.online_player.as_str()),
         ("{motd_target_addr}", context.motd_target_addr.as_str()),
@@ -69,17 +65,21 @@ pub fn render<'a>(template_str: &'a str, context: &TemplateContext) -> Cow<'a, s
         ("{upstream_addr}", context.upstream_addr.as_str()),
     ];
 
-    let mut changed = false;
-    for (placeholder, value) in replacements {
-        if rendered.contains(placeholder) {
-            rendered = rendered.replace(placeholder, value);
-            changed = true;
-        }
+    // Replacements must be sequential because each one modifies the string
+    let active_replacements: Vec<_> = replacements
+        .par_iter()
+        .filter(|(placeholder, _)| template_str.contains(placeholder))
+        .map(|(placeholder, value)| (*placeholder, *value))
+        .collect();
+
+    if active_replacements.is_empty() {
+        return Cow::Borrowed(template_str);
     }
 
-    if changed {
-        Cow::Owned(rendered)
-    } else {
-        Cow::Borrowed(template_str)
+    let mut rendered = template_str.to_owned();
+    for (placeholder, value) in active_replacements {
+        rendered = rendered.replace(placeholder, value);
     }
+
+    Cow::Owned(rendered)
 }

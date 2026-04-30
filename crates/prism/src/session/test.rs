@@ -121,7 +121,7 @@ fn report_new_captures_all_fields() {
 #[test]
 fn route_carries_connection_id() {
     let route = ConnectionRoute {
-        target_addr: necron_prism_minecraft::RuntimeAddress::parse("127.0.0.1:25565").unwrap(),
+        target_addr: prism_minecraft::RuntimeAddress::parse("127.0.0.1:25565").unwrap(),
         rewrite_addr: None,
         connection_id: Some(Arc::<str>::from("mock-1")),
         player_name: None,
@@ -133,7 +133,7 @@ fn route_carries_connection_id() {
 #[test]
 fn route_carries_player_info() {
     let route = ConnectionRoute {
-        target_addr: necron_prism_minecraft::RuntimeAddress::parse("127.0.0.1:25565").unwrap(),
+        target_addr: prism_minecraft::RuntimeAddress::parse("127.0.0.1:25565").unwrap(),
         rewrite_addr: None,
         connection_id: Some(Arc::<str>::from("mock-1")),
         player_name: Some(Arc::<str>::from("TestPlayer")),

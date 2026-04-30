@@ -7,7 +7,7 @@ use tokio::net::TcpStream;
 use tokio::net::lookup_host;
 use tracing::{trace, warn};
 
-use necron_prism_minecraft::RuntimeAddress;
+use prism_minecraft::RuntimeAddress;
 
 use crate::config::Config;
 use crate::network::{apply_sockref_options, connect_stream};
@@ -54,13 +54,19 @@ pub async fn connect_addr(
     }
 
     if !resolved_any {
-        let error = io::Error::new(io::ErrorKind::AddrNotAvailable, "no socket address resolved");
+        let error = io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "no socket address resolved",
+        );
         trace!(target_addr = %target_addr, error = %error, "[CONNECT/OUTBOUND] no upstream socket address resolved");
         return Err(error.into());
     }
 
     let error = last_error.unwrap_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no socket address resolved")
+        std::io::Error::new(
+            std::io::ErrorKind::AddrNotAvailable,
+            "no socket address resolved",
+        )
     });
     let connect_ms = started.elapsed().as_millis();
 

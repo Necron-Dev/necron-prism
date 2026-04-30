@@ -1,6 +1,6 @@
-use necron_prism_minecraft::HandshakeInfo;
 use crate::config::{MotdConfig, MotdMode, RelayConfig};
 use crate::template::{self, TemplateContext};
+use prism_minecraft::HandshakeInfo;
 use tokio::io::AsyncWriteExt;
 
 use super::rewrite::rewrite_json;
@@ -51,12 +51,15 @@ async fn fetch_upstream_status_json(config: &MotdConfig) -> anyhow::Result<Strin
     let mut stream = tokio::net::TcpStream::connect(address).await?;
 
     let server_port = if let Some(stripped) = address.strip_prefix('[') {
-        let (_, port) = stripped.split_once(']').ok_or_else(|| anyhow::anyhow!("invalid IPv6 address"))?;
+        let (_, port) = stripped
+            .split_once(']')
+            .ok_or_else(|| anyhow::anyhow!("invalid IPv6 address"))?;
         port.strip_prefix(':')
             .and_then(|p| p.parse().ok())
             .unwrap_or(25565)
     } else {
-        address.rsplit_once(':')
+        address
+            .rsplit_once(':')
             .and_then(|(_, port)| port.parse().ok())
             .unwrap_or(25565)
     };
@@ -67,13 +70,14 @@ async fn fetch_upstream_status_json(config: &MotdConfig) -> anyhow::Result<Strin
         server_port,
         next_state: 1,
     };
-    let mut request = necron_prism_minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
+    let mut request =
+        prism_minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
     request.extend_from_slice(&[1, 0]);
     stream.write_all(&request).await?;
 
-    let mut packet_io = necron_prism_minecraft::PacketIo::new();
+    let mut packet_io = prism_minecraft::PacketIo::default();
     let frame = packet_io.read_frame(&mut stream, 64 * 1024).await?;
-    necron_prism_minecraft::decode_status_response(&frame).map_err(anyhow::Error::from)
+    prism_minecraft::decode_status_response(&frame).map_err(anyhow::Error::from)
 }
 
 fn extract_legacy_text(json: &str) -> String {

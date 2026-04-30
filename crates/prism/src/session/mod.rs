@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use tracing::{field::Empty, info_span, Span};
+use tracing::{Span, field::Empty, info_span};
 use valence_protocol::uuid::Uuid;
 
-use necron_prism_minecraft::RuntimeAddress;
+use prism_minecraft::RuntimeAddress;
 
 use crate::relay::RelayMode;
 

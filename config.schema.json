@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Config",
+  "title": "FileConfig",
   "type": "object",
   "properties": {
     "api": {
-      "$ref": "#/$defs/ApiConfig",
+      "$ref": "#/$defs/FileApiConfig",
       "default": {
+        "entry_node_key": null,
         "mock_connection_id_prefix": "debug",
         "mock_target_addr": "mc.hypixel.net:25565",
         "mode": "mock",
@@ -14,7 +15,7 @@
       }
     },
     "logging": {
-      "$ref": "#/$defs/LoggingConfig",
+      "$ref": "#/$defs/FileLoggingConfig",
       "default": {
         "async_enabled": true,
         "format": "pretty",
@@ -23,7 +24,7 @@
       }
     },
     "motd": {
-      "$ref": "#/$defs/MotdConfig",
+      "$ref": "#/$defs/FileMotdConfig",
       "default": {
         "favicon": {
           "mode": "json"
@@ -37,14 +38,20 @@
       }
     },
     "network": {
-      "$ref": "#/$defs/NetworkConfig",
+      "$ref": "#/$defs/FileNetworkConfig",
       "default": {
+        "buffer": {
+          "io_uring_buffer_size": 65536,
+          "packet_read_buffer_size": 16384,
+          "relay_buffer_size": 65536,
+          "splice_pipe_chunk_size": 65536
+        },
         "relay": {
           "mode": "async"
         },
         "socket": {
           "first_packet_timeout_ms": 5000,
-          "ip_tos": 16,
+          "ip_tos": 184,
           "keepalive_secs": 30,
           "listen_addr": "0.0.0.0:25565",
           "listen_backlog": 1024,
@@ -54,13 +61,21 @@
           "tcp_fastopen": true,
           "tcp_keepalive": true,
           "tcp_nodelay": true,
+          "tcp_notsent_lowat": 16384,
           "tcp_quickack": true
         }
       }
     }
   },
   "$defs": {
-    "ApiConfig": {
+    "ApiMode": {
+      "type": "string",
+      "enum": [
+        "http",
+        "mock"
+      ]
+    },
+    "FileApiConfig": {
       "type": "object",
       "properties": {
         "base_url": {
@@ -74,6 +89,13 @@
             "string",
             "null"
           ]
+        },
+        "entry_node_key": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "mock_connection_id_prefix": {
           "type": "string",
@@ -93,8 +115,7 @@
         },
         "mock_target_addr": {
           "type": "string",
-          "default": "mc.hypixel.net:25565",
-          "minLength": 1
+          "default": "mc.hypixel.net:25565"
         },
         "mode": {
           "$ref": "#/$defs/ApiMode",
@@ -114,14 +135,36 @@
         }
       }
     },
-    "ApiMode": {
-      "type": "string",
-      "enum": [
-        "http",
-        "mock"
-      ]
+    "FileBufferConfig": {
+      "type": "object",
+      "properties": {
+        "io_uring_buffer_size": {
+          "type": "integer",
+          "format": "uint",
+          "default": 65536,
+          "minimum": 0
+        },
+        "packet_read_buffer_size": {
+          "type": "integer",
+          "format": "uint",
+          "default": 16384,
+          "minimum": 0
+        },
+        "relay_buffer_size": {
+          "type": "integer",
+          "format": "uint",
+          "default": 65536,
+          "minimum": 0
+        },
+        "splice_pipe_chunk_size": {
+          "type": "integer",
+          "format": "uint",
+          "default": 65536,
+          "minimum": 0
+        }
+      }
     },
-    "LogFileConfig": {
+    "FileLogFileConfig": {
       "type": "object",
       "properties": {
         "archive_pattern": {
@@ -138,33 +181,7 @@
         }
       }
     },
-    "LogFormat": {
-      "type": "string",
-      "enum": [
-        "pretty",
-        "compact",
-        "json"
-      ]
-    },
-    "LogLevel": {
-      "type": "string",
-      "enum": [
-        "trace",
-        "debug",
-        "info",
-        "warn",
-        "error"
-      ]
-    },
-    "LogRotation": {
-      "type": "string",
-      "enum": [
-        "none",
-        "rename",
-        "compress"
-      ]
-    },
-    "LoggingConfig": {
+    "FileLoggingConfig": {
       "type": "object",
       "properties": {
         "async_enabled": {
@@ -174,7 +191,7 @@
         "file": {
           "anyOf": [
             {
-              "$ref": "#/$defs/LogFileConfig"
+              "$ref": "#/$defs/FileLogFileConfig"
             },
             {
               "type": "null"
@@ -200,19 +217,18 @@
         }
       }
     },
-    "MotdConfig": {
+    "FileMotdConfig": {
       "type": "object",
       "properties": {
         "favicon": {
-          "$ref": "#/$defs/MotdFaviconConfig",
+          "$ref": "#/$defs/FileMotdFaviconConfig",
           "default": {
             "mode": "json"
           }
         },
         "local_json": {
           "type": "string",
-          "default": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}",
-          "minLength": 1
+          "default": "{\"version\":{\"name\":\"§bnecron-prism §7status\",\"protocol\":-1},\"players\":{\"max\":100,\"online\":{online_player},\"sample\":[{\"name\":\"§7mode §8> §f{relay_mode}\",\"id\":\"00000000-0000-0000-0000-000000000001\"},{\"name\":\"§7ping §8> §b{ping_mode}\",\"id\":\"00000000-0000-0000-0000-000000000002\"},{\"name\":\"§7target §8> §f{motd_target_addr}\",\"id\":\"00000000-0000-0000-0000-000000000003\"}]},\"description\":{\"text\":\"§bnecron-prism §8» §fclean minecraft relay\\n§7online §f{online_player} §8| §7favicon §f{favicon_mode} §8| §7ping §b{ping_mode}\"}}"
         },
         "mode": {
           "$ref": "#/$defs/MotdMode",
@@ -234,8 +250,7 @@
         },
         "upstream_addr": {
           "type": "string",
-          "default": "mc.hypixel.net:25565",
-          "minLength": 1
+          "default": "mc.hypixel.net:25565"
         },
         "upstream_ping_timeout_ms": {
           "type": "integer",
@@ -245,7 +260,7 @@
         }
       }
     },
-    "MotdFaviconConfig": {
+    "FileMotdFaviconConfig": {
       "type": "object",
       "properties": {
         "mode": {
@@ -266,43 +281,29 @@
         }
       }
     },
-    "MotdFaviconMode": {
-      "type": "string",
-      "enum": [
-        "json",
-        "path",
-        "passthrough",
-        "remove"
-      ]
-    },
-    "MotdMode": {
-      "type": "string",
-      "enum": [
-        "local",
-        "upstream"
-      ]
-    },
-    "MotdProtocol": {
-      "type": "string",
-      "enum": [
-        "client",
-        "negative_one"
-      ]
-    },
-    "NetworkConfig": {
+    "FileNetworkConfig": {
       "type": "object",
       "properties": {
+        "buffer": {
+          "$ref": "#/$defs/FileBufferConfig",
+          "default": {
+            "io_uring_buffer_size": 65536,
+            "packet_read_buffer_size": 16384,
+            "relay_buffer_size": 65536,
+            "splice_pipe_chunk_size": 65536
+          }
+        },
         "relay": {
-          "$ref": "#/$defs/RelayConfig",
+          "$ref": "#/$defs/FileRelayConfig",
           "default": {
             "mode": "async"
           }
         },
         "socket": {
-          "$ref": "#/$defs/NetworkSocketConfig",
+          "$ref": "#/$defs/FileNetworkSocketConfig",
           "default": {
             "first_packet_timeout_ms": 5000,
-            "ip_tos": 16,
+            "ip_tos": 184,
             "keepalive_secs": 30,
             "listen_addr": "0.0.0.0:25565",
             "listen_backlog": 1024,
@@ -312,12 +313,13 @@
             "tcp_fastopen": true,
             "tcp_keepalive": true,
             "tcp_nodelay": true,
+            "tcp_notsent_lowat": 16384,
             "tcp_quickack": true
           }
         }
       }
     },
-    "NetworkSocketConfig": {
+    "FileNetworkSocketConfig": {
       "type": "object",
       "properties": {
         "bind_interface": {
@@ -352,7 +354,7 @@
             "null"
           ],
           "format": "uint8",
-          "default": 16,
+          "default": 184,
           "maximum": 255,
           "minimum": 0
         },
@@ -367,8 +369,7 @@
         },
         "listen_addr": {
           "type": "string",
-          "default": "0.0.0.0:25565",
-          "minLength": 1
+          "default": "0.0.0.0:25565"
         },
         "listen_backlog": {
           "type": "integer",
@@ -404,6 +405,14 @@
           "format": "uint",
           "minimum": 0
         },
+        "so_busy_poll": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "tcp_fastopen": {
           "type": "boolean",
           "default": true
@@ -424,13 +433,22 @@
           "type": "boolean",
           "default": true
         },
+        "tcp_notsent_lowat": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "default": 16384,
+          "minimum": 0
+        },
         "tcp_quickack": {
           "type": "boolean",
           "default": true
         }
       }
     },
-    "RelayConfig": {
+    "FileRelayConfig": {
       "type": "object",
       "properties": {
         "mode": {
@@ -438,6 +456,55 @@
           "default": "async"
         }
       }
+    },
+    "LogFormat": {
+      "type": "string",
+      "enum": [
+        "pretty",
+        "compact",
+        "json"
+      ]
+    },
+    "LogLevel": {
+      "type": "string",
+      "enum": [
+        "trace",
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ]
+    },
+    "LogRotation": {
+      "type": "string",
+      "enum": [
+        "none",
+        "rename",
+        "compress"
+      ]
+    },
+    "MotdFaviconMode": {
+      "type": "string",
+      "enum": [
+        "json",
+        "path",
+        "passthrough",
+        "remove"
+      ]
+    },
+    "MotdMode": {
+      "type": "string",
+      "enum": [
+        "local",
+        "upstream"
+      ]
+    },
+    "MotdProtocol": {
+      "type": "string",
+      "enum": [
+        "client",
+        "negative_one"
+      ]
     },
     "RelayMode": {
       "type": "string",

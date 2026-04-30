@@ -24,4 +24,4 @@ target
 data/
 ZBProxy/
 *.exe
-
+dist/

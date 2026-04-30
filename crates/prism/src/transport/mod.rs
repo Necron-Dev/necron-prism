@@ -1,21 +1,22 @@
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context as AnyhowContext};
+use anyhow::{Context as AnyhowContext, anyhow};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
 use tracing::{debug, info, trace, warn};
 
-use necron_prism_minecraft::{
+use prism_minecraft::{
+    INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, PRISM_MAGIC_ID, PacketIo,
     decode_handshake, encode_handshake, encode_raw_frame,
-    PacketIo, INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE,
-    MAX_LOGIN_PACKET_SIZE, PRISM_MAGIC_ID,
 };
 
 use crate::context::PrismContext;
 use crate::hooks::{LoginResult, PrismHooks};
 use crate::outbound::connect_addr as connect_outbound_addr;
 use crate::relay::relay_bidirectional;
-use crate::session::{ConnectionKind, ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic};
+use crate::session::{
+    ConnectionKind, ConnectionReport, ConnectionRoute, ConnectionSession, ConnectionTraffic,
+};
 
 fn to_disconnect_json(message: &str) -> String {
     serde_json::json!({ "text": message }).to_string()
@@ -77,20 +78,17 @@ async fn handle_client<H: PrismHooks>(
     let config = ctx.config();
     let first_packet_timeout = Duration::from_millis(config.network.socket.first_packet_timeout_ms);
 
-    let mut packet_io = PacketIo::new();
+    let mut packet_io = PacketIo::new(config.network.buffer.packet_read_buffer_size);
     let mut first_byte = [0_u8; 1];
-    timeout(
-        first_packet_timeout,
-        client.read_exact(&mut first_byte),
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "read first byte timed out after {}ms",
-            first_packet_timeout.as_millis()
-        )
-    })?
-    .context("read first byte")?;
+    timeout(first_packet_timeout, client.read_exact(&mut first_byte))
+        .await
+        .with_context(|| {
+            format!(
+                "read first byte timed out after {}ms",
+                first_packet_timeout.as_millis()
+            )
+        })?
+        .context("read first byte")?;
 
     trace!(
         elapsed_ms = started_at.elapsed().as_millis(),
@@ -108,7 +106,12 @@ async fn handle_client<H: PrismHooks>(
             .on_legacy_ping(&mut client, session, &config, online_count)
             .await
             .context("serve legacy ping")?;
-        return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
+        return Ok(ConnectionReport::new(
+            ConnectionTraffic::default(),
+            None,
+            None,
+            None,
+        ));
     }
 
     packet_io.queue_slice(&first_byte);
@@ -131,7 +134,12 @@ async fn handle_client<H: PrismHooks>(
             .await
             .context("write magic response")?;
         client.shutdown().await.context("shutdown magic stream")?;
-        return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
+        return Ok(ConnectionReport::new(
+            ConnectionTraffic::default(),
+            None,
+            None,
+            None,
+        ));
     }
 
     let handshake = decode_handshake(&handshake_packet)
@@ -154,10 +162,22 @@ async fn handle_client<H: PrismHooks>(
         let online_count = ctx.runtime().connections.current_online_count();
         let config = ctx.config();
         ctx.hooks()
-            .on_status_request(&mut packet_io, &mut client, session, &handshake, &config, online_count)
+            .on_status_request(
+                &mut packet_io,
+                &mut client,
+                session,
+                &handshake,
+                &config,
+                online_count,
+            )
             .await
             .context("serve motd")?;
-        return Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None));
+        return Ok(ConnectionReport::new(
+            ConnectionTraffic::default(),
+            None,
+            None,
+            None,
+        ));
     }
 
     session.set_kind(ConnectionKind::Proxy);
@@ -176,7 +196,15 @@ async fn handle_client<H: PrismHooks>(
     let config = ctx.config();
     let login_result = ctx
         .hooks()
-        .on_login(&mut client, session, &handshake, &login_start_packet, session.peer_addr, &config, online_count)
+        .on_login(
+            &mut client,
+            session,
+            &handshake,
+            &login_start_packet,
+            session.peer_addr,
+            &config,
+            online_count,
+        )
         .await?;
 
     let route = match login_result {
@@ -186,9 +214,10 @@ async fn handle_client<H: PrismHooks>(
                 kick_reason = %kick_reason,
                 "[CONNECT/LOGIN] player join denied"
             );
-            let kick_packet = necron_prism_minecraft::login_disconnect_packet(&to_disconnect_json(&kick_reason))
-                .map_err(anyhow::Error::from)
-                .context("build disconnect packet")?;
+            let kick_packet =
+                prism_minecraft::login_disconnect_packet(&to_disconnect_json(&kick_reason))
+                    .map_err(anyhow::Error::from)
+                    .context("build disconnect packet")?;
             client.write_all(&kick_packet).await?;
             client.shutdown().await?;
 
@@ -204,7 +233,16 @@ async fn handle_client<H: PrismHooks>(
         }
     };
 
-    proxy_connection(client, ctx, session, handshake, login_start_packet, route, started_at).await
+    proxy_connection(
+        client,
+        ctx,
+        session,
+        handshake,
+        login_start_packet,
+        route,
+        started_at,
+    )
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -212,29 +250,28 @@ async fn proxy_connection<H: PrismHooks>(
     client: tokio::net::TcpStream,
     ctx: &PrismContext<H>,
     session: &ConnectionSession,
-    mut handshake: necron_prism_minecraft::HandshakeInfo,
-    login_start_packet: necron_prism_minecraft::FramedPacket,
+    mut handshake: prism_minecraft::HandshakeInfo,
+    login_start_packet: prism_minecraft::FramedPacket,
     route: ConnectionRoute,
     started_at: Instant,
 ) -> anyhow::Result<ConnectionReport> {
     let _guard = session.enter_stage("CONNECT/OUTBOUND");
     let config = ctx.config();
 
-    let rewrite_addr = route
-        .rewrite_addr
-        .as_ref()
-        .unwrap_or(&route.target_addr);
+    let rewrite_addr = route.rewrite_addr.as_ref().unwrap_or(&route.target_addr);
     handshake
         .rewrite_addr(rewrite_addr)
         .map_err(|e| anyhow!(e))
         .context("rewrite handshake")?;
 
-    // 登录成功，设置 connection_id 并注册到 Registry
+    // Login succeeded, set connection_id and register to Registry
     if let Some(cid) = &route.connection_id {
         let session_mut = session.clone();
         session_mut.set_connection_id(cid.to_string());
-        let remaining = ctx.runtime().connections.register(session_mut);
-        ctx.runtime().connections.update_outbound(cid, route.target_addr.as_str().into());
+        let remaining = ctx.runtime().connections.register(session_mut)?;
+        ctx.runtime()
+            .connections
+            .update_outbound(cid, route.target_addr.as_str().into());
         trace!(
             connection_id = %cid,
             active_remaining = remaining,
@@ -341,7 +378,11 @@ fn finalize_connection<H: PrismHooks>(
                     upload_bytes = report.connection_traffic.upload_bytes,
                     download_bytes = report.connection_traffic.download_bytes,
                     active_remaining,
-                    target_addr = report.target_addr.as_ref().map(ToString::to_string).as_deref(),
+                    target_addr = report
+                        .target_addr
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .as_deref(),
                     "[{tag}] connection closed"
                 );
             }
@@ -416,5 +457,3 @@ impl std::fmt::Display for HandledConnection {
 }
 
 impl std::error::Error for HandledConnection {}
-
-

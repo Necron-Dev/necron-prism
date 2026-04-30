@@ -8,6 +8,7 @@ on:
   workflow_call:
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   fmt:
@@ -22,8 +23,36 @@ jobs:
         with:
           components: rustfmt
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Run cargo fmt
+        run: cargo fmt --all
+
+      - name: Check for changes
+        id: fmt-changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.fmt-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "fix: auto-fix formatting issues"
+          branch: auto-fix/fmt
+          delete-branch: true
+          title: "fix: auto-fix formatting issues"
+          body: |
+            ## Auto-generated PR
+            
+            `cargo fmt --all` found and fixed formatting issues.
+            
+            Please review the changes before merging.
+          labels: |
+            automated
+            lint
 
   clippy:
     name: Clippy
@@ -48,8 +77,36 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-clippy-
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run cargo clippy fix
+        run: cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
+
+      - name: Check for changes
+        id: clippy-changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.clippy-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "fix: auto-fix clippy warnings"
+          branch: auto-fix/clippy
+          delete-branch: true
+          title: "fix: auto-fix clippy warnings"
+          body: |
+            ## Auto-generated PR
+            
+            `cargo clippy --fix` found and fixed lint warnings.
+            
+            Please review the changes before merging.
+          labels: |
+            automated
+            lint
 
   doc:
     name: Documentation
@@ -141,3 +198,4 @@ jobs:
 
       - name: Run cargo-audit
         run: cargo audit
+

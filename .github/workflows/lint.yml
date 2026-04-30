@@ -23,6 +23,9 @@ jobs:
         with:
           components: rustfmt
 
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
       - name: Run cargo fmt
         run: cargo fmt --all
 
@@ -66,16 +69,8 @@ jobs:
         with:
           components: clippy
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-clippy-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-clippy-
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Run cargo clippy fix
         run: cargo clippy --all-targets --all-features --fix --allow-dirty --allow-staged
@@ -118,16 +113,8 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-doc-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-doc-
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Check documentation
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
@@ -153,16 +140,10 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-check-${{ matrix.id }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-check-${{ matrix.id }}-
+          key: ${{ matrix.id }}
 
       - name: Run cargo check
         run: cargo check --all-targets --features "${{ matrix.features }}"
@@ -177,8 +158,19 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo-deny
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: ${{ runner.os }}-cargo-deny-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deny-
+
       - name: Install cargo-deny
-        run: cargo install cargo-deny
+        run: |
+          if ! command -v cargo-deny &> /dev/null; then
+            cargo install cargo-deny
+          fi
 
       - name: Run cargo-deny
         run: cargo deny check
@@ -193,9 +185,19 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-audit-
+
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: |
+          if ! command -v cargo-audit &> /dev/null; then
+            cargo install cargo-audit
+          fi
 
       - name: Run cargo-audit
         run: cargo audit
-

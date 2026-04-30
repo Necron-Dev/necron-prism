@@ -107,9 +107,9 @@ fn parse_explicit_relay_config() {
     .unwrap();
     canonicalize_runtime_config(&mut config);
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "linux-accel"))]
     assert_eq!(config.prism.network.relay.mode, RelayMode::Splice);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(all(target_os = "linux", feature = "linux-accel")))]
     {
         assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
         assert_eq!(config.prism.requested_relay.mode, RelayMode::Splice);
@@ -134,9 +134,9 @@ fn parse_io_uring_config() {
     .unwrap();
     canonicalize_runtime_config(&mut config);
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "linux-accel"))]
     assert_eq!(config.prism.network.relay.mode, RelayMode::IoUring);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(all(target_os = "linux", feature = "linux-accel")))]
     {
         assert_eq!(config.prism.network.relay.mode, RelayMode::Async);
         assert_eq!(config.prism.requested_relay.mode, RelayMode::IoUring);

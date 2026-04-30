@@ -31,5 +31,5 @@
 
 ## 致谢
 
-- [ZBProxy](https://github.com/layou233/ZBProxy) _加速与反向代理领域的开源先驱; 参考了部分设计思路_
+- [ZBProxy](https://github.com/layou233/ZBProxy) _Minecraft加速IP与反向代理领域的开源先驱; 参考了部分设计思路_
 - [Minecraft WIKI](https://minecraft.wiki/w/Java_Edition_protocol) _Minecraft Java协议文档; 站在前人的肩膀上，我们才能看得更远。_

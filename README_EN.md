@@ -31,5 +31,5 @@ Although `MIT License` was used during internal development, those versions were
 
 ## Acknowledgements
 
-- [ZBProxy](https://github.com/layou233/ZBProxy) — _Open-source pioneer in the acceleration and reverse proxy space; some design ideas were referenced._
+- [ZBProxy](https://github.com/layou233/ZBProxy) — _Open-source pioneer in the Minecraft acceleration IP and reverse proxy space; some design ideas were referenced._
 - [Minecraft WIKI](https://minecraft.wiki/w/Java_Edition_protocol) — _Minecraft Java protocol documentation; standing on the shoulders of giants, we see further._

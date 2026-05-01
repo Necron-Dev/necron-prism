@@ -212,7 +212,7 @@ async fn encode_raw_frame_round_trip() {
         .unwrap();
     let encoded = encode_raw_frame(&frame).unwrap();
 
-    assert_eq!(encoded, packet);
+    assert_eq!(&encoded[..], &packet[..]);
 }
 
 #[tokio::test]

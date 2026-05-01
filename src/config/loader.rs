@@ -6,7 +6,6 @@ use tracing::warn;
 
 use prism::config::*;
 
-use super::file::FileConfig;
 use crate::config::{ApiMode, NecronPrismConfig};
 
 const CONFIG_SCHEMA_DIRECTIVE: &str = "#:schema ./config.schema.json";
@@ -32,10 +31,9 @@ impl ConfigLoader {
     }
 
     fn load_from_str_inner(content: &str, path: &Path) -> Result<NecronPrismConfig> {
-        let file_config = toml::from_str::<FileConfig>(content)
+        let mut config: NecronPrismConfig = toml::from_str(content)
             .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
 
-        let mut config = NecronPrismConfig::from(file_config);
         config.prism.source_path = path.to_path_buf();
         validate_config(&config)?;
 
@@ -204,9 +202,9 @@ fn write_default_config_if_missing(path: &Path) -> Result<()> {
 }
 
 pub fn render_default_toml() -> Result<String> {
-    let file_config = FileConfig::default();
-    let content =
-        toml::to_string_pretty(&file_config).context("failed to serialize default config")?;
+    let default_config = NecronPrismConfig::default();
+    let content = toml::to_string_pretty(&default_config)
+        .context("failed to serialize default config")?;
     let mut rendered = String::with_capacity(CONFIG_SCHEMA_DIRECTIVE.len() + content.len() + 2);
     rendered.push_str(CONFIG_SCHEMA_DIRECTIVE);
     rendered.push_str("\n\n");
@@ -217,7 +215,7 @@ pub fn render_default_toml() -> Result<String> {
 #[cfg(feature = "schema")]
 #[allow(dead_code)]
 pub fn write_schema_file(root: &Path) -> Result<()> {
-    let schema = schemars::schema_for!(FileConfig);
+    let schema = schemars::schema_for!(NecronPrismConfig);
     let content =
         serde_json::to_string_pretty(&schema).context("failed to serialize config schema")?;
     let path = root.join("config.schema.json");

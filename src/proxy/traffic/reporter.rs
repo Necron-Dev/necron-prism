@@ -1,7 +1,6 @@
 use std::net::Shutdown;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::thread;
 
 use flurry::HashMap;
 use rayon::prelude::*;
@@ -19,7 +18,7 @@ pub struct TrafficReporter {
     sessions: Arc<HashMap<String, TrafficRecord>>,
     closers: Arc<HashMap<Arc<str>, std::net::TcpStream>>,
     cancel_token: CancellationToken,
-    background_handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
+    background_handle: Arc<Mutex<Option<BackgroundHandle>>>,
 }
 
 impl TrafficReporter {
@@ -41,7 +40,7 @@ impl TrafficReporter {
         if let Ok(mut handle) = self.background_handle.lock()
             && let Some(h) = handle.take()
         {
-            let _ = h.join();
+            h.blocking_wait();
         }
     }
 
@@ -281,18 +280,38 @@ struct PlayerTraffic {
     delta_download_bytes: u64,
 }
 
-fn spawn_background<F>(future: F) -> Option<thread::JoinHandle<()>>
+enum BackgroundHandle {
+    Tokio(tokio::task::JoinHandle<()>),
+    Thread(std::thread::JoinHandle<()>),
+}
+
+impl BackgroundHandle {
+    fn blocking_wait(self) {
+        match self {
+            // Already inside a tokio runtime — can't block_on, just abort.
+            // The cancel_token was already set, so the task will exit soon anyway.
+            BackgroundHandle::Tokio(join_handle) => {
+                join_handle.abort();
+            }
+            // Sync context — safe to block the thread until completion.
+            BackgroundHandle::Thread(handle) => {
+                let _ = handle.join();
+            }
+        }
+    }
+}
+
+fn spawn_background<F>(future: F) -> Option<BackgroundHandle>
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         let span = tracing::info_span!("traffic");
-        handle.spawn(future.instrument(span));
-        return None;
+        return Some(BackgroundHandle::Tokio(handle.spawn(future.instrument(span))));
     }
 
-    Some(thread::spawn(
-        move || match tokio::runtime::Builder::new_current_thread()
+    Some(BackgroundHandle::Thread(std::thread::spawn(move || {
+        match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
         {
@@ -300,8 +319,8 @@ where
             Err(error) => {
                 tracing::error!(error = %error, "failed to build background tokio runtime")
             }
-        },
-    ))
+        }
+    })))
 }
 
 fn close_connections(

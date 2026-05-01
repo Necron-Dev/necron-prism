@@ -25,43 +25,61 @@ const DEFAULT_UPSTREAM_PING_TIMEOUT_MS: u64 = 1_500;
 // Logging defaults
 const DEFAULT_STATS_LOG_INTERVAL_SECS: u64 = 10;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct Config {
     pub network: NetworkConfig,
     pub motd: MotdConfig,
     pub logging: LoggingConfig,
+    #[serde(skip)]
     pub source_path: PathBuf,
+    #[serde(skip)]
     pub requested_relay: RelayConfig,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct NetworkConfig {
     pub socket: NetworkSocketConfig,
     pub relay: RelayConfig,
     pub buffer: BufferConfig,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct NetworkSocketConfig {
     pub listen_addr: String,
     pub multipath_tcp: bool,
     pub first_packet_timeout_ms: u64,
     pub tcp_nodelay: bool,
     pub tcp_keepalive: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keepalive_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub recv_buffer_size: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub send_buffer_size: Option<usize>,
     pub reuse_address: bool,
     pub reuse_port: bool,
     pub listen_backlog: u32,
     pub tcp_fastopen: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tcp_fastopen_queue: Option<u32>,
     pub tcp_quickack: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_tos: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub congestion_control: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bind_interface: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fwmark: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tcp_notsent_lowat: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub so_busy_poll: Option<u32>,
 }
 
@@ -92,7 +110,9 @@ impl Default for NetworkSocketConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct BufferConfig {
     pub relay_buffer_size: usize,
     pub io_uring_buffer_size: usize,
@@ -111,13 +131,16 @@ impl Default for BufferConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct MotdConfig {
     pub mode: MotdMode,
     pub local_json: String,
     pub upstream_addr: String,
     pub protocol: MotdProtocol,
     pub ping_mode: StatusPingMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ping_target_addr: Option<String>,
     pub upstream_ping_timeout_ms: u64,
     pub favicon: MotdFaviconConfig,
@@ -138,16 +161,22 @@ impl Default for MotdConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct LoggingConfig {
     pub level: LogLevel,
     pub format: LogFormat,
     pub async_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub stats_log_interval_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<LogFileConfig>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct LogFileConfig {
     pub path: PathBuf,
     pub mode: LogRotation,
@@ -186,10 +215,14 @@ impl Default for LogFileConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct MotdFaviconConfig {
     pub mode: MotdFaviconMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_addr: Option<String>,
 }
 
@@ -248,7 +281,9 @@ pub enum RelayMode {
     Splice,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct RelayConfig {
     pub mode: RelayMode,
 }

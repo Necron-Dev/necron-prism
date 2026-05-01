@@ -307,7 +307,9 @@ where
 {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         let span = tracing::info_span!("traffic");
-        return Some(BackgroundHandle::Tokio(handle.spawn(future.instrument(span))));
+        return Some(BackgroundHandle::Tokio(
+            handle.spawn(future.instrument(span)),
+        ));
     }
 
     Some(BackgroundHandle::Thread(std::thread::spawn(move || {

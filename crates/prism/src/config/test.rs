@@ -1,11 +1,10 @@
-use crate::config::{ApiMode, RelayConfig, RelayMode};
+use crate::config::{RelayConfig, RelayMode};
 use crate::session::ConnectionSession;
 use std::net::SocketAddr;
 
 #[test]
 fn default_config_has_expected_values() {
     let config = crate::config::Config::default();
-    assert_eq!(config.api.mode, ApiMode::Mock);
     assert_eq!(config.network.socket.listen_addr, "0.0.0.0:25565");
     assert_eq!(config.network.relay.mode, RelayMode::Async);
 }
@@ -27,11 +26,11 @@ fn relay_label_matrix() {
 #[test]
 fn connection_session_keeps_identity_fields() {
     let peer_addr: SocketAddr = "127.0.0.1:25565".parse().unwrap();
-    let context = ConnectionSession::new(Some(peer_addr));
+    let session = ConnectionSession::new(Some(peer_addr));
 
-    assert_eq!(context.id, None);
-    assert_eq!(context.peer_addr, Some(peer_addr));
+    assert_eq!(session.connection_id(), None);
+    assert_eq!(session.peer_addr, Some(peer_addr));
 
-    context.record_player_identity("alex", "550e8400-e29b-41d4-a716-446655440000");
-    let _entered = context.enter_stage("relay");
+    session.record_player_identity("alex", "550e8400-e29b-41d4-a716-446655440000");
+    let _entered = session.enter_stage("relay");
 }

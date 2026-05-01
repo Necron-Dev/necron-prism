@@ -203,8 +203,8 @@ fn write_default_config_if_missing(path: &Path) -> Result<()> {
 
 pub fn render_default_toml() -> Result<String> {
     let default_config = NecronPrismConfig::default();
-    let content = toml::to_string_pretty(&default_config)
-        .context("failed to serialize default config")?;
+    let content =
+        toml::to_string_pretty(&default_config).context("failed to serialize default config")?;
     let mut rendered = String::with_capacity(CONFIG_SCHEMA_DIRECTIVE.len() + content.len() + 2);
     rendered.push_str(CONFIG_SCHEMA_DIRECTIVE);
     rendered.push_str("\n\n");

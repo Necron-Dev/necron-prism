@@ -28,7 +28,6 @@ pub async fn handle_connection<H: PrismHooks>(
     session: ConnectionSession,
 ) {
     let started_at = Instant::now();
-    let mut finalize_guard = FinalizeGuard::new(ctx.clone(), session.clone(), started_at);
 
     let outcome = match handle_client(client, &ctx, &session).await {
         Ok(report) => ConnectionOutcome::Completed(report),
@@ -47,7 +46,6 @@ pub async fn handle_connection<H: PrismHooks>(
     };
 
     finalize_connection(&ctx, &session, started_at, outcome);
-    finalize_guard.mark_finalized();
 }
 
 fn is_expected_disconnect(error: &anyhow::Error) -> bool {
@@ -427,67 +425,6 @@ fn finalize_connection<H: PrismHooks>(
                 );
             }
         }
-    }
-}
-
-struct FinalizeGuard<H: PrismHooks> {
-    ctx: PrismContext<H>,
-    session: ConnectionSession,
-    started_at: Instant,
-    finalized: bool,
-}
-
-impl<H: PrismHooks> FinalizeGuard<H> {
-    fn new(ctx: PrismContext<H>, session: ConnectionSession, started_at: Instant) -> Self {
-        Self {
-            ctx,
-            session,
-            started_at,
-            finalized: false,
-        }
-    }
-
-    fn mark_finalized(&mut self) {
-        self.finalized = true;
-    }
-}
-
-impl<H: PrismHooks> Drop for FinalizeGuard<H> {
-    fn drop(&mut self) {
-        if self.finalized {
-            return;
-        }
-
-        let traffic = self.session.connection_traffic();
-        let report = ConnectionReport::new(traffic, None, None, None);
-        self.ctx
-            .hooks()
-            .on_connection_finished(&self.session, &report);
-        let _settled = self
-            .ctx
-            .runtime()
-            .totals
-            .record_finished_connection(traffic);
-
-        let active_remaining = if let Some(cid) = self.session.connection_id() {
-            let remaining = self.ctx.runtime().connections.remove_connection(&cid);
-            trace!(
-                connection_id = %cid,
-                active_remaining = remaining,
-                "[FINISH] removed connection from registry during guard cleanup"
-            );
-            remaining
-        } else {
-            self.ctx.runtime().connections.active_count()
-        };
-
-        warn!(
-            elapsed_ms = self.started_at.elapsed().as_millis() as u64,
-            upload_bytes = traffic.upload_bytes,
-            download_bytes = traffic.download_bytes,
-            active_remaining,
-            "[FINISH] connection guard cleaned up unfinished connection"
-        );
     }
 }
 

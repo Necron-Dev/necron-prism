@@ -1,7 +1,6 @@
 use std::net::Shutdown;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use flurry::HashMap;
 use rayon::prelude::*;
@@ -12,8 +11,6 @@ use tracing::{info, trace, warn};
 use crate::config::ApiConfig;
 use crate::proxy::api::ApiService;
 use prism::{ConnectionSession, ConnectionTraffic};
-
-const STALE_IDLE_INTERVALS: u32 = 20;
 
 #[derive(Clone)]
 pub struct TrafficReporter {
@@ -66,9 +63,7 @@ impl TrafficReporter {
                 session,
                 player_name,
                 player_uuid,
-                last_upload_bytes: AtomicU64::new(0),
-                last_download_bytes: AtomicU64::new(0),
-                idle_intervals: AtomicU32::new(0),
+                last_sent: ConnectionTraffic::default(),
             },
             &guard,
         );
@@ -167,7 +162,6 @@ impl TrafficReporter {
                 tokio::select! {
                     _ = tokio::time::sleep(interval) => {
                         let (snapshot, aggregate, aggregate_delta) = collect_traffic_snapshot(&reporter);
-                        evict_stale_connections(&reporter, &snapshot);
 
                         if snapshot.is_empty() {
                             continue;
@@ -237,22 +231,8 @@ fn collect_traffic_snapshot(
         .map(|(_, record)| {
             let upload = record.session.upload();
             let download = record.session.download();
-            let last_upload = record.last_upload_bytes.swap(upload, Ordering::Relaxed);
-            let last_download = record.last_download_bytes.swap(download, Ordering::Relaxed);
-            let delta_upload = upload.saturating_sub(last_upload);
-            let delta_download = download.saturating_sub(last_download);
-            let idle_intervals = if delta_upload == 0 && delta_download == 0 {
-                record
-                    .idle_intervals
-                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                        Some(value.saturating_add(1))
-                    })
-                    .unwrap_or(u32::MAX)
-                    .saturating_add(1)
-            } else {
-                record.idle_intervals.store(0, Ordering::Relaxed);
-                0
-            };
+            let delta_upload = upload.saturating_sub(record.last_sent.upload_bytes);
+            let delta_download = download.saturating_sub(record.last_sent.download_bytes);
 
             let player_traffic = PlayerTraffic {
                 cid: record.connection_id.clone(),
@@ -262,7 +242,6 @@ fn collect_traffic_snapshot(
                 download_bytes: download,
                 delta_upload_bytes: delta_upload,
                 delta_download_bytes: delta_download,
-                idle_intervals,
             };
 
             let traffic = ConnectionTraffic {
@@ -291,38 +270,6 @@ fn collect_traffic_snapshot(
     (snapshot, aggregate, aggregate_delta)
 }
 
-fn evict_stale_connections(reporter: &TrafficReporter, snapshot: &[PlayerTraffic]) {
-    let stale_connections: Vec<_> = snapshot
-        .iter()
-        .filter(|player| player.idle_intervals >= STALE_IDLE_INTERVALS)
-        .map(|player| player.cid.clone())
-        .collect();
-
-    if stale_connections.is_empty() {
-        return;
-    }
-
-    let sessions_guard = reporter.sessions.guard();
-    let closers_guard = reporter.closers.guard();
-    for cid in stale_connections {
-        if let Some(record) = reporter.sessions.remove(cid.as_ref(), &sessions_guard) {
-            reporter
-                .closers
-                .remove(record.connection_id.as_ref(), &closers_guard);
-            warn!(
-                cid = %record.connection_id,
-                player_name = record.player_name.as_deref().unwrap_or("-"),
-                player_uuid = record.player_uuid.as_deref().unwrap_or("-"),
-                idle_intervals = record.idle_intervals.load(Ordering::Relaxed),
-                upload_bytes = record.last_upload_bytes.load(Ordering::Relaxed),
-                download_bytes = record.last_download_bytes.load(Ordering::Relaxed),
-                active_after = reporter.sessions.len(),
-                "[TRAFFIC] evicted stale idle connection"
-            );
-        }
-    }
-}
-
 struct PlayerTraffic {
     cid: Arc<str>,
     player_name: Option<Arc<str>>,
@@ -331,7 +278,6 @@ struct PlayerTraffic {
     download_bytes: u64,
     delta_upload_bytes: u64,
     delta_download_bytes: u64,
-    idle_intervals: u32,
 }
 
 enum BackgroundHandle {
@@ -397,9 +343,7 @@ struct TrafficRecord {
     session: ConnectionSession,
     player_name: Option<Arc<str>>,
     player_uuid: Option<Arc<str>>,
-    last_upload_bytes: AtomicU64,
-    last_download_bytes: AtomicU64,
-    idle_intervals: AtomicU32,
+    last_sent: ConnectionTraffic,
 }
 
 fn bytes_to_mbps(bytes: u64, interval_secs: f64) -> f64 {

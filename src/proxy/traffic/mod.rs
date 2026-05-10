@@ -1,4 +1,6 @@
+mod background;
 mod reporter;
+
 #[cfg(test)]
 mod test;
 

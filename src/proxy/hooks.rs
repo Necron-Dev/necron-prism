@@ -22,7 +22,6 @@ fn offline_uuid(username: &str) -> uuid::Uuid {
 
 pub struct NecronPrismHooks {
     api: Arc<ApiService>,
-    motd: Arc<prism::motd::MotdService>,
     traffic: TrafficReporter,
     entry_node_key: String,
 }
@@ -30,13 +29,11 @@ pub struct NecronPrismHooks {
 impl NecronPrismHooks {
     pub fn new(
         api: Arc<ApiService>,
-        motd: Arc<prism::motd::MotdService>,
         traffic: TrafficReporter,
         entry_node_key: String,
     ) -> Self {
         Self {
             api,
-            motd,
             traffic,
             entry_node_key,
         }
@@ -51,13 +48,10 @@ impl PrismHooks for NecronPrismHooks {
         config: &Config,
         online_count: i32,
     ) -> Result<()> {
-        // MOTD 请求不需要 connection_id
-        prism::motd::serve_legacy_ping(
+        crate::motd::serve_legacy_ping(
             client,
             &config.motd,
             &config.network.relay,
-            &self.motd,
-            0, // legacy ping 不需要 connection_id
             online_count,
         )
         .await
@@ -72,17 +66,16 @@ impl PrismHooks for NecronPrismHooks {
         config: &Config,
         online_count: i32,
     ) -> Result<()> {
-        self.motd
-            .serve(
-                packet_io,
-                client,
-                &config.motd,
-                &config.network.relay,
-                online_count,
-                handshake,
-                session,
-            )
-            .await
+        crate::motd::serve(
+            packet_io,
+            client,
+            &config.motd,
+            &config.network.relay,
+            online_count,
+            handshake,
+            session,
+        )
+        .await
     }
 
     async fn on_login(
@@ -95,7 +88,7 @@ impl PrismHooks for NecronPrismHooks {
         _config: &Config,
         online_count: i32,
     ) -> Result<LoginResult> {
-        let _guard = session.enter_stage("CONNECT/LOGIN");
+        let _guard = session.root_span().enter();
         let login_hello = decode_login_hello(login_start_packet)
             .map_err(anyhow::Error::from)
             .context("decode login hello")?;
@@ -112,6 +105,10 @@ impl PrismHooks for NecronPrismHooks {
             login_start_bytes = login_start_packet.wire_len,
             "[CONNECT/LOGIN] parsed login hello"
         );
+        let connect_host = match handshake.server_address.find('\0') {
+            Some(pos) => &handshake.server_address[..pos],
+            None => handshake.server_address.as_str(),
+        };
 
         match self
             .api
@@ -119,7 +116,7 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&login_hello.username),
                 Some(&player_uuid.to_string()),
                 peer_addr.as_ref().map(ToString::to_string).as_deref(),
-                Some(&handshake.server_address),
+                Some(connect_host),
                 &self.entry_node_key,
                 online_count,
             )

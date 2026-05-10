@@ -9,12 +9,11 @@ use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
+use acta;
 use tracing::{info, warn};
-
 use crate::config::{ConfigLoader, NecronPrismConfig, canonicalize_runtime_config};
-use logging::{ReloadHandle, init_tracing, reload_log_filter, rotate_log_file};
+use logging::{ReloadHandle, init_tracing, reload_log_filter};
 use prism::PrismContext;
-
 use self::hooks::NecronPrismHooks;
 use self::traffic::TrafficReporter;
 
@@ -24,7 +23,7 @@ type Context = PrismContext<NecronPrismHooks>;
 pub async fn run() -> Result<()> {
     let mut config = ConfigLoader::load_default()?;
     let log_config = config.prism.logging.clone();
-    let (guards, resolved_log_path, log_handle) = init_tracing(&log_config)?;
+    let guard = init_tracing(&log_config)?;
 
     info!(
         version = env!("CARGO_PKG_VERSION"),
@@ -36,7 +35,7 @@ pub async fn run() -> Result<()> {
     let (hooks, traffic) = build_hooks(&config)?;
     let ctx = Context::new(config.prism, hooks);
 
-    tokio::spawn(watch_reload_file(ctx.clone(), log_handle.clone()));
+    tokio::spawn(watch_reload_file(ctx.clone(), guard.reload_handle.clone()));
     let _traffic_guard = traffic;
 
     tokio::select! {
@@ -45,17 +44,9 @@ pub async fn run() -> Result<()> {
     }
 
     info!("flushing logs and compressing active log file...");
-    drop(guards);
-    drop(_traffic_guard);
-
-    if let Some(resolved_path) = resolved_log_path
-        && let Some(file_config) = log_config.file.as_ref()
-        && let Err(e) = rotate_log_file(
-            &resolved_path,
-            file_config.mode,
-            &file_config.archive_pattern,
-        )
-    {
+    drop(guard.worker_guard);
+    if let Some(file_config) = log_config.file.as_ref()
+        && let Err(e) = acta::rotate_log_file(&file_config.path, file_config.mode) {
         eprintln!("failed to rotate log file on shutdown: {e}");
     }
 
@@ -68,13 +59,11 @@ fn build_hooks(config: &NecronPrismConfig) -> Result<(NecronPrismHooks, TrafficR
         &config.api,
         std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
     )?);
-    let motd = std::sync::Arc::new(prism::motd::MotdService::new());
     let traffic = TrafficReporter::new(api.clone(), &config.api);
 
     Ok((
         NecronPrismHooks::new(
             api,
-            motd,
             traffic.clone(),
             config
                 .api
@@ -110,7 +99,7 @@ fn reload_config(ctx: &Context, log_handle: &ReloadHandle) -> Result<()> {
 
     reload_log_filter(
         log_handle,
-        new_config.prism.logging.level.as_filter_directive(),
+        new_config.prism.logging.level.clone(),
     )?;
 
     ctx.update_config(new_config.prism);

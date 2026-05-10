@@ -68,7 +68,6 @@ impl ApiClient {
         entry_node_key: &str,
         load: i32,
     ) -> Result<JoinDecision> {
-        let load = load.to_string();
         let response = self
             .inner
             .get(self.join_url.as_str())
@@ -78,7 +77,7 @@ impl ApiClient {
                 ("client_addr", peer_addr.unwrap_or_default()),
                 ("client_host", connect_host.unwrap_or_default()),
                 ("entry_node_key", entry_node_key),
-                ("prism_online", load.as_str()),
+                ("prism_online", load.to_string().as_str()),
             ])
             .send()
             .await?;

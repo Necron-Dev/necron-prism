@@ -37,6 +37,6 @@ mock_connection_id_prefix = "debug"
 
 [logging]
 level = "debug"
-format = "pretty"
+format = "compact"
 async_enabled = true
 stats_log_interval_secs = 10

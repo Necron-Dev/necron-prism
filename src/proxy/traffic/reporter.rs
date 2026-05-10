@@ -185,10 +185,10 @@ impl TrafficReporter {
                         }
 
                         for player in &snapshot {
-                            if player.delta_upload_bytes == 0 && player.delta_download_bytes == 0 {
+                            if player.upload_bytes == 0 && player.download_bytes == 0 {
                                 continue;
                             }
-                            match reporter.api.traffic_single(&player.cid, player.delta_upload_bytes, player.delta_download_bytes).await {
+                            match reporter.api.traffic_single(&player.cid, player.upload_bytes, player.download_bytes).await {
                                 Ok(connections_to_close) => {
                                     if !connections_to_close.is_empty() {
                                         close_connections(&reporter.closers, &connections_to_close);
@@ -240,8 +240,6 @@ fn collect_traffic_snapshot(
                 player_uuid: record.player_uuid.clone(),
                 upload_bytes: upload,
                 download_bytes: download,
-                delta_upload_bytes: delta_upload,
-                delta_download_bytes: delta_download,
             };
 
             let traffic = ConnectionTraffic {
@@ -276,8 +274,6 @@ struct PlayerTraffic {
     player_uuid: Option<Arc<str>>,
     upload_bytes: u64,
     download_bytes: u64,
-    delta_upload_bytes: u64,
-    delta_download_bytes: u64,
 }
 
 enum BackgroundHandle {

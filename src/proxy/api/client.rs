@@ -47,13 +47,13 @@ impl ApiClient {
 
         Ok(Self {
             join_url: base_url
-                .join("v1/open")
+                .join("v2/open")
                 .map_err(|error| anyhow!("invalid join url: {error}"))?,
             traffic_url: base_url
-                .join("v1/traffic")
+                .join("v2/traffic")
                 .map_err(|error| anyhow!("invalid traffic url: {error}"))?,
             closed_url: base_url
-                .join("v1/closed")
+                .join("v2/closed")
                 .map_err(|error| anyhow!("invalid closed url: {error}"))?,
             inner,
         })

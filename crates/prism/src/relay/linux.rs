@@ -219,7 +219,7 @@ mod imp {
                 Ok(copied)
             })?;
 
-            let download_bytes = Self::splice_copy(
+            let download_result = Self::splice_copy(
                 &upstream_read,
                 &client_write,
                 &pipes.download.read_end,
@@ -227,17 +227,22 @@ mod imp {
                 &download_session,
                 false,
                 pipe_chunk_size,
-            )?;
+            );
+
+            // Always join the upload thread before checking download result,
+            // even if download failed. Dropping a JoinHandle detaches the thread,
+            // causing the thread and its held TCP file descriptors to leak.
+            let upload_bytes = upload
+                .join()
+                .map_err(|_| io::Error::other("upload splice thread panicked"))??;
+
+            let download_bytes = download_result?;
             shutdown_write(&client_write);
             tracing::trace!(
                 direction = "download",
                 bytes = download_bytes,
                 "[CONNECT/RELAY] direction finished"
             );
-
-            let upload_bytes = upload
-                .join()
-                .map_err(|_| io::Error::other("upload splice thread panicked"))??;
 
             Ok(RelayStats {
                 upload_bytes,
@@ -457,11 +462,17 @@ mod imp {
                 .await
             });
 
-            let download_bytes =
-                Self::io_uring_copy(upstream, client, download_session, false, buffer_size).await?;
+            let download_result =
+                Self::io_uring_copy(upstream, client, download_session, false, buffer_size).await;
+
+            // Always await the upload task before checking download result,
+            // even if download failed. Dropping a JoinHandle detaches the task,
+            // causing the task and its held TCP file descriptors to leak.
             let upload_bytes = upload.await.map_err(|error| {
                 io::Error::other(format!("io_uring upload task failed: {error}"))
             })??;
+
+            let download_bytes = download_result?;
 
             Ok(RelayStats {
                 upload_bytes,

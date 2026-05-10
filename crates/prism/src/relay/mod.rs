@@ -56,7 +56,7 @@ pub async fn relay_bidirectional(
     config: &Config,
 ) -> io::Result<RelayStats> {
     let logging_session = session.clone();
-    let _guard = logging_session.enter_stage("CONNECT/RELAY");
+    let _guard = logging_session.root_span().enter();
     let _ = apply_sockref_options(SockRef::from(&client), config);
     let _ = apply_sockref_options(SockRef::from(&upstream), config);
 
@@ -133,30 +133,14 @@ pub async fn relay_bidirectional(
     }
 
     let buffer_size = config.network.buffer.relay_buffer_size;
-    let (upload_bytes, download_bytes) = relay(client, upstream, session, buffer_size).await?;
-
-    Ok(RelayStats {
-        upload_bytes,
-        download_bytes,
-        mode: Some(RelayMode::StandardCopy),
-    })
-}
-
-#[cfg(test)]
-mod test;
-
-async fn relay(
-    mut client: tokio::net::TcpStream,
-    mut upstream: tokio::net::TcpStream,
-    session: ConnectionSession,
-    buffer_size: usize,
-) -> io::Result<(u64, u64)> {
+    let mut client = client;
+    let mut upstream = upstream;
     let (mut client_read, mut client_write) = client.split();
     let (mut upstream_read, mut upstream_write) = upstream.split();
     let upload_session = session.clone();
     let download_session = session;
 
-    tokio::try_join!(
+    let (upload_bytes, download_bytes) = tokio::try_join!(
         custom_async_copy(
             &mut client_read,
             &mut upstream_write,
@@ -171,8 +155,17 @@ async fn relay(
             false,
             buffer_size
         ),
-    )
+    )?;
+
+    Ok(RelayStats {
+        upload_bytes,
+        download_bytes,
+        mode: Some(RelayMode::StandardCopy),
+    })
 }
+
+#[cfg(test)]
+mod test;
 
 async fn custom_async_copy<R, W>(
     reader: &mut R,
@@ -185,7 +178,7 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let _guard = session.enter_stage("CONNECT/RELAY");
+    let _guard = session.root_span().enter();
     let direction = if upload_direction {
         "upload"
     } else {
@@ -276,7 +269,16 @@ fn relay_with_copy(
         })
         .map_err(|error| io::Error::other(format!("spawn relay-upload thread: {error}")))?;
 
-    let download_bytes = io::copy(&mut upstream_read, &mut client_write)?;
+    let download_result = io::copy(&mut upstream_read, &mut client_write);
+
+    // Always join the upload thread before checking download result,
+    // even if download failed. Dropping a JoinHandle detaches the thread,
+    // causing the thread and its held TCP file descriptors to leak.
+    let upload_bytes = upload
+        .join()
+        .map_err(|_| io::Error::other("relay upload thread panicked"))??;
+
+    let download_bytes = download_result?;
     download_session.add_download(download_bytes);
     let _ = client_write.shutdown(Shutdown::Write);
     tracing::trace!(
@@ -284,10 +286,6 @@ fn relay_with_copy(
         bytes = download_bytes,
         "[CONNECT/RELAY] direction finished"
     );
-
-    let upload_bytes = upload
-        .join()
-        .map_err(|_| io::Error::other("relay upload thread panicked"))??;
 
     Ok(RelayStats {
         upload_bytes,

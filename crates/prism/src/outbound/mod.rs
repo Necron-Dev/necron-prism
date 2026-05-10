@@ -18,7 +18,7 @@ pub async fn connect_addr(
     config: &Config,
     session: &ConnectionSession,
 ) -> Result<TcpStream> {
-    let _guard = session.enter_stage("CONNECT/OUTBOUND");
+    let _guard = session.root_span().enter();
     let started = Instant::now();
     trace!(target_addr = %target_addr, "[CONNECT/OUTBOUND] starting upstream connection");
 

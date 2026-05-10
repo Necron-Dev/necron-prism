@@ -32,5 +32,5 @@ fn connection_session_keeps_identity_fields() {
     assert_eq!(session.peer_addr, Some(peer_addr));
 
     session.record_player_identity("alex", "550e8400-e29b-41d4-a716-446655440000");
-    let _entered = session.enter_stage("relay");
+    let _entered = session.root_span().enter();
 }

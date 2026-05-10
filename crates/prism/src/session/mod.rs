@@ -133,9 +133,6 @@ impl ConnectionSession {
         }
     }
 
-    pub fn enter_stage(&self, _stage: &str) -> tracing::span::Entered<'_> {
-        self.root_span.enter()
-    }
 
     pub fn add_upload(&self, bytes: u64) {
         self.upload_bytes.fetch_add(bytes, Ordering::Relaxed);

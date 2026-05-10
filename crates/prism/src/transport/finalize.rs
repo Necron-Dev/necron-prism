@@ -16,7 +16,10 @@ pub(super) fn finalize_connection<H: PrismHooks>(
 ) {
     let report = outcome.report().clone();
     ctx.hooks().on_connection_finished(session, &report);
-    let _settled = ctx.runtime().totals.record_finished_connection(report.connection_traffic);
+    let _settled = ctx
+        .runtime()
+        .totals
+        .record_finished_connection(report.connection_traffic);
 
     if let Some(cid) = session.connection_id() {
         let remaining = ctx.runtime().connections.remove_connection(&cid);
@@ -35,21 +38,52 @@ pub(super) fn finalize_connection<H: PrismHooks>(
         ConnectionOutcome::Completed(_) | ConnectionOutcome::Handled(_) => {
             log_closed(session.kind(), &report, elapsed_ms, active_remaining, tag);
         }
-        ConnectionOutcome::Failed { error, expected_disconnect, .. } => {
-            log_failed(session.kind(), &report, error, expected_disconnect, elapsed_ms, active_remaining, tag);
+        ConnectionOutcome::Failed {
+            error,
+            expected_disconnect,
+            ..
+        } => {
+            log_failed(
+                session.kind(),
+                &report,
+                error,
+                expected_disconnect,
+                elapsed_ms,
+                active_remaining,
+                tag,
+            );
         }
     }
 }
 
-fn log_closed(kind: ConnectionKind, report: &ConnectionReport, elapsed_ms: u64, active_remaining: usize, tag: &str) {
+fn log_closed(
+    kind: ConnectionKind,
+    report: &ConnectionReport,
+    elapsed_ms: u64,
+    active_remaining: usize,
+    tag: &str,
+) {
     let upload = report.connection_traffic.upload_bytes;
     let download = report.connection_traffic.download_bytes;
     let target = report.target_addr.as_ref().map(ToString::to_string);
 
     if kind == ConnectionKind::Motd {
-        debug!(elapsed_ms, upload_bytes = upload, download_bytes = download, active_remaining, "[{tag}] connection closed");
+        debug!(
+            elapsed_ms,
+            upload_bytes = upload,
+            download_bytes = download,
+            active_remaining,
+            "[{tag}] connection closed"
+        );
     } else {
-        info!(elapsed_ms, upload_bytes = upload, download_bytes = download, active_remaining, target_addr = target.as_deref(), "[{tag}] connection closed");
+        info!(
+            elapsed_ms,
+            upload_bytes = upload,
+            download_bytes = download,
+            active_remaining,
+            target_addr = target.as_deref(),
+            "[{tag}] connection closed"
+        );
     }
 }
 

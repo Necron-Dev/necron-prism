@@ -12,7 +12,7 @@ use prism_minecraft::{
 
 use crate::context::PrismContext;
 use crate::hooks::{LoginResult, PrismHooks};
-use crate::session::{ConnectionKind, ConnectionReport, ConnectionTraffic, ConnectionSession};
+use crate::session::{ConnectionKind, ConnectionReport, ConnectionSession, ConnectionTraffic};
 
 use super::{outcome, proxy};
 
@@ -23,7 +23,10 @@ pub(super) async fn handle_client<H: PrismHooks>(
 ) -> anyhow::Result<ConnectionReport> {
     let started_at = Instant::now();
 
-    trace!(elapsed_ms = started_at.elapsed().as_millis(), "[CONNECT] connection handling started");
+    trace!(
+        elapsed_ms = started_at.elapsed().as_millis(),
+        "[CONNECT] connection handling started"
+    );
 
     let config = ctx.config();
     let first_packet_timeout = Duration::from_millis(config.network.socket.first_packet_timeout_ms);
@@ -32,10 +35,19 @@ pub(super) async fn handle_client<H: PrismHooks>(
     let mut first_byte = [0_u8; 1];
     timeout(first_packet_timeout, client.read_exact(&mut first_byte))
         .await
-        .with_context(|| format!("read first byte timed out after {}ms", first_packet_timeout.as_millis()))?
+        .with_context(|| {
+            format!(
+                "read first byte timed out after {}ms",
+                first_packet_timeout.as_millis()
+            )
+        })?
         .context("read first byte")?;
 
-    trace!(elapsed_ms = started_at.elapsed().as_millis(), first_byte = first_byte[0], "[CONNECT] read first byte from client");
+    trace!(
+        elapsed_ms = started_at.elapsed().as_millis(),
+        first_byte = first_byte[0],
+        "[CONNECT] read first byte from client"
+    );
 
     if first_byte[0] == 0xFE {
         return handle_legacy_ping(&mut client, ctx, session).await;
@@ -47,7 +59,12 @@ pub(super) async fn handle_client<H: PrismHooks>(
         packet_io.read_frame(&mut client, MAX_HANDSHAKE_PACKET_SIZE),
     )
     .await
-    .with_context(|| format!("read handshake packet timed out after {}ms", first_packet_timeout.as_millis()))?
+    .with_context(|| {
+        format!(
+            "read handshake packet timed out after {}ms",
+            first_packet_timeout.as_millis()
+        )
+    })?
     .context("read handshake packet")?;
 
     if handshake_packet.frame.id == PRISM_MAGIC_ID {
@@ -79,23 +96,35 @@ pub(super) async fn handle_client<H: PrismHooks>(
         .await
         .context("read login start packet")?;
 
-    trace!(elapsed_ms = started_at.elapsed().as_millis() as u64, "[CONNECT/LOGIN] read login start packet");
+    trace!(
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        "[CONNECT/LOGIN] read login start packet"
+    );
 
     let online_count = ctx.runtime().connections.current_online_count();
     let config = ctx.config();
     let login_result = ctx
         .hooks()
-        .on_login(&mut client, session, &handshake, &login_start_packet, session.peer_addr, &config, online_count)
+        .on_login(
+            &mut client,
+            session,
+            &handshake,
+            &login_start_packet,
+            session.peer_addr,
+            &config,
+            online_count,
+        )
         .await?;
 
     let route = match login_result {
         LoginResult::Allow(route) => route,
         LoginResult::Deny { kick_reason } => {
             info!(kick_reason = %kick_reason, "[CONNECT/LOGIN] player join denied");
-            let kick_packet =
-                prism_minecraft::login_disconnect_packet(&serde_json::json!({ "text": kick_reason }).to_string())
-                    .map_err(anyhow::Error::from)
-                    .context("build disconnect packet")?;
+            let kick_packet = prism_minecraft::login_disconnect_packet(
+                &serde_json::json!({ "text": kick_reason }).to_string(),
+            )
+            .map_err(anyhow::Error::from)
+            .context("build disconnect packet")?;
             client.write_all(&kick_packet).await?;
             client.shutdown().await?;
 
@@ -111,7 +140,16 @@ pub(super) async fn handle_client<H: PrismHooks>(
         }
     };
 
-    proxy::proxy_connection(client, ctx, session, handshake, login_start_packet, route, started_at).await
+    proxy::proxy_connection(
+        client,
+        ctx,
+        session,
+        handshake,
+        login_start_packet,
+        route,
+        started_at,
+    )
+    .await
 }
 
 async fn handle_legacy_ping<H: PrismHooks>(
@@ -124,14 +162,32 @@ async fn handle_legacy_ping<H: PrismHooks>(
     debug!("[CONNECT/MOTD] detected legacy ping (0xFE)");
     let online_count = ctx.runtime().connections.current_online_count();
     let config = ctx.config();
-    ctx.hooks().on_legacy_ping(client, session, &config, online_count).await.context("serve legacy ping")?;
-    Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None))
+    ctx.hooks()
+        .on_legacy_ping(client, session, &config, online_count)
+        .await
+        .context("serve legacy ping")?;
+    Ok(ConnectionReport::new(
+        ConnectionTraffic::default(),
+        None,
+        None,
+        None,
+    ))
 }
 
-async fn handle_magic_packet(client: &mut tokio::net::TcpStream) -> anyhow::Result<ConnectionReport> {
-    client.write_all("necron-prism".as_bytes()).await.context("write magic response")?;
+async fn handle_magic_packet(
+    client: &mut tokio::net::TcpStream,
+) -> anyhow::Result<ConnectionReport> {
+    client
+        .write_all("necron-prism".as_bytes())
+        .await
+        .context("write magic response")?;
     client.shutdown().await.context("shutdown magic stream")?;
-    Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None))
+    Ok(ConnectionReport::new(
+        ConnectionTraffic::default(),
+        None,
+        None,
+        None,
+    ))
 }
 
 async fn handle_motd<H: PrismHooks>(
@@ -145,6 +201,14 @@ async fn handle_motd<H: PrismHooks>(
     let _motd_guard = session.root_span().enter();
     let online_count = ctx.runtime().connections.current_online_count();
     let config = ctx.config();
-    ctx.hooks().on_status_request(packet_io, client, session, handshake, &config, online_count).await.context("serve motd")?;
-    Ok(ConnectionReport::new(ConnectionTraffic::default(), None, None, None))
+    ctx.hooks()
+        .on_status_request(packet_io, client, session, handshake, &config, online_count)
+        .await
+        .context("serve motd")?;
+    Ok(ConnectionReport::new(
+        ConnectionTraffic::default(),
+        None,
+        None,
+        None,
+    ))
 }

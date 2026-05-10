@@ -2,14 +2,14 @@ mod canonicalize;
 mod loader;
 
 pub use acta::{LogFormat, LogLevel, LogRotation};
-pub use loader::ConfigLoader;
 pub use canonicalize::canonicalize_runtime_config;
+pub use loader::ConfigLoader;
 
 #[cfg(feature = "schema")]
 pub use loader::write_schema_file;
 
 // Re-export LoggingConfig from prism (auto-generated config types)
-pub use prism::config::{LoggingConfig, LogFileConfig};
+pub use prism::config::{LogFileConfig, LoggingConfig};
 
 use prism::config::Config;
 use serde::{Deserialize, Serialize};

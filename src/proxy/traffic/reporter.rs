@@ -12,8 +12,7 @@ use crate::proxy::api::ApiService;
 use prism::{ConnectionSession, ConnectionTraffic};
 
 use super::background::{
-    BackgroundHandle, TrafficRecord, TrafficReporterState,
-    spawn_background, run_loop,
+    BackgroundHandle, TrafficRecord, TrafficReporterState, run_loop, spawn_background,
 };
 
 #[derive(Clone)]

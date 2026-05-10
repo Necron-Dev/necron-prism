@@ -2,7 +2,6 @@
 mod linux;
 mod socket;
 
-
 use crate::config::Config;
 use socket2::{Domain, SockRef, TcpKeepalive};
 use std::io;
@@ -107,7 +106,11 @@ pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result
     socket.set_keepalive(config.network.socket.tcp_keepalive)?;
 
     if config.network.socket.tcp_keepalive
-        && let Some(keepalive_secs) = config.network.socket.keepalive_secs.filter(|secs| *secs > 0)
+        && let Some(keepalive_secs) = config
+            .network
+            .socket
+            .keepalive_secs
+            .filter(|secs| *secs > 0)
     {
         socket.set_tcp_keepalive(
             &TcpKeepalive::new().with_time(Duration::from_secs(keepalive_secs)),

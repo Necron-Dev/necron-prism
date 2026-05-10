@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use anyhow::{anyhow, Context as AnyhowContext};
+use anyhow::{Context as AnyhowContext, anyhow};
 use smallvec::SmallVec;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, trace};
@@ -28,17 +28,24 @@ pub(super) async fn proxy_connection<H: PrismHooks>(
     let config = ctx.config();
 
     let rewrite_addr = route.rewrite_addr.as_ref().unwrap_or(&route.target_addr);
-    handshake.rewrite_addr(rewrite_addr).map_err(|e| anyhow!(e)).context("rewrite handshake")?;
+    handshake
+        .rewrite_addr(rewrite_addr)
+        .map_err(|e| anyhow!(e))
+        .context("rewrite handshake")?;
 
     if let Some(cid) = &route.connection_id {
         let session_mut = session.clone();
         session_mut.set_connection_id(cid.to_string());
         let remaining = ctx.runtime().connections.register(session_mut)?;
-        ctx.runtime().connections.update_outbound(cid, route.target_addr.as_str().into());
+        ctx.runtime()
+            .connections
+            .update_outbound(cid, route.target_addr.as_str().into());
         trace!(connection_id = %cid, active_remaining = remaining, "[CONNECT/OUTBOUND] registered connection");
     }
 
-    let rewritten_packet = encode_handshake(&handshake).map_err(anyhow::Error::from).context("encode handshake")?;
+    let rewritten_packet = encode_handshake(&handshake)
+        .map_err(anyhow::Error::from)
+        .context("encode handshake")?;
 
     trace!(
         rewrite_addr = %rewrite_addr,
@@ -72,7 +79,10 @@ pub(super) async fn proxy_connection<H: PrismHooks>(
     );
     combined.extend_from_slice(&rewritten_packet);
     combined.extend_from_slice(&encoded_login_start);
-    upstream.write_all(&combined).await.context("write rewritten handshake + login start")?;
+    upstream
+        .write_all(&combined)
+        .await
+        .context("write rewritten handshake + login start")?;
 
     let relay_stats = relay_bidirectional(client, upstream, session.clone(), &config)
         .await

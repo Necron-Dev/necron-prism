@@ -5,7 +5,10 @@ use std::{io, os::unix::io::AsRawFd};
 pub(super) fn apply_bind_interface(socket: &SockRef<'_>, config: &Config) -> io::Result<()> {
     if let Some(ref iface) = config.network.socket.bind_interface {
         let c_iface = std::ffi::CString::new(iface.as_str()).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidInput, "bind_interface contains null byte")
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "bind_interface contains null byte",
+            )
         })?;
         let fd = socket.as_raw_fd();
         let ret = unsafe {
@@ -148,10 +151,7 @@ pub(super) fn apply_socket_options_pre_bind(socket: &Socket, config: &Config) ->
     Ok(())
 }
 
-pub(super) fn apply_socket_options_post_listen(
-    socket: &Socket,
-    config: &Config,
-) -> io::Result<()> {
+pub(super) fn apply_socket_options_post_listen(socket: &Socket, config: &Config) -> io::Result<()> {
     if config.network.socket.tcp_fastopen {
         let queue = config.network.socket.tcp_fastopen_queue.unwrap_or(1024);
         let fd = socket.as_raw_fd();
@@ -206,10 +206,7 @@ pub(super) fn apply_socket_options_post_listen(
     Ok(())
 }
 
-pub(super) fn apply_socket_options_pre_connect(
-    socket: &Socket,
-    config: &Config,
-) -> io::Result<()> {
+pub(super) fn apply_socket_options_pre_connect(socket: &Socket, config: &Config) -> io::Result<()> {
     apply_bind_interface(&SockRef::from(socket), config)?;
     if let Some(ref iface) = config.network.socket.bind_interface {
         tracing::trace!(interface = %iface, "bound outbound socket to network interface");

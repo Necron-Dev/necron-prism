@@ -1,6 +1,6 @@
+use crate::template;
 use prism::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
 use prism::session::ConnectionSession;
-use crate::template;
 use prism_minecraft::{
     HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, decode_status_request, encode_raw_frame,
     ping_response_packet, status_response_packet,
@@ -41,8 +41,7 @@ pub async fn serve(
     };
 
     let motd_json = context.build_json(online_count, upstream.as_mut()).await?;
-    let mut status_response =
-        status_response_packet(&motd_json).map_err(anyhow::Error::from)?;
+    let mut status_response = status_response_packet(&motd_json).map_err(anyhow::Error::from)?;
 
     let outcome = match motd_config.ping_mode {
         StatusPingMode::ZeroMs => {
@@ -81,9 +80,7 @@ pub async fn serve(
     Ok(())
 }
 
-pub async fn read_favicon_data_url(
-    path: &std::path::Path,
-) -> anyhow::Result<std::sync::Arc<str>> {
+pub async fn read_favicon_data_url(path: &std::path::Path) -> anyhow::Result<std::sync::Arc<str>> {
     use anyhow::Context;
     use base64::Engine;
 

@@ -2,6 +2,19 @@
 members = [".", "crates/prism-minecraft", "crates/prism"]
 resolver = "2"
 
+[workspace.dependencies]
+prism = { path = "crates/prism" }
+prism-minecraft = { path = "crates/prism-minecraft" }
+anyhow = "1.0"
+tracing = "0.1"
+tokio = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs", "signal"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rayon = "1.10"
+smallvec = { version = "1", features = ["write"] }
+thiserror = "2.0"
+smart-default = "0.7"
+
 [package]
 name = "necron-prism"
 edition = "2024"
@@ -15,27 +28,26 @@ schema = ["dep:schemars", "prism/schema"]
 benchmark = ["prism/benchmark"]
 
 [dependencies]
-prism = { path = "crates/prism" }
-prism-minecraft = { path = "crates/prism-minecraft" }
-anyhow = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "registry"] }
-tracing-appender = "0.2"
-tokio = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs", "signal"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+prism = { workspace = true }
+prism-minecraft = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+rayon = { workspace = true }
+smart-default = { workspace = true }
+acta = { version = "0.0.1", features = ["compress", "serde", "nerd", "custom-async"] }
 toml = "1.0.7"
 schemars = { version = "1.0", features = ["derive"], optional = true }
 flurry = "0.5"
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls"], optional = true }
 http = "1.4.0"
 tokio-util = "0.7"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-flate2 = "1.0"
-owo-colors = "4.3.0"
 uuid = { version = "1", features = ["v3"] }
-rayon = "1.10"
 seize = "0.5"
+base64 = "0.22"
+mime_guess = { version = "2.0", default-features = false }
 
 [[bin]]
 name = "schema"

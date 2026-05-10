@@ -9,7 +9,6 @@ use prism_minecraft::{
     decode_status_response, ping_response_packet,
 };
 
-use super::service::MotdService;
 
 pub struct UpstreamStatusSession {
     stream: TcpStream,
@@ -24,7 +23,6 @@ impl UpstreamStatusSession {
         client_handshake: &HandshakeInfo,
         status_request_wire: &[u8],
         timeout_duration: Duration,
-        _service: &MotdService,
         read_json: bool,
     ) -> anyhow::Result<Self> {
         let mut stream =

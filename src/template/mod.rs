@@ -1,4 +1,4 @@
-use crate::config::{MotdConfig, RelayConfig};
+use prism::config::{MotdConfig, RelayConfig};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::borrow::Cow;

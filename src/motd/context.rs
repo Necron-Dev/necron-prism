@@ -8,16 +8,16 @@ use prism_minecraft::{
 };
 
 use super::rewrite::rewrite_json;
-use super::service::MotdService;
+use super::service::{read_favicon_data_url, render_local_json};
 use super::upstream::UpstreamStatusSession;
-use crate::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
+use prism::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
 use crate::template::{self, TemplateContext};
+
 
 pub struct StatusContext<'a> {
     config: &'a MotdConfig,
     relay: &'a RelayConfig,
     handshake: &'a HandshakeInfo,
-    service: &'a MotdService,
 }
 
 impl<'a> StatusContext<'a> {
@@ -25,13 +25,11 @@ impl<'a> StatusContext<'a> {
         config: &'a MotdConfig,
         relay: &'a RelayConfig,
         handshake: &'a HandshakeInfo,
-        service: &'a MotdService,
     ) -> Self {
         Self {
             config,
             relay,
             handshake,
-            service,
         }
     }
 
@@ -51,7 +49,6 @@ impl<'a> StatusContext<'a> {
             self.handshake,
             status_request_wire,
             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
-            self.service,
             needs_status_json,
         )
         .await
@@ -63,10 +60,7 @@ impl<'a> StatusContext<'a> {
         online_count: i32,
         mut upstream: Option<&mut UpstreamStatusSession>,
     ) -> anyhow::Result<String> {
-        if let Some(json) = self
-            .service
-            .render_local_json(self.config, self.relay, self.handshake, online_count)
-            .await
+        if let Some(json) = render_local_json(self.config, self.relay, self.handshake, online_count).await
         {
             return Ok(json.as_ref().to_owned());
         }
@@ -139,7 +133,6 @@ impl<'a> StatusContext<'a> {
                             self.handshake,
                             &[1, 0],
                             std::time::Duration::from_millis(self.config.upstream_ping_timeout_ms),
-                            self.service,
                             true,
                         )
                         .await?
@@ -208,7 +201,7 @@ impl<'a> StatusContext<'a> {
                     .path
                     .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("missing MOTD favicon path"))?;
-                self.service.read_favicon_data_url(path).await.map(Some)
+                read_favicon_data_url(path).await.map(Some)
             }
             _ => Ok(None),
         }

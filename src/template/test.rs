@@ -1,8 +1,11 @@
 use super::*;
-use crate::config::{
+use prism::config::{
     MotdConfig, MotdFaviconConfig, MotdFaviconMode, MotdMode, MotdProtocol, RelayConfig, RelayMode,
     StatusPingMode,
 };
+
+
+
 use serde_json::Value;
 
 #[test]

@@ -5,4 +5,4 @@ mod service;
 mod upstream;
 
 pub use legacy::serve_legacy_ping;
-pub use service::MotdService;
+pub use service::{serve, read_favicon_data_url, render_local_json};

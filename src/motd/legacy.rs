@@ -1,17 +1,15 @@
-use crate::config::{MotdConfig, MotdMode, RelayConfig};
+use prism::config::{MotdConfig, MotdMode, RelayConfig};
 use crate::template::{self, TemplateContext};
 use prism_minecraft::HandshakeInfo;
 use tokio::io::AsyncWriteExt;
 
 use super::rewrite::rewrite_json;
-use super::service::MotdService;
+
 
 pub async fn serve_legacy_ping(
     client: &mut tokio::net::TcpStream,
     motd_config: &MotdConfig,
     relay: &RelayConfig,
-    _motd: &MotdService,
-    _connection_id: u64,
     online_count: i32,
 ) -> anyhow::Result<()> {
     let upstream_json = if matches!(motd_config.mode, MotdMode::Upstream) {

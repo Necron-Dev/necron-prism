@@ -1,4 +1,4 @@
-use crate::config::{MotdFaviconConfig, MotdFaviconMode, MotdProtocol};
+use prism::config::{MotdFaviconConfig, MotdFaviconMode, MotdProtocol};
 
 pub fn rewrite_json(
     json: &str,

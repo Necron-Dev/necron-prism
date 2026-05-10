@@ -8,7 +8,7 @@ use schemars::JsonSchema;
 
 // Logging defaults
 const DEFAULT_STATS_LOG_INTERVAL_SECS: u64 = 10;
-pub use acta::{LogLevel, LogFormat, LogRotation};
+pub use acta::{LogFormat, LogLevel, LogRotation};
 
 // Network defaults
 const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:25565";

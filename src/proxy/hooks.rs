@@ -27,11 +27,7 @@ pub struct NecronPrismHooks {
 }
 
 impl NecronPrismHooks {
-    pub fn new(
-        api: Arc<ApiService>,
-        traffic: TrafficReporter,
-        entry_node_key: String,
-    ) -> Self {
+    pub fn new(api: Arc<ApiService>, traffic: TrafficReporter, entry_node_key: String) -> Self {
         Self {
             api,
             traffic,
@@ -48,13 +44,8 @@ impl PrismHooks for NecronPrismHooks {
         config: &Config,
         online_count: i32,
     ) -> Result<()> {
-        crate::motd::serve_legacy_ping(
-            client,
-            &config.motd,
-            &config.network.relay,
-            online_count,
-        )
-        .await
+        crate::motd::serve_legacy_ping(client, &config.motd, &config.network.relay, online_count)
+            .await
     }
 
     async fn on_status_request(

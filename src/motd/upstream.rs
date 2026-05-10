@@ -9,7 +9,6 @@ use prism_minecraft::{
     decode_status_response, ping_response_packet,
 };
 
-
 pub struct UpstreamStatusSession {
     stream: TcpStream,
     packet_io: PacketIo,

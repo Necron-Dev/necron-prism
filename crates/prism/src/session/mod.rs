@@ -133,7 +133,6 @@ impl ConnectionSession {
         }
     }
 
-
     pub fn add_upload(&self, bytes: u64) {
         self.upload_bytes.fetch_add(bytes, Ordering::Relaxed);
     }

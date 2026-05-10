@@ -5,8 +5,8 @@ use std::time::Duration;
 use flurry::HashMap;
 use rayon::prelude::*;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, trace, warn};
 use tracing::Instrument;
+use tracing::{info, trace, warn};
 
 use crate::proxy::api::ApiService;
 use prism::{ConnectionSession, ConnectionTraffic};
@@ -144,10 +144,7 @@ pub(super) struct TrafficReporterState {
     pub(super) cancel_token: CancellationToken,
 }
 
-pub(super) fn run_loop(
-    state: TrafficReporterState,
-    interval: Duration,
-) {
+pub(super) fn run_loop(state: TrafficReporterState, interval: Duration) {
     let interval_secs = interval.as_secs_f64();
     spawn_background(async move {
         loop {

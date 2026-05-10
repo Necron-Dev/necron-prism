@@ -8,14 +8,14 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
-use acta;
-use tracing::{info, warn};
-use crate::config::{ConfigLoader, NecronPrismConfig, canonicalize_runtime_config};
-use logging::{ReloadHandle, init_tracing, reload_log_filter};
-use prism::PrismContext;
 use self::hooks::NecronPrismHooks;
 use self::traffic::TrafficReporter;
+use crate::config::{ConfigLoader, NecronPrismConfig, canonicalize_runtime_config};
+use acta;
+use anyhow::Result;
+use logging::{ReloadHandle, init_tracing, reload_log_filter};
+use prism::PrismContext;
+use tracing::{info, warn};
 
 type Context = PrismContext<NecronPrismHooks>;
 
@@ -46,7 +46,8 @@ pub async fn run() -> Result<()> {
     info!("flushing logs and compressing active log file...");
     drop(guard.worker_guard);
     if let Some(file_config) = log_config.file.as_ref()
-        && let Err(e) = acta::rotate_log_file(&file_config.path, file_config.mode) {
+        && let Err(e) = acta::rotate_log_file(&file_config.path, file_config.mode)
+    {
         eprintln!("failed to rotate log file on shutdown: {e}");
     }
 
@@ -97,10 +98,7 @@ fn reload_config(ctx: &Context, log_handle: &ReloadHandle) -> Result<()> {
 
     canonicalize_runtime_config(&mut new_config);
 
-    reload_log_filter(
-        log_handle,
-        new_config.prism.logging.level.clone(),
-    )?;
+    reload_log_filter(log_handle, new_config.prism.logging.level.clone())?;
 
     ctx.update_config(new_config.prism);
 

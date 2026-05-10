@@ -4,8 +4,6 @@ use prism::config::{
     StatusPingMode,
 };
 
-
-
 use serde_json::Value;
 
 #[test]

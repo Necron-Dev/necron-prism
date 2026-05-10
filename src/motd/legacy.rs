@@ -1,10 +1,9 @@
-use prism::config::{MotdConfig, MotdMode, RelayConfig};
 use crate::template::{self, TemplateContext};
+use prism::config::{MotdConfig, MotdMode, RelayConfig};
 use prism_minecraft::HandshakeInfo;
 use tokio::io::AsyncWriteExt;
 
 use super::rewrite::rewrite_json;
-
 
 pub async fn serve_legacy_ping(
     client: &mut tokio::net::TcpStream,

@@ -31,6 +31,7 @@ const DEFAULT_UPSTREAM_ADDR: &str = "mc.hypixel.net:25565";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(default)]
 pub struct Config {
     pub network: NetworkConfig,
     pub motd: MotdConfig,

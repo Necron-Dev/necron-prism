@@ -112,10 +112,26 @@ pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result
             .keepalive_secs
             .filter(|secs| *secs > 0)
     {
-        socket.set_tcp_keepalive(
-            &TcpKeepalive::new().with_time(Duration::from_secs(keepalive_secs)),
-        )?;
+        let mut ka = TcpKeepalive::new().with_time(Duration::from_secs(keepalive_secs));
+        if let Some(interval) = config
+            .network
+            .socket
+            .keepalive_interval_secs
+            .filter(|s| *s > 0)
+        {
+            ka = ka.with_interval(Duration::from_secs(interval));
+        }
+        if let Some(retries) = config
+            .network
+            .socket
+            .keepalive_retries
+            .filter(|r| *r > 0)
+        {
+            ka = ka.with_retries(retries);
+        }
+        socket.set_tcp_keepalive(&ka)?;
     }
+
 
     #[cfg(all(target_os = "linux", feature = "linux-accel"))]
     linux::apply_linux_tcp_options(&socket, config)?;

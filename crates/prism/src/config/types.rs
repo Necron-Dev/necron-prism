@@ -14,6 +14,9 @@ pub use acta::{LogFormat, LogLevel, LogRotation};
 const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:25565";
 const DEFAULT_FIRST_PACKET_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_KEEPALIVE_SECS: u64 = 30;
+const DEFAULT_KEEPALIVE_INTERVAL_SECS: u64 = 5;
+const DEFAULT_KEEPALIVE_RETRIES: u32 = 3;
+
 const DEFAULT_LISTEN_BACKLOG: u32 = 1024;
 const DEFAULT_IP_TOS: u8 = 0xB8;
 const DEFAULT_TCP_NOTSENT_LOWAT: u32 = 16384;
@@ -69,6 +72,12 @@ pub struct NetworkSocketConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[default(Some(DEFAULT_KEEPALIVE_SECS))]
     pub keepalive_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[default(Some(DEFAULT_KEEPALIVE_INTERVAL_SECS))]
+    pub keepalive_interval_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[default(Some(DEFAULT_KEEPALIVE_RETRIES))]
+    pub keepalive_retries: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recv_buffer_size: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]

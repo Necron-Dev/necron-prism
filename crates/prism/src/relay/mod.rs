@@ -1,8 +1,6 @@
 use std::fmt;
 use std::io;
 
-
-
 #[cfg(all(target_os = "linux", feature = "linux-accel"))]
 use std::net::{Shutdown, TcpStream};
 
@@ -157,7 +155,6 @@ pub async fn relay_bidirectional(
             buffer_size
         ),
     )?;
-
 
     Ok(RelayStats {
         upload_bytes,

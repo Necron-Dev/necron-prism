@@ -121,17 +121,11 @@ pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result
         {
             ka = ka.with_interval(Duration::from_secs(interval));
         }
-        if let Some(retries) = config
-            .network
-            .socket
-            .keepalive_retries
-            .filter(|r| *r > 0)
-        {
+        if let Some(retries) = config.network.socket.keepalive_retries.filter(|r| *r > 0) {
             ka = ka.with_retries(retries);
         }
         socket.set_tcp_keepalive(&ka)?;
     }
-
 
     #[cfg(all(target_os = "linux", feature = "linux-accel"))]
     linux::apply_linux_tcp_options(&socket, config)?;

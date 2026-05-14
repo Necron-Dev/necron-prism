@@ -23,7 +23,7 @@ arc-swap = "1.7"
 crossbeam-channel = "0.5"
 flurry = "0.5"
 socket2 = { version = "0.6", default-features = false, features = ["all"] }
-acta = { version = "0.0.1", features = ["compress", "serde", "custom-async"] }
+acta = { version = "0.1.0", features = ["compress", "serde", "custom-async"] }
 parking_lot = "0.12"
 valence_protocol = "0.2.0-alpha.1"
 strum = { version = "0.28.0", features = ["derive"] }

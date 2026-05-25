@@ -96,10 +96,6 @@ impl PrismHooks for NecronPrismHooks {
             login_start_bytes = login_start_packet.wire_len,
             "[CONNECT/LOGIN] parsed login hello"
         );
-        let connect_host = match handshake.server_address.find('\0') {
-            Some(pos) => &handshake.server_address[..pos],
-            None => handshake.server_address.as_str(),
-        };
 
         match self
             .api
@@ -107,7 +103,7 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&login_hello.username),
                 Some(&player_uuid.to_string()),
                 peer_addr.as_ref().map(ToString::to_string).as_deref(),
-                Some(connect_host),
+                Some(handshake.server_address),
                 &self.entry_node_key,
                 online_count,
             )

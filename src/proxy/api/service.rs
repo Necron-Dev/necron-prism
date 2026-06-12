@@ -64,7 +64,15 @@ impl ApiService {
             }
             Self::Mock(service) => {
                 service
-                    .join(name, uuid, peer_addr, connect_host, entry_node_key, load)
+                    .join(
+                        name,
+                        uuid,
+                        peer_addr,
+                        connect_host,
+                        entry_node_key,
+                        load,
+                        protocol_version,
+                    )
                     .await
             }
         }
@@ -165,6 +173,7 @@ impl MockApiService {
         _connect_host: Option<&str>,
         _entry_node_key: &str,
         _load: i32,
+        _protocol_version: i32,
     ) -> Result<JoinDecision> {
         if let Some(kick_reason) = &self.config.mock_kick_reason {
             return Ok(JoinDecision::Deny {

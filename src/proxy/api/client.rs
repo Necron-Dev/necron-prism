@@ -67,6 +67,7 @@ impl ApiClient {
         connect_host: Option<&str>,
         entry_node_key: &str,
         load: i32,
+        protocol_version: i32
     ) -> Result<JoinDecision> {
         let response = self
             .inner
@@ -78,6 +79,7 @@ impl ApiClient {
                 ("client_host", connect_host.unwrap_or_default()),
                 ("entry_node_key", entry_node_key),
                 ("prism_online", load.to_string().as_str()),
+                ("protocol_version", protocol_version.to_string().as_str()),
             ])
             .send()
             .await?;

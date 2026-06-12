@@ -106,6 +106,7 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&handshake.server_address),
                 &self.entry_node_key,
                 online_count,
+                handshake.protocol_version
             )
             .await
         {

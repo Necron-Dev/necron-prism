@@ -45,13 +45,21 @@ impl ApiService {
         connect_host: Option<&str>,
         entry_node_key: &str,
         load: i32,
-        protocol_version: i32
+        protocol_version: i32,
     ) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
             Self::Http(service) => {
                 service
-                    .join(name, uuid, peer_addr, connect_host, entry_node_key, load, protocol_version)
+                    .join(
+                        name,
+                        uuid,
+                        peer_addr,
+                        connect_host,
+                        entry_node_key,
+                        load,
+                        protocol_version,
+                    )
                     .await
             }
             Self::Mock(service) => {
@@ -108,10 +116,18 @@ impl HttpApiService {
         connect_host: Option<&str>,
         entry_node_key: &str,
         load: i32,
-        protocol_version: i32
+        protocol_version: i32,
     ) -> Result<JoinDecision> {
         self.client
-            .join(name, uuid, peer_addr, connect_host, entry_node_key, load, protocol_version)
+            .join(
+                name,
+                uuid,
+                peer_addr,
+                connect_host,
+                entry_node_key,
+                load,
+                protocol_version,
+            )
             .await
             .map_err(|error| anyhow!("join api request failed: {error}"))
     }

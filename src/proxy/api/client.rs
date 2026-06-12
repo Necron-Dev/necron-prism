@@ -67,7 +67,7 @@ impl ApiClient {
         connect_host: Option<&str>,
         entry_node_key: &str,
         load: i32,
-        protocol_version: i32
+        protocol_version: i32,
     ) -> Result<JoinDecision> {
         let response = self
             .inner

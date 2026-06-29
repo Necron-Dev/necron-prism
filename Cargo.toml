@@ -49,6 +49,9 @@ seize = "0.5"
 base64 = "0.22"
 mime_guess = { version = "2.0", default-features = false }
 
+[patch.crates-io]
+quinn-proto = { version = ">=0.11.15" }
+
 [[bin]]
 name = "schema"
 path = "src/bin/schema.rs"

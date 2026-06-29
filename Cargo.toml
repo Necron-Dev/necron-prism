@@ -46,6 +46,7 @@ http = "1.4.0"
 tokio-util = "0.7"
 base64 = "0.22"
 mime_guess = { version = "2.0", default-features = false }
+uuid = { version = "1", features = ["v3"] }
 
 [[bin]]
 name = "schema"

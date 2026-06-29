@@ -44,13 +44,8 @@ flurry = "0.5"
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls"], optional = true }
 http = "1.4.0"
 tokio-util = "0.7"
-uuid = { version = "1", features = ["v3"] }
-seize = "0.5"
 base64 = "0.22"
 mime_guess = { version = "2.0", default-features = false }
-
-[patch.crates-io]
-quinn-proto = { version = ">=0.11.15" }
 
 [[bin]]
 name = "schema"

@@ -1,439 +1,383 @@
-Attribution-NonCommercial-ShareAlike 4.0 International
-
-Copyright (c) 2026 Me0wo
-
-=======================================================================
-
-Creative Commons Corporation ("Creative Commons") is not a law firm and
-does not provide legal services or legal advice. Distribution of
-Creative Commons public licenses does not create a lawyer-client or
-other relationship. Creative Commons makes its licenses and related
-information available on an "as-is" basis. Creative Commons gives no
-warranties regarding its licenses, any material licensed under their
-terms and conditions, or any related information. Creative Commons
-disclaims all liability for damages resulting from their use to the
-fullest extent possible.
-
-Using Creative Commons Public Licenses
-
-Creative Commons public licenses provide a standard set of terms and
-conditions that creators and other rights holders may use to share
-original works of authorship and other material subject to copyright
-and certain other rights specified in the public license below. The
-following considerations are for informational purposes only, are not
-exhaustive, and do not form part of our licenses.
-
-     Considerations for licensors: Our public licenses are
-     intended for use by those authorized to give the public
-     permission to use material in ways otherwise restricted by
-     copyright and certain other rights. Our licenses are
-     irrevocable. Licensors should read and understand the terms
-     and conditions of the license they choose before applying it.
-     Licensors should also secure all rights necessary before
-     applying our licenses so that the public can reuse the
-     material as expected. Licensors should clearly mark any
-     material not subject to the license. This includes other CC-
-     licensed material, or material used under an exception or
-     limitation to copyright. More considerations for licensors:
-    wiki.creativecommons.org/Considerations_for_licensors
-
-     Considerations for the public: By using one of our public
-     licenses, a licensor grants the public permission to use the
-     licensed material under specified terms and conditions. If
-     the licensor's permission is not necessary for any reason--for
-     example, because of any applicable exception or limitation to
-     copyright--then that use is not regulated by the license. Our
-     licenses grant only permissions under copyright and certain
-     other rights that a licensor has authority to grant. Use of
-     the licensed material may still be restricted for other
-     reasons, including because others have copyright or other
-     rights in the material. A licensor may make special requests,
-     such as asking that all changes be marked or described.
-     Although not required by our licenses, you are encouraged to
-     respect those requests where reasonable. More considerations
-     for the public:
-    wiki.creativecommons.org/Considerations_for_licensees
-
-=======================================================================
-
-Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
-Public License
-
-By exercising the Licensed Rights (defined below), You accept and agree
-to be bound by the terms and conditions of this Creative Commons
-Attribution-NonCommercial-ShareAlike 4.0 International Public License
-("Public License"). To the extent this Public License may be
-interpreted as a contract, You are granted the Licensed Rights in
-consideration of Your acceptance of these terms and conditions, and the
-Licensor grants You such rights in consideration of benefits the
-Licensor receives from making the Licensed Material available under
-these terms and conditions.
-
-
-Section 1 -- Definitions.
-
-  a. Adapted Material means material subject to Copyright and Similar
-     Rights that is derived from or based upon the Licensed Material
-     and in which the Licensed Material is translated, altered,
-     arranged, transformed, or otherwise modified in a manner requiring
-     permission under the Copyright and Similar Rights held by the
-     Licensor. For purposes of this Public License, where the Licensed
-     Material is a musical work, performance, or sound recording,
-     Adapted Material is always produced where the Licensed Material is
-     synched in timed relation with a moving image.
-
-  b. Adapter's License means the license You apply to Your Copyright
-     and Similar Rights in Your contributions to Adapted Material in
-     accordance with the terms and conditions of this Public License.
-
-  c. BY-NC-SA Compatible License means a license listed at
-     creativecommons.org/compatiblelicenses, approved by Creative
-     Commons as essentially the equivalent of this Public License.
-
-  d. Copyright and Similar Rights means copyright and/or similar rights
-     closely related to copyright including, without limitation,
-     performance, broadcast, sound recording, and Sui Generis Database
-     Rights, without regard to how the rights are labeled or
-     categorized. For purposes of this Public License, the rights
-     specified in Section 2(b)(1)-(2) are not Copyright and Similar
-     Rights.
-
-  e. Effective Technological Measures means those measures that, in the
-     absence of proper authority, may not be circumvented under laws
-     fulfilling obligations under Article 11 of the WIPO Copyright
-     Treaty adopted on December 20, 1996, and/or similar international
-     agreements.
-
-  f. Exceptions and Limitations means fair use, fair dealing, and/or
-     any other exception or limitation to Copyright and Similar Rights
-     that applies to Your use of the Licensed Material.
-
-  g. License Elements means the license attributes listed in the name
-     of a Creative Commons Public License. The License Elements of this
-     Public License are Attribution, NonCommercial, and ShareAlike.
-
-  h. Licensed Material means the artistic or literary work, database,
-     or other material to which the Licensor applied this Public
-     License.
-
-  i. Licensed Rights means the rights granted to You subject to the
-     terms and conditions of this Public License, which are limited to
-     all Copyright and Similar Rights that apply to Your use of the
-     Licensed Material and that the Licensor has authority to license.
-
-  j. Licensor means the individual(s) or entity(ies) granting rights
-     under this Public License.
-
-  k. NonCommercial means not primarily intended for or directed towards
-     commercial advantage or monetary compensation. For purposes of
-     this Public License, the exchange of the Licensed Material for
-     other material subject to Copyright and Similar Rights by digital
-     file-sharing or similar means is NonCommercial provided there is
-     no payment of monetary compensation in connection with the
-     exchange.
-
-  l. Share means to provide material to the public by any means or
-     process that requires permission under the Licensed Rights, such
-     as reproduction, public display, public performance, distribution,
-     dissemination, communication, or importation, and to make material
-     available to the public including in ways that members of the
-     public may access the material from a place and at a time
-     individually chosen by them.
-
-  m. Sui Generis Database Rights means rights other than copyright
-     resulting from Directive 96/9/EC of the European Parliament and of
-     the Council of 11 March 1996 on the legal protection of databases,
-     as amended and/or succeeded, as well as other essentially
-     equivalent rights anywhere in the world.
-
-  n. You means the individual or entity exercising the Licensed Rights
-     under this Public License. Your has a corresponding meaning.
-
-
-Section 2 -- Scope.
-
-  a. License grant.
-
-       1. Subject to the terms and conditions of this Public License,
-          the Licensor hereby grants You a worldwide, royalty-free,
-          non-sublicensable, non-exclusive, irrevocable license to
-          exercise the Licensed Rights in the Licensed Material to:
-
-            a. reproduce and Share the Licensed Material, in whole or
-               in part, for NonCommercial purposes only; and
-
-            b. produce, reproduce, and Share Adapted Material for
-               NonCommercial purposes only.
-
-       2. Exceptions and Limitations. For the avoidance of doubt, where
-          Exceptions and Limitations apply to Your use, this Public
-          License does not apply, and You do not need to comply with
-          its terms and conditions.
-
-       3. Term. The term of this Public License is specified in Section
-          6(a).
-
-       4. Media and formats; technical modifications allowed. The
-          Licensor authorizes You to exercise the Licensed Rights in
-          all media and formats whether now known or hereafter created,
-          and to make technical modifications necessary to do so. The
-          Licensor waives and/or agrees not to assert any right or
-          authority to forbid You from making technical modifications
-          necessary to exercise the Licensed Rights, including
-          technical modifications necessary to circumvent Effective
-          Technological Measures. For purposes of this Public License,
-          simply making modifications authorized by this Section 2(a)
-          (4) never produces Adapted Material.
-
-       5. Downstream recipients.
-
-            a. Offer from the Licensor -- Licensed Material. Every
-               recipient of the Licensed Material automatically
-               receives an offer from the Licensor to exercise the
-               Licensed Rights under the terms and conditions of this
-               Public License.
-
-            b. Additional offer from the Licensor -- Adapted Material.
-               Every recipient of Adapted Material from You
-               automatically receives an offer from the Licensor to
-               exercise the Licensed Rights in the Adapted Material
-               under the conditions of the Adapter's License You apply.
-
-            c. No downstream restrictions. You may not offer or impose
-               any additional or different terms or conditions on, or
-               apply any Effective Technological Measures to, the
-               Licensed Material if doing so restricts exercise of the
-               Licensed Rights by any recipient of the Licensed
-               Material.
-
-       6. No endorsement. Nothing in this Public License constitutes or
-          may be construed as permission to assert or imply that You
-          are, or that Your use of the Licensed Material is, connected
-          with, or sponsored, endorsed, or granted official status by,
-          the Licensor or others designated to receive attribution as
-          provided in Section 3(a)(1)(A)(i).
-
-  b. Other rights.
-
-       1. Moral rights, such as the right of integrity, are not
-          licensed under this Public License, nor are publicity,
-          privacy, and/or other similar personality rights; however, to
-          the extent possible, the Licensor waives and/or agrees not to
-          assert any such rights held by the Licensor to the limited
-          extent necessary to allow You to exercise the Licensed
-          Rights, but not otherwise.
-
-       2. Patent and trademark rights are not licensed under this
-          Public License.
-
-       3. To the extent possible, the Licensor waives any right to
-          collect royalties from You for the exercise of the Licensed
-          Rights, whether directly or through a collecting society
-          under any voluntary or waivable statutory or compulsory
-          licensing scheme. In all other cases the Licensor expressly
-          reserves any right to collect such royalties, including when
-          the Licensed Material is used other than for NonCommercial
-          purposes.
-
-
-Section 3 -- License Conditions.
-
-Your exercise of the Licensed Rights is expressly made subject to the
-following conditions.
-
-  a. Attribution.
-
-       1. If You Share the Licensed Material (including in modified
-          form), You must:
-
-            a. retain the following if it is supplied by the Licensor
-               with the Licensed Material:
-
-                 i. identification of the creator(s) of the Licensed
-                    Material and any others designated to receive
-                    attribution, in any reasonable manner requested by
-                    the Licensor (including by pseudonym if
-                    designated);
-
-                ii. a copyright notice;
-
-               iii. a notice that refers to this Public License;
-
-                iv. a notice that refers to the disclaimer of
-                    warranties;
-
-                 v. a URI or hyperlink to the Licensed Material to the
-                    extent reasonably practicable;
-
-            b. indicate if You modified the Licensed Material and
-               retain an indication of any previous modifications; and
-
-            c. indicate the Licensed Material is licensed under this
-               Public License, and include the text of, or the URI or
-               hyperlink to, this Public License.
-
-       2. You may satisfy the conditions in Section 3(a)(1) in any
-          reasonable manner based on the medium, means, and context in
-          which You Share the Licensed Material. For example, it may be
-          reasonable to satisfy the conditions by providing a URI or
-          hyperlink to a resource that includes the required
-          information.
-       3. If requested by the Licensor, You must remove any of the
-          information required by Section 3(a)(1)(A) to the extent
-          reasonably practicable.
-
-  b. ShareAlike.
-
-     In addition to the conditions in Section 3(a), if You Share
-     Adapted Material You produce, the following conditions also apply.
-
-       1. The Adapter's License You apply must be a Creative Commons
-          license with the same License Elements, this version or
-          later, or a BY-NC-SA Compatible License.
-
-       2. You must include the text of, or the URI or hyperlink to, the
-          Adapter's License You apply. You may satisfy this condition
-          in any reasonable manner based on the medium, means, and
-          context in which You Share Adapted Material.
-
-       3. You may not offer or impose any additional or different terms
-          or conditions on, or apply any Effective Technological
-          Measures to, Adapted Material that restrict exercise of the
-          rights granted under the Adapter's License You apply.
-
-
-Section 4 -- Sui Generis Database Rights.
-
-Where the Licensed Rights include Sui Generis Database Rights that
-apply to Your use of the Licensed Material:
-
-  a. for the avoidance of doubt, Section 2(a)(1) grants You the right
-     to extract, reuse, reproduce, and Share all or a substantial
-     portion of the contents of the database for NonCommercial purposes
-     only;
-
-  b. if You include all or a substantial portion of the database
-     contents in a database in which You have Sui Generis Database
-     Rights, then the database in which You have Sui Generis Database
-     Rights (but not its individual contents) is Adapted Material,
-     including for purposes of Section 3(b); and
-
-  c. You must comply with the conditions in Section 3(a) if You Share
-     all or a substantial portion of the contents of the database.
-
-For the avoidance of doubt, this Section 4 supplements and does not
-replace Your obligations under this Public License where the Licensed
-Rights include other Copyright and Similar Rights.
-
-
-Section 5 -- Disclaimer of Warranties and Limitation of Liability.
-
-  a. UNLESS OTHERWISE SEPARATELY UNDERTAKEN BY THE LICENSOR, TO THE
-     EXTENT POSSIBLE, THE LICENSOR OFFERS THE LICENSED MATERIAL AS-IS
-     AND AS-AVAILABLE, AND MAKES NO REPRESENTATIONS OR WARRANTIES OF
-     ANY KIND CONCERNING THE LICENSED MATERIAL, WHETHER EXPRESS,
-     IMPLIED, STATUTORY, OR OTHER. THIS INCLUDES, WITHOUT LIMITATION,
-     WARRANTIES OF TITLE, MERCHANTABILITY, FITNESS FOR A PARTICULAR
-     PURPOSE, NON-INFRINGEMENT, ABSENCE OF LATENT OR OTHER DEFECTS,
-     ACCURACY, OR THE PRESENCE OR ABSENCE OF ERRORS, WHETHER OR NOT
-     KNOWN OR DISCOVERABLE. WHERE DISCLAIMERS OF WARRANTIES ARE NOT
-     ALLOWED IN FULL OR IN PART, THIS DISCLAIMER MAY NOT APPLY TO YOU.
-
-  b. TO THE EXTENT POSSIBLE, IN NO EVENT WILL THE LICENSOR BE LIABLE
-     TO YOU ON ANY LEGAL THEORY (INCLUDING, WITHOUT LIMITATION,
-     NEGLIGENCE) OR OTHERWISE FOR ANY DIRECT, SPECIAL, INDIRECT,
-     INCIDENTAL, CONSEQUENTIAL, PUNITIVE, EXEMPLARY, OR OTHER LOSSES,
-     COSTS, EXPENSES, OR DAMAGES ARISING OUT OF THIS PUBLIC LICENSE OR
-     USE OF THE LICENSED MATERIAL, EVEN IF THE LICENSOR HAS BEEN
-     ADVISED OF THE POSSIBILITY OF SUCH LOSSES, COSTS, EXPENSES, OR
-     DAMAGES. WHERE A LIMITATION OF LIABILITY IS NOT ALLOWED IN FULL OR
-     IN PART, THIS LIMITATION MAY NOT APPLY TO YOU.
-
-  c. The disclaimer of warranties and limitation of liability provided
-     above shall be interpreted in a manner that, to the extent
-     possible, most closely approximates an absolute disclaimer and
-     waiver of all liability.
-
-
-Section 6 -- Term and Termination.
-
-  a. This Public License applies for the term of the Copyright and
-     Similar Rights licensed here. However, if You fail to comply with
-     this Public License, then Your rights under this Public License
-     terminate automatically.
-
-  b. Where Your right to use the Licensed Material has terminated under
-     Section 6(a), it reinstates:
-
-       1. automatically as of the date the violation is cured, provided
-          it is cured within 30 days of Your discovery of the
-          violation; or
-
-       2. upon express reinstatement by the Licensor.
-
-     For the avoidance of doubt, this Section 6(b) does not affect any
-     right the Licensor may have to seek remedies for Your violations
-     of this Public License.
-
-  c. For the avoidance of doubt, the Licensor may also offer the
-     Licensed Material under separate terms or conditions or stop
-     distributing the Licensed Material at any time; however, doing so
-     will not terminate this Public License.
-
-  d. Sections 1, 5, 6, 7, and 8 survive termination of this Public
-     License.
-
-
-Section 7 -- Other Terms and Conditions.
-
-  a. The Licensor shall not be bound by any additional or different
-     terms or conditions communicated by You unless expressly agreed.
-
-  b. Any arrangements, understandings, or agreements regarding the
-     Licensed Material not stated herein are separate from and
-     independent of the terms and conditions of this Public License.
-
-
-Section 8 -- Interpretation.
-
-  a. For the avoidance of doubt, this Public License does not, and
-     shall not be interpreted to, reduce, limit, restrict, or impose
-     conditions on any use of the Licensed Material that could lawfully
-     be made without permission under this Public License.
-
-  b. To the extent possible, if any provision of this Public License is
-     deemed unenforceable, it shall be automatically reformed to the
-     minimum extent necessary to make it enforceable. If the provision
-     cannot be reformed, it shall be severed from this Public License
-     without affecting the enforceability of the remaining terms and
-     conditions.
-
-  c. No term or condition of this Public License will be waived and no
-     failure to comply consented to unless expressly agreed to by the
-     Licensor.
-
-  d. Nothing in this Public License constitutes or may be interpreted
-     as a limitation upon, or waiver of, any privileges and immunities
-     that apply to the Licensor or You, including from the legal
-     processes of any jurisdiction or authority.
-
-=======================================================================
-
-Creative Commons is not a party to its public
-licenses. Notwithstanding, Creative Commons may elect to apply one of
-its public licenses to material it publishes and in those instances
-will be considered the “Licensor.” The text of the Creative Commons
-public licenses is dedicated to the public domain under the CC0 Public
-Domain Dedication. Except for the limited purpose of indicating that
-material is shared under a Creative Commons public license or as
-otherwise permitted by the Creative Commons policies published at
-creativecommons.org/policies, Creative Commons does not authorize the
-use of the trademark "Creative Commons" or any other trademark or logo
-of Creative Commons without its prior written consent including,
-without limitation, in connection with any unauthorized modifications
-to any of its public licenses or any other arrangements,
-understandings, or agreements concerning use of licensed material. For
-the avoidance of doubt, this paragraph does not form part of the
-public licenses.
-
-Creative Commons may be contacted at creativecommons.org.
+Me0wo NC Public License
+Version 1.3, July 2026
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Definitions.
+
+   "License" shall mean the terms and conditions for use, reproduction,
+   modification, public performance, public display, making available,
+   sublicensing, distribution, and network use as defined by this
+   document.
+
+   "Licensor" shall mean Me0wo, the copyright owner, or any entity
+   authorized by Me0wo or the copyright owner to grant this License.
+
+   "Legal Entity" shall mean the union of the acting entity and all
+   other entities that control, are controlled by, or are under common
+   control with that entity. For the purposes of this definition,
+   "control" means (i) the power, direct or indirect, to cause the
+   direction or management of such entity, whether by contract or
+   otherwise, or (ii) ownership of fifty percent (50%) or more of the
+   outstanding shares, or (iii) beneficial ownership of such entity.
+
+   "You" (or "Your") shall mean an individual or Legal Entity exercising
+   permissions granted by this License.
+
+   "Source" form shall mean the preferred form for making modifications,
+   including but not limited to software source code, documentation
+   source, configuration files, build scripts, interface definitions,
+   and other human-readable materials used to create, modify, build,
+   install, or operate the Work.
+
+   "Object" form shall mean any form resulting from mechanical
+   transformation or translation of a Source form, including but not
+   limited to compiled object code, generated documentation, packaged
+   applications, container images, minified files, generated assets,
+   and conversions to other media types.
+
+   "Work" shall mean the work of authorship, whether in Source or
+   Object form, made available under this License, as indicated by a
+   copyright notice that is included in or attached to the work.
+
+   "Derivative Work" shall mean any work, whether in Source or Object
+   form, that is based on, derived from, adapted from, translated from,
+   modified from, or otherwise incorporates all or part of the Work, and
+   for which the editorial revisions, annotations, elaborations,
+   adaptations, arrangements, transformations, or other modifications
+   represent, as a whole, an original work of authorship.
+
+   "Mere Aggregation" shall mean placing the Work together with separate
+   and independent works on the same storage medium, repository, package
+   index, distribution channel, container registry, or hosting service,
+   without combining them into a Derivative Work. Mere Aggregation alone
+   does not cause such separate and independent works to become subject
+   to this License.
+
+   "Contribution" shall mean any work of authorship, including the
+   original version of the Work and any modifications or additions to
+   that Work or Derivative Works thereof, that is intentionally submitted
+   to the Licensor for inclusion in the Work by the copyright owner or
+   by an individual or Legal Entity authorized to submit on behalf of the
+   copyright owner. For the purposes of this definition, "submitted"
+   means any electronic or written communication sent to the Licensor or
+   its representatives for the purpose of discussing, improving, or
+   incorporating changes into the Work, including but not limited to pull
+   requests, patches, commits, issue tracker submissions, code review
+   comments, and source code control system submissions, but excluding
+   communication that is conspicuously marked or otherwise designated in
+   writing by the copyright owner as "Not a Contribution."
+
+   "Contributor" shall mean the Licensor and any individual or Legal
+   Entity on behalf of whom a Contribution has been received by the
+   Licensor and subsequently incorporated within the Work.
+
+   "Network Use" means making the functionality of the Work or a
+   Derivative Work available to one or more users through a computer
+   network, including but not limited to use as a web service, API,
+   hosted application, remote procedure call service, online platform,
+   bot, or software-as-a-service offering.
+
+2. Grant of Copyright License.
+
+   Subject to the terms and conditions of this License, each Contributor
+   hereby grants to You a perpetual, worldwide, non-exclusive,
+   no-charge, royalty-free, irrevocable copyright license to reproduce,
+   prepare Derivative Works of, publicly display, publicly perform, make
+   available, sublicense, distribute, and otherwise use the Work and
+   such Derivative Works in Source or Object form, including for
+   commercial purposes.
+
+3. Grant of Patent License.
+
+   Subject to the terms and conditions of this License, each Contributor
+   hereby grants to You a perpetual, worldwide, non-exclusive,
+   no-charge, royalty-free, irrevocable patent license to make, have
+   made, use, import, and otherwise transfer the Work, where such
+   license applies only to those patent claims licensable by such
+   Contributor that are necessarily infringed by their Contribution(s)
+   alone or by combination of their Contribution(s) with the Work to
+   which such Contribution(s) was submitted.
+
+   If You institute patent litigation against any entity, including a
+   cross-claim or counterclaim in a lawsuit, alleging that the Work or a
+   Contribution incorporated within the Work constitutes direct or
+   contributory patent infringement, then any patent licenses granted to
+   You under this License for that Work shall terminate as of the date
+   such litigation is filed.
+
+4. Conditions.
+
+   You may exercise the permissions granted by this License only if You
+   comply with all of the following conditions:
+
+   (a) License Copy. You must give any recipients of the Work or
+       Derivative Works a copy of this License.
+
+   (b) Modified Files. You must cause any modified files to carry
+       prominent notices stating that You changed the files.
+
+   (c) Retention of Notices. You must retain all copyright, patent,
+       trademark, attribution, and license notices from the Source form
+       of the Work in the Source form of any Derivative Work that You
+       distribute or make available, excluding notices that do not
+       pertain to any part of the Derivative Work.
+
+   (d) Attribution. You must include a prominent attribution to Me0wo
+       and any other designated Contributors in any public use, Network
+       Use, making available, or distribution of the Work or Derivative
+       Works, in a manner reasonably designed to inform recipients or
+       users of the origin of the Work. Such attribution shall not imply
+       endorsement by the Licensor or any Contributor.
+
+       For works made available through a user interface, including
+       network services, such attribution must be displayed in a
+       reasonably conspicuous location within that interface, such as an
+       "About," "Credits," "Legal," or similar page. For command-line
+       tools, libraries, APIs, or services without a conventional user
+       interface, attribution may be provided in the documentation,
+       package metadata, repository, generated legal notice, or other
+       location reasonably likely to be seen by recipients or users.
+
+   (e) NOTICE File. If the Work includes a "NOTICE" text file as part of
+       its distribution, then any Derivative Work that You distribute or
+       make available must include a readable copy of the attribution
+       notices contained within such NOTICE file, excluding notices that
+       do not pertain to any part of the Derivative Work, in at least
+       one of the following places: within a NOTICE text file distributed
+       as part of the Derivative Work; within the Source form or
+       documentation, if provided along with the Derivative Work; within
+       package metadata; or within a display generated by the Derivative
+       Work, if and wherever such third-party notices normally appear.
+
+   (f) No Additional Restrictions. You may not impose legal, technical,
+       contractual, platform, access-control, digital-rights-management,
+       or other restrictions that prevent or materially limit recipients
+       or users from exercising the rights granted under this License.
+
+5. Submission of Contributions.
+
+   Unless You explicitly state otherwise in writing, any Contribution
+   intentionally submitted by You to the Licensor for inclusion in the
+   Work shall be submitted under the terms and conditions of this
+   License, without any additional terms or conditions.
+
+   In addition, by submitting a Contribution, You grant the Licensor a
+   perpetual, worldwide, non-exclusive, no-charge, royalty-free,
+   irrevocable, sublicensable license to use, reproduce, modify, prepare
+   Derivative Works of, publicly display, publicly perform, make
+   available, distribute, sublicense, commercialize, and relicense Your
+   Contribution, including under commercial, proprietary, or otherwise
+   different license terms. You represent that You have the right to
+   grant this license for Your Contribution.
+
+   Notwithstanding the above, nothing herein shall supersede or modify
+   the terms of any separate written license agreement You may have
+   executed with the Licensor regarding such Contributions.
+
+6. Trademarks.
+
+   This License does not grant permission to use the trade names,
+   trademarks, service marks, logos, or product names of the Licensor,
+   except as required for reasonable and customary use in describing the
+   origin of the Work, providing attribution required by this License,
+   and reproducing the content of the NOTICE file.
+
+7. Termination and Reinstatement.
+
+   If You fail to comply with any term or condition of this License,
+   then all rights granted to You under this License terminate
+   automatically and immediately.
+
+   After termination, You must immediately stop all use, reproduction,
+   modification, making available, sublicensing, distribution, Network
+   Use, and other exercise of rights under this License, unless and
+   until the Licensor reinstates Your rights in writing. Continued
+   exercise of rights after termination without written reinstatement is
+   not authorized by this License.
+
+   You may cure the violation and request reinstatement from the
+   Licensor. Any request for reinstatement must describe the violation,
+   the cure, and the steps taken to prevent recurrence. The Licensor may
+   accept or reject any cure, require additional conditions, or reinstate
+   rights in whole or in part, at the Licensor's sole discretion.
+
+   A cure and reinstatement request should be submitted within five (5)
+   years after termination. The Licensor may, at the Licensor's sole
+   discretion, consider or reject requests submitted after that period.
+   No cure, request, delay, silence, or partial compliance shall cause
+   automatic reinstatement unless the Licensor expressly states in
+   writing that Your rights are reinstated.
+
+   For repeated, willful, fraudulent, concealed, or bad-faith violations,
+   reinstatement is entirely at the Licensor's sole discretion, and the
+   Licensor may refuse reinstatement even if the violation is later
+   cured.
+
+   Termination of Your rights under this License does not automatically
+   terminate the rights of recipients who received copies from You while
+   You were in compliance with this License, provided that such
+   recipients remain in full compliance with this License.
+
+8. Disclaimer of Warranty.
+
+   Unless required by applicable law or agreed to in writing, the
+   Licensor provides the Work, and each Contributor provides its
+   Contributions, on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
+   OF ANY KIND, either express or implied, including, without limitation,
+   any warranties or conditions of TITLE, NON-INFRINGEMENT,
+   MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE. You are solely
+   responsible for determining the appropriateness of using or
+   redistributing the Work and assume any risks associated with Your
+   exercise of permissions under this License.
+
+9. Limitation of Liability.
+
+   In no event and under no legal theory, whether in tort, including
+   negligence, contract, or otherwise, unless required by applicable law
+   or agreed to in writing, shall any Contributor be liable to You for
+   damages, including any direct, indirect, special, incidental,
+   consequential, exemplary, or punitive damages of any character
+   arising as a result of this License or out of the use or inability to
+   use the Work, including but not limited to damages for loss of
+   goodwill, work stoppage, computer failure or malfunction, loss of
+   data, security breach, lost profits, or any and all other commercial
+   damages or losses, even if such Contributor has been advised of the
+   possibility of such damages.
+
+10. Miscellaneous.
+
+    This License is intended to be interpreted as a copyright, patent,
+    and contract license to the maximum extent permitted by applicable
+    law. If any provision of this License is held to be unenforceable,
+    such provision shall be reformed only to the extent necessary to make
+    it enforceable, and the remaining provisions shall remain in full
+    force and effect.
+
+    No failure or delay by the Licensor in exercising any right under
+    this License shall constitute a waiver of that right. Any waiver must
+    be in writing and signed or otherwise expressly approved by the
+    Licensor.
+
+11. Non-Commercial Scope and Distribution Terms.
+
+    The following definitions and conditions apply in addition to
+    Section 4 and qualify the scope of the licenses granted above. In
+    case of any conflict between this Section and Sections 2 or 3, this
+    Section controls.
+
+    "Non-Commercial" means use that is not a Commercial Purpose. Personal
+    use, personal study, personal experimentation, non-profit education,
+    non-profit academic research, and charitable use shall be deemed
+    Non-Commercial only when such use is not conducted by or on behalf of
+    a for-profit Legal Entity and is not primarily intended for or
+    directed toward commercial advantage, monetary compensation, paid
+    services, advertising revenue, subscription revenue, sale, licensing
+    revenue, business operations, or other commercial benefit.
+
+    "Commercial Purpose" includes, without limitation: (i) use by, for,
+    or on behalf of a for-profit Legal Entity; (ii) use in internal
+    business operations, production systems, commercial research and
+    development, or commercial evaluation, except where the Licensor has
+    given written permission; (iii) use to provide, operate, support, or
+    improve a paid, subscription-based, ad-supported, revenue-generating,
+    or commercially promoted product or service; (iv) sale, lease,
+    licensing, sublicensing, hosting, or distribution for monetary or
+    other commercial consideration; (v) use in consulting, contracting,
+    outsourcing, or other services performed for compensation; and
+    (vi) use to train, fine-tune, evaluate, improve, or operate machine
+    learning or artificial intelligence systems for or on behalf of a
+    for-profit Legal Entity or a commercial product or service.
+
+    "Corresponding Source" for a work in Object form means all Source
+    form needed to generate, reproduce, build, install, run, operate,
+    debug, and modify the Object form, including scripts, build files,
+    interface files, configuration files, dependency manifests, and other
+    materials used to control those activities. However, it does not
+    include System Libraries or general-purpose tools that are generally
+    available to the public, used unmodified in performing those
+    activities, and not part of the Work or Derivative Work.
+
+    "System Libraries" means components that are normally distributed
+    with or as part of a major component of the operating system,
+    language runtime, compiler, standard library, or platform on which
+    the Work runs, and that are used unmodified and are not specifically
+    designed for or included as part of the Work or Derivative Work.
+
+    (a) Non-Commercial Limitation. Notwithstanding anything to the
+        contrary in this License, the copyright and patent licenses
+        granted under Sections 2 and 3 are limited solely to
+        Non-Commercial purposes. For clarity, these licenses do not
+        authorize any Commercial Purpose, commercial sale, commercial
+        offering, or commercial distribution.
+
+    (b) Commercial Use and Commercial Licensing. This License grants no
+        permission for any Commercial Purpose. If You wish to use,
+        reproduce, modify, make available, distribute, operate, or
+        otherwise exploit the Work or any Derivative Work for any
+        Commercial Purpose, You must obtain a separate written commercial
+        license from the Licensor before doing so. Commercial licensing
+        is available only from the Licensor and only to the extent the
+        Licensor has the rights necessary to grant such license. Contact
+        information and terms for commercial licensing may be obtained
+        from:
+
+            https://github.com/Sn0wo2
+
+    (c) Source for Object Distribution. If You distribute or make
+        available the Work or any Derivative Work in Object form, You
+        must provide the complete Corresponding Source for that Object
+        form under the terms of this License. The Corresponding Source
+        must be provided either together with the Object form, or through
+        a clear and durable written offer or network location that
+        remains valid for at least five (5) years after Your last
+        distribution of that Object form.
+
+    (d) Network Source Requirement. If You make the functionality of the
+        Work or a Derivative Work available through Network Use, You must
+        prominently offer all users of that Network Use a copy of this
+        License and the complete Corresponding Source of the Work or
+        Derivative Work under the terms of this License.
+
+    (e) Same License for Derivative Works. Any Derivative Work that You
+        distribute, make available, or use through Network Use must be
+        licensed, as a whole, under the terms of this License for
+        Non-Commercial use, without additional restrictions that would
+        limit the exercise of rights granted under this License. You may
+        add Your own copyright statements to Your modifications. To the
+        extent You own Your modifications, You may also license those
+        modifications separately under additional or different terms,
+        including commercial terms, but only if such separate terms do
+        not limit, condition, or restrict the rights granted to
+        recipients or users under this License for the copy of the
+        Derivative Work that You distribute, make available, or use
+        through Network Use. In case of conflict, this License shall
+        prevail for the Work and for any Derivative Work distributed,
+        made available, or used through Network Use under this License.
+
+END OF TERMS AND CONDITIONS
+
+APPENDIX: How to apply the Me0wo NC Public License to your work.
+
+   To apply the Me0wo NC Public License to your work, attach the following
+   boilerplate notice, with the fields enclosed by brackets "[]"
+   replaced with your own identifying information. Do not include the
+   brackets. The text should be enclosed in the appropriate comment
+   syntax for the file format. We also recommend that a file or class
+   name and description of purpose be included on the same printed page
+   as the copyright notice for easier identification within third-party
+   archives.
+
+Copyright 2026 Me0wo
+
+Licensed under the Me0wo NC Public License, Version 1.3 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://github.com/Sn0wo2/Me0wo-LICENSE/blob/main/LICENSE-NC
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

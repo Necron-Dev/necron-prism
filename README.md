@@ -21,9 +21,10 @@
 
 ## 许可证
 
-此项目中的代码禁止除 Necron Prism 以外的任何商业用途。
+本项目基于 [**Me0wo NC Public License v1.3**](LICENSE) 许可。
+如果你不知道什么是 Me0wo NC Public License v1.3，请参考 [Me0wo-LICENSE](https://github.com/Sn0wo2/Me0wo-LICENSE)。
 
-本项目基于 [**CC BY-NC-SA 4.0**](LICENSE) 许可。
+本项目仅允许 [Necron-Dev](https://github.com/Necron-Dev) 的 Necron Prism 用于商业用途。
 
 尽管内部开发过程中曾使用 `MIT License`，但这些版本从未公开发布。历史提交中的任何许可文本均为无效占位符，不构成任何法律授权。
 
@@ -31,5 +32,5 @@
 
 ## 致谢
 
-- [ZBProxy](https://github.com/layou233/ZBProxy) _Minecraft加速IP与反向代理领域的开源先驱; 参考了部分设计思路_
-- [Minecraft WIKI](https://minecraft.wiki/w/Java_Edition_protocol) _Minecraft Java协议文档; 站在前人的肩膀上，我们才能看得更远。_
+- [ZBProxy](https://github.com/layou233/ZBProxy) _Minecraft加速IP与反向代理领域的开源先驱; 参考了部分设计思路。_
+- [Minecraft WIKI](https://minecraft.wiki/w/Java_Edition_protocol) _Minecraft Java协议文档。_

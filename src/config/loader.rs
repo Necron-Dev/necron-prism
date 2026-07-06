@@ -47,6 +47,9 @@ fn validate_config(config: &NecronPrismConfig) -> Result<()> {
     if config.prism.motd.local_json.is_empty() {
         anyhow::bail!("motd.local_json cannot be empty");
     }
+
+    serde_json::from_str::<serde_json::Value>(&config.prism.motd.local_json)?;
+
     if config.prism.motd.upstream_addr.is_empty() {
         anyhow::bail!("motd.upstream_addr cannot be empty");
     }

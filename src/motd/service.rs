@@ -2,7 +2,7 @@ use crate::template;
 use prism::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
 use prism::session::ConnectionSession;
 use prism_minecraft::{
-    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, decode_status_request, encode_raw_frame,
+    HandshakeC2s, MAX_STATUS_PACKET_SIZE, PacketIo, decode_request, encode_raw_frame,
     ping_response_packet, status_response_packet,
 };
 
@@ -21,12 +21,13 @@ pub async fn serve(
     motd_config: &MotdConfig,
     relay: &RelayConfig,
     online_count: i32,
-    handshake: &HandshakeInfo,
+    handshake: &HandshakeC2s,
     session: &ConnectionSession,
 ) -> anyhow::Result<()> {
     let _guard = session.root_span().enter();
     let status_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
-    decode_status_request(&status_request).map_err(anyhow::Error::from)?;
+    let _: prism_minecraft::QueryRequestC2s =
+        decode_request(&status_request).map_err(anyhow::Error::from)?;
 
     let status_request_wire = encode_raw_frame(&status_request).map_err(anyhow::Error::from)?;
 
@@ -97,7 +98,7 @@ pub async fn read_favicon_data_url(path: &std::path::Path) -> anyhow::Result<std
 pub async fn render_local_json(
     config: &MotdConfig,
     relay: &RelayConfig,
-    handshake: &HandshakeInfo,
+    handshake: &HandshakeC2s,
     online_count: i32,
 ) -> Option<Arc<str>> {
     if config.mode != MotdMode::Local {
@@ -118,7 +119,7 @@ pub async fn render_local_json(
     Some(Arc::<str>::from(rewrite_json(
         &final_text,
         config.protocol,
-        handshake.protocol_version,
+        handshake.protocol_version.0,
         &config.favicon,
         favicon_data_url.as_deref(),
         None,

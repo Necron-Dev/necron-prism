@@ -3,8 +3,7 @@ use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 
 use prism_minecraft::{
-    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, decode_ping_request,
-    ping_response_packet,
+    HandshakeC2s, MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, ping_response_packet,
 };
 
 use super::rewrite::rewrite_json;
@@ -16,14 +15,14 @@ use prism::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPi
 pub struct StatusContext<'a> {
     config: &'a MotdConfig,
     relay: &'a RelayConfig,
-    handshake: &'a HandshakeInfo,
+    handshake: &'a HandshakeC2s,
 }
 
 impl<'a> StatusContext<'a> {
     pub fn new(
         config: &'a MotdConfig,
         relay: &'a RelayConfig,
-        handshake: &'a HandshakeInfo,
+        handshake: &'a HandshakeC2s,
     ) -> Self {
         Self {
             config,
@@ -93,7 +92,7 @@ impl<'a> StatusContext<'a> {
         Ok(rewrite_json(
             &base_json,
             self.config.protocol,
-            self.handshake.protocol_version,
+            self.handshake.protocol_version.0,
             &self.config.favicon,
             explicit_favicon.as_deref(),
             favicon_source,
@@ -114,13 +113,15 @@ impl<'a> StatusContext<'a> {
             StatusPingMode::ZeroMs => send_pong(client, 0, 0, None).await,
             StatusPingMode::Local => {
                 let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
-                let payload = decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
-                send_pong(client, payload, ping_request.wire_len, None).await
+                let ping: prism_minecraft::QueryPingC2s =
+                    prism_minecraft::decode_request(&ping_request).map_err(anyhow::Error::from)?;
+                send_pong(client, ping.payload, ping_request.wire_len, None).await
             }
             StatusPingMode::Passthrough => {
                 let ping_request = packet_io.read_frame(client, MAX_STATUS_PACKET_SIZE).await?;
-                let client_payload =
-                    decode_ping_request(&ping_request).map_err(anyhow::Error::from)?;
+                let ping: prism_minecraft::QueryPingC2s =
+                    prism_minecraft::decode_request(&ping_request).map_err(anyhow::Error::from)?;
+                let client_payload = ping.payload;
                 let (payload, measured_ms) = match upstream {
                     Some(session) => session.ping(client_payload).await,
                     None => {

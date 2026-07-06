@@ -1,17 +1,11 @@
 use regex::Regex;
 use std::fmt;
 use std::sync::{Arc, LazyLock};
+use valence_protocol::uuid::Uuid;
+use valence_protocol::{Decode, Encode, Packet, PacketState, VarInt, packet_id};
 
 static ADDR_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(?:\[(?P<ipv6>.+?)\]|(?P<host>.+?)):(?P<port>\d+)$").unwrap());
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HandshakeInfo {
-    pub protocol_version: i32,
-    pub server_address: String,
-    pub server_port: u16,
-    pub next_state: i32,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RuntimeAddress {
@@ -66,21 +60,32 @@ impl fmt::Display for RuntimeAddress {
     }
 }
 
-impl HandshakeInfo {
-    pub fn rewrite_addr(&mut self, addr: &RuntimeAddress) -> Result<(), String> {
-        let host = addr.host();
-        let port = addr.port();
+#[derive(Clone, Debug, Encode, Decode, Packet)]
+#[packet(id = packet_id::HANDSHAKE_C2S, state = PacketState::Handshaking)]
+pub struct HandshakeC2s {
+    pub protocol_version: VarInt,
+    pub server_address: String,
+    pub server_port: u16,
+    pub next_state: HandshakeNextState,
+}
 
-        if let Some(pos) = self.server_address.find('\0') {
-            let suffix = &self.server_address[pos..];
-            let mut rewritten = String::with_capacity(host.len() + suffix.len());
-            rewritten.push_str(host);
-            rewritten.push_str(suffix);
-            self.server_address = rewritten;
-        } else {
-            self.server_address = host.to_owned();
-        }
-        self.server_port = port;
-        Ok(())
-    }
+// valence_protocol & mojang 也干了, 没有 Transfer 这个 State
+// Minecraft 1.20.1 还没这个 Transfer State; 1.20.5 才加入的
+// 直接反序列化会爆
+// https://minecraft.wiki/w/Java_Edition_protocol/Packets#Clientbound
+// https://docs.rs/valence_protocol/0.2.0-alpha.1/valence_protocol/packets/handshaking/handshake_c2s/enum.HandshakeNextState.html
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum HandshakeNextState {
+    #[packet(tag = 1)]
+    Status,
+    #[packet(tag = 2)]
+    Login,
+    #[packet(tag = 3)]
+    Transfer,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LoginHelloInfo {
+    pub username: String,
+    pub profile_id: Option<Uuid>,
 }

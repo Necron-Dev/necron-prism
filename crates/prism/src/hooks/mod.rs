@@ -2,7 +2,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use prism_minecraft::{FramedPacket, HandshakeInfo, PacketIo};
+use prism_minecraft::{FramedPacket, HandshakeC2s, PacketIo};
 
 use crate::config::Config;
 use crate::session::{ConnectionReport, ConnectionRoute, ConnectionSession};
@@ -21,7 +21,7 @@ pub trait PrismHooks: Send + Sync + 'static {
         packet_io: &mut PacketIo,
         client: &mut tokio::net::TcpStream,
         session: &ConnectionSession,
-        handshake: &HandshakeInfo,
+        handshake: &HandshakeC2s,
         config: &Config,
         online_count: i32,
     ) -> impl Future<Output = Result<()>> + Send;
@@ -31,7 +31,7 @@ pub trait PrismHooks: Send + Sync + 'static {
         &self,
         client: &mut tokio::net::TcpStream,
         session: &ConnectionSession,
-        handshake: &HandshakeInfo,
+        handshake: &HandshakeC2s,
         login_packet: &FramedPacket,
         peer_addr: Option<SocketAddr>,
         config: &Config,

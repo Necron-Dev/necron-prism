@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 use tracing::{Span, field::Empty, info_span};
 use valence_protocol::uuid::Uuid;
 
-use prism_minecraft::RuntimeAddress;
+use prism_minecraft::{HandshakeC2s, RuntimeAddress};
 
 use crate::relay::RelayMode;
 
@@ -65,8 +65,9 @@ pub struct ConnectionSession {
     pub username: Option<String>,
     pub uuid: Option<Uuid>,
     pub outbound_name: Option<Arc<str>>,
-    pub protocol_version: Option<i32>,
-    pub next_state: Option<i32>,
+
+    pub handshake: Option<HandshakeC2s>,
+
     pub state: PlayerState,
 
     // Connection tracking fields
@@ -92,8 +93,7 @@ impl ConnectionSession {
             username: None,
             uuid: None,
             outbound_name: None,
-            protocol_version: None,
-            next_state: None,
+            handshake: None,
             state: PlayerState::Connected,
             kind: Arc::new(AtomicU8::new(ConnectionKind::Unknown as u8)),
             root_span,

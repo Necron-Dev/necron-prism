@@ -5,8 +5,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use prism_minecraft::{
-    HandshakeInfo, MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, decode_ping_request,
-    decode_status_response, ping_response_packet,
+    HandshakeC2s, MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, decode_request,
+    ping_response_packet,
 };
 
 pub struct UpstreamStatusSession {
@@ -19,7 +19,7 @@ impl UpstreamStatusSession {
     pub async fn connect(
         target_addr: RuntimeAddress,
         rewrite_addr: RuntimeAddress,
-        client_handshake: &HandshakeInfo,
+        client_handshake: &HandshakeC2s,
         status_request_wire: &[u8],
         timeout_duration: Duration,
         read_json: bool,
@@ -49,8 +49,9 @@ impl UpstreamStatusSession {
             let frame = packet_io
                 .read_frame(&mut stream, MAX_STATUS_PACKET_SIZE)
                 .await?;
-            let json = decode_status_response(&frame).map_err(anyhow::Error::from)?;
-            Some(Arc::<str>::from(json))
+            let response: prism_minecraft::QueryResponseS2c =
+                decode_request(&frame).map_err(anyhow::Error::from)?;
+            Some(Arc::<str>::from(response.json))
         } else {
             None
         };
@@ -68,8 +69,9 @@ impl UpstreamStatusSession {
                 .packet_io
                 .read_frame(&mut self.stream, MAX_STATUS_PACKET_SIZE)
                 .await?;
-            let json = decode_status_response(&frame).map_err(anyhow::Error::from)?;
-            self.status_json = Some(Arc::<str>::from(json));
+            let response: prism_minecraft::QueryResponseS2c =
+                decode_request(&frame).map_err(anyhow::Error::from)?;
+            self.status_json = Some(Arc::<str>::from(response.json));
         }
 
         Ok(self.status_json.as_deref().unwrap())
@@ -85,7 +87,9 @@ impl UpstreamStatusSession {
             .packet_io
             .read_frame(&mut self.stream, MAX_STATUS_PACKET_SIZE)
             .await?;
-        let payload = decode_ping_request(&pong_frame).map_err(anyhow::Error::from)?;
+        let pong: prism_minecraft::QueryPongS2c =
+            decode_request(&pong_frame).map_err(anyhow::Error::from)?;
+        let payload = pong.payload;
 
         let measured_ms = start.elapsed().as_millis() as u32;
 

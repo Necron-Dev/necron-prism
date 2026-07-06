@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 use tokio::io::AsyncWriteExt;
 use tracing::{info, trace};
 
-use prism_minecraft::{encode_handshake, encode_raw_frame};
+use prism_minecraft::{FramedPacket, HandshakeC2s, encode_handshake, encode_raw_frame};
 
 use crate::context::PrismContext;
 use crate::hooks::PrismHooks;
@@ -19,8 +19,8 @@ pub(super) async fn proxy_connection<H: PrismHooks>(
     client: tokio::net::TcpStream,
     ctx: &PrismContext<H>,
     session: &ConnectionSession,
-    mut handshake: prism_minecraft::HandshakeInfo,
-    login_start_packet: prism_minecraft::FramedPacket,
+    mut handshake: HandshakeC2s,
+    login_start_packet: FramedPacket,
     route: ConnectionRoute,
     started_at: Instant,
 ) -> anyhow::Result<ConnectionReport> {

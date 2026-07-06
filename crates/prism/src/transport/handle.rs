@@ -6,8 +6,8 @@ use tokio::time::timeout;
 use tracing::{debug, info, trace};
 
 use prism_minecraft::{
-    INTENT_STATUS, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, PRISM_MAGIC_ID, PacketIo,
-    decode_handshake,
+    HandshakeC2s, HandshakeNextState, MAGIC, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    PacketIo, decode_handshake,
 };
 
 use crate::context::PrismContext;
@@ -49,6 +49,7 @@ pub(super) async fn handle_client<H: PrismHooks>(
         "[CONNECT] read first byte from client"
     );
 
+    // https://minecraft.wiki/w/Java_Edition_protocol/Packets#Legacy_Server_List_Ping
     if first_byte[0] == 0xFE {
         return handle_legacy_ping(&mut client, ctx, session).await;
     }
@@ -67,8 +68,18 @@ pub(super) async fn handle_client<H: PrismHooks>(
     })?
     .context("read handshake packet")?;
 
-    if handshake_packet.frame.id == PRISM_MAGIC_ID {
-        return handle_magic_packet(&mut client).await;
+    if handshake_packet.frame.id == MAGIC {
+        client
+            .write_all("necron-prism".as_bytes())
+            .await
+            .context("write magic response")?;
+        client.shutdown().await.context("shutdown magic stream")?;
+        return Ok(ConnectionReport::new(
+            ConnectionTraffic::default(),
+            None,
+            None,
+            None,
+        ));
     }
 
     let handshake = decode_handshake(&handshake_packet)
@@ -76,7 +87,7 @@ pub(super) async fn handle_client<H: PrismHooks>(
         .context("decode handshake")?;
 
     trace!(
-        protocol_version = handshake.protocol_version,
+        protocol_version = handshake.protocol_version.0,
         next_state = ?handshake.next_state,
         original_host = handshake.server_address,
         original_port = handshake.server_port,
@@ -85,7 +96,7 @@ pub(super) async fn handle_client<H: PrismHooks>(
         "[CONNECT] handshake packet decoded"
     );
 
-    if handshake.next_state == INTENT_STATUS {
+    if handshake.next_state == HandshakeNextState::Status {
         return handle_motd(&mut packet_io, &mut client, ctx, session, &handshake).await;
     }
 
@@ -174,28 +185,12 @@ async fn handle_legacy_ping<H: PrismHooks>(
     ))
 }
 
-async fn handle_magic_packet(
-    client: &mut tokio::net::TcpStream,
-) -> anyhow::Result<ConnectionReport> {
-    client
-        .write_all("necron-prism".as_bytes())
-        .await
-        .context("write magic response")?;
-    client.shutdown().await.context("shutdown magic stream")?;
-    Ok(ConnectionReport::new(
-        ConnectionTraffic::default(),
-        None,
-        None,
-        None,
-    ))
-}
-
 async fn handle_motd<H: PrismHooks>(
     packet_io: &mut PacketIo,
     client: &mut tokio::net::TcpStream,
     ctx: &PrismContext<H>,
     session: &ConnectionSession,
-    handshake: &prism_minecraft::HandshakeInfo,
+    handshake: &HandshakeC2s,
 ) -> anyhow::Result<ConnectionReport> {
     session.set_kind(ConnectionKind::Motd);
     let _motd_guard = session.root_span().enter();

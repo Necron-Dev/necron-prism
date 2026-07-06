@@ -1,6 +1,6 @@
 use crate::template::{self, TemplateContext};
 use prism::config::{MotdConfig, MotdMode, RelayConfig};
-use prism_minecraft::HandshakeInfo;
+use prism_minecraft::{HandshakeC2s, HandshakeNextState, VarInt};
 use tokio::io::AsyncWriteExt;
 
 use super::rewrite::rewrite_json;
@@ -12,25 +12,59 @@ pub async fn serve_legacy_ping(
     online_count: i32,
 ) -> anyhow::Result<()> {
     let upstream_json = if matches!(motd_config.mode, MotdMode::Upstream) {
-        fetch_upstream_status_json(motd_config)
-            .await
-            .unwrap_or_else(|_| motd_config.local_json.clone())
+        let server_address = motd_config.upstream_addr.clone();
+        let mut stream = tokio::net::TcpStream::connect(&server_address).await?;
+
+        let server_port = if let Some(stripped) = server_address.strip_prefix('[') {
+            let (_, port) = stripped
+                .split_once(']')
+                .ok_or_else(|| anyhow::anyhow!("invalid IPv6 address"))?;
+            port.strip_prefix(':')
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(25565)
+        } else {
+            server_address
+                .rsplit_once(':')
+                .and_then(|(_, port)| port.parse().ok())
+                .unwrap_or(25565)
+        };
+
+        let mut request = prism_minecraft::encode_handshake(&HandshakeC2s {
+            protocol_version: VarInt(motd_config.protocol as i32),
+            server_address,
+            server_port,
+            next_state: HandshakeNextState::Status,
+        })
+        .map_err(anyhow::Error::from)?;
+        request.extend_from_slice(&[1, 0]);
+        stream.write_all(&request).await?;
+
+        let frame = prism_minecraft::PacketIo::default()
+            .read_frame(&mut stream, 64 * 1024)
+            .await?;
+        let response: Result<prism_minecraft::QueryResponseS2c, _> =
+            prism_minecraft::decode_request(&frame);
+        response
+            .map(|r| r.json.to_owned())
+            .unwrap_or_else(|_| motd_config.local_json.to_owned())
     } else {
-        let template_context = TemplateContext::for_transport(motd_config, relay, online_count);
-        template::render(&motd_config.local_json, &template_context).into_owned()
+        template::render(
+            &motd_config.local_json,
+            &TemplateContext::for_transport(motd_config, relay, online_count),
+        )
+        .into_owned()
     };
 
-    let motd_json = rewrite_json(
+    let utf16: Vec<u16> = extract_legacy_text(&rewrite_json(
         &upstream_json,
         motd_config.protocol,
         763,
         &motd_config.favicon,
         None,
         None,
-    );
-    let legacy_raw = extract_legacy_text(&motd_json);
-
-    let utf16: Vec<u16> = legacy_raw.encode_utf16().collect();
+    ))
+    .encode_utf16()
+    .collect();
     let mut response = Vec::with_capacity(3 + utf16.len() * 2);
     response.push(0xFF);
     response.extend_from_slice(&(utf16.len() as u16).to_be_bytes());
@@ -41,39 +75,6 @@ pub async fn serve_legacy_ping(
     client.write_all(&response).await?;
 
     Ok(())
-}
-
-async fn fetch_upstream_status_json(config: &MotdConfig) -> anyhow::Result<String> {
-    let address = &config.upstream_addr;
-    let mut stream = tokio::net::TcpStream::connect(address).await?;
-
-    let server_port = if let Some(stripped) = address.strip_prefix('[') {
-        let (_, port) = stripped
-            .split_once(']')
-            .ok_or_else(|| anyhow::anyhow!("invalid IPv6 address"))?;
-        port.strip_prefix(':')
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(25565)
-    } else {
-        address
-            .rsplit_once(':')
-            .and_then(|(_, port)| port.parse().ok())
-            .unwrap_or(25565)
-    };
-
-    let handshake = HandshakeInfo {
-        protocol_version: 763,
-        server_address: address.to_string(),
-        server_port,
-        next_state: 1,
-    };
-    let mut request = prism_minecraft::encode_handshake(&handshake).map_err(anyhow::Error::from)?;
-    request.extend_from_slice(&[1, 0]);
-    stream.write_all(&request).await?;
-
-    let mut packet_io = prism_minecraft::PacketIo::default();
-    let frame = packet_io.read_frame(&mut stream, 64 * 1024).await?;
-    prism_minecraft::decode_status_response(&frame).map_err(anyhow::Error::from)
 }
 
 fn extract_legacy_text(json: &str) -> String {

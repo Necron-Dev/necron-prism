@@ -130,6 +130,7 @@ pub struct BufferConfig {
 pub struct MotdConfig {
     #[default(MotdMode::Local)]
     pub mode: MotdMode,
+    // https://minecraft.wiki/w/Java_Edition_protocol/Server_List_Ping#Status_Response
     #[default(DEFAULT_LOCAL_JSON.to_owned())]
     pub local_json: String,
     #[default(DEFAULT_UPSTREAM_ADDR.to_owned())]

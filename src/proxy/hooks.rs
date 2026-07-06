@@ -7,7 +7,7 @@ use tracing::{info, trace};
 use prism::{
     Config, ConnectionReport, ConnectionRoute, ConnectionSession, LoginResult, PrismHooks,
 };
-use prism_minecraft::{FramedPacket, HandshakeInfo, PacketIo, RuntimeAddress, decode_login_hello};
+use prism_minecraft::{FramedPacket, HandshakeC2s, PacketIo, RuntimeAddress, decode_login_hello};
 
 use super::api::ApiService;
 use super::routing::JoinDecision;
@@ -53,7 +53,7 @@ impl PrismHooks for NecronPrismHooks {
         packet_io: &mut PacketIo,
         client: &mut tokio::net::TcpStream,
         session: &ConnectionSession,
-        handshake: &HandshakeInfo,
+        handshake: &HandshakeC2s,
         config: &Config,
         online_count: i32,
     ) -> Result<()> {
@@ -73,7 +73,7 @@ impl PrismHooks for NecronPrismHooks {
         &self,
         _client: &mut tokio::net::TcpStream,
         session: &ConnectionSession,
-        handshake: &HandshakeInfo,
+        handshake: &HandshakeC2s,
         login_start_packet: &FramedPacket,
         peer_addr: Option<SocketAddr>,
         _config: &Config,
@@ -106,7 +106,7 @@ impl PrismHooks for NecronPrismHooks {
                 Some(&handshake.server_address),
                 &self.entry_node_key,
                 online_count,
-                handshake.protocol_version,
+                handshake.protocol_version.0,
             )
             .await
         {

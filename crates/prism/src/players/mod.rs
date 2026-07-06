@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 use anyhow::Result;
 use flurry::HashMap;
+use prism_minecraft::HandshakeC2s;
 
 use crate::session::{ConnectionSession, PlayerState};
-use prism_minecraft::{HandshakeInfo, INTENT_LOGIN, INTENT_STATUS};
 
 #[derive(Clone, Default)]
 pub struct ConnectionRegistry {
@@ -22,15 +22,9 @@ impl ConnectionRegistry {
         self.sessions.insert(connection_id, session, &guard);
         Ok(self.sessions.len())
     }
-    pub fn update_handshake(&self, connection_id: &str, handshake: &HandshakeInfo) {
+    pub fn update_handshake(&self, connection_id: &str, handshake: &HandshakeC2s) {
         self.update(connection_id, |session| {
-            session.protocol_version = Some(handshake.protocol_version);
-            session.next_state = Some(handshake.next_state);
-            session.state = match handshake.next_state {
-                INTENT_STATUS => PlayerState::Routing,
-                INTENT_LOGIN => PlayerState::Login,
-                _ => PlayerState::Routing,
-            };
+            session.handshake = Some(handshake.to_owned());
         });
     }
 

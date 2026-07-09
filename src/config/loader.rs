@@ -34,13 +34,13 @@ impl ConfigLoader {
             .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
 
         config.prism.source_path = path.to_path_buf();
-        validate_config(&config)?;
+        validate_config(&mut config)?;
 
         Ok(config)
     }
 }
 
-fn validate_config(config: &NecronPrismConfig) -> Result<()> {
+fn validate_config(config: &mut NecronPrismConfig) -> Result<()> {
     if config.prism.network.socket.listen_addr.is_empty() {
         anyhow::bail!("network.socket.listen_addr cannot be empty");
     }
@@ -64,6 +64,8 @@ fn validate_config(config: &NecronPrismConfig) -> Result<()> {
     {
         anyhow::bail!("motd.favicon.path is required when motd.favicon.mode is \"path\"");
     }
+
+    config.prism.motd.latency_needs = LatencyNeeds::for_config(&config.prism.motd);
     Ok(())
 }
 

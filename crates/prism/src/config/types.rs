@@ -29,7 +29,7 @@ const DEFAULT_PACKET_READ_BUFFER_SIZE: usize = 16 * 1024;
 
 // MOTD defaults
 const DEFAULT_UPSTREAM_PING_TIMEOUT_MS: u64 = 1_500;
-const DEFAULT_LOCAL_JSON: &str = r#"{"version":{"name":"\u00a7bnecron-prism \u00a77status","protocol":-1},"players":{"max":100,"online":{online_player},"sample":[{"name":"\u00a77mode \u00a78> \u00a7f{relay_mode}","id":"00000000-0000-0000-0000-000000000001"},{"name":"\u00a77ping \u00a78> \u00a7b{ping_mode}","id":"00000000-0000-0000-0000-000000000002"},{"name":"\u00a77target \u00a78> \u00a7f{motd_target_addr}","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"\u00a7bnecron-prism \u00a78\u00bb \u00a7fclean minecraft relay\n\u00a77online \u00a7f{online_player} \u00a78| \u00a77favicon \u00a7f{favicon_mode} \u00a78| \u00a77ping \u00a7b{ping_mode}"}}"#;
+const DEFAULT_LOCAL_JSON: &str = r#"{"version":{"name":"\u00a7bnecron-prism \u00a77status","protocol":-1},"players":{"max":100,"online":{online_player},"sample":[{"name":"\u00a77mode \u00a78> \u00a7f{relay_mode}","id":"00000000-0000-0000-0000-000000000001"},{"name":"\u00a77ping \u00a78> \u00a7b{ping_mode}","id":"00000000-0000-0000-0000-000000000002"},{"name":"\u00a77target \u00a78> \u00a7f{motd_target_addr}","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"\u00a7bnecron-prism \u00a78\u00bb \u00a7fclean minecraft relay\n\u00a77online \u00a7f{online_player} \u00a78| \u00a77favicon \u00a7f{favicon_mode} \u00a78| \u00a77ping \u00a7b{ping_mode}\n\u00a77latency \u00a7b{total_latency} \u00a78| \u00a77entry \u00a7f{client_latency} \u00a78| \u00a77upstream \u00a7f{upstream_latency}"}}"#;
 const DEFAULT_UPSTREAM_ADDR: &str = "mc.hypixel.net:25565";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -145,6 +145,9 @@ pub struct MotdConfig {
     pub upstream_ping_timeout_ms: u64,
     #[default(MotdFaviconConfig::default())]
     pub favicon: MotdFaviconConfig,
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schemars(skip))]
+    pub latency_needs: LatencyNeeds,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SmartDefault)]
@@ -193,6 +196,28 @@ pub enum RelayMode {
     Async,
     IoUring,
     Splice,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LatencyNeeds {
+    pub client: bool,
+    pub upstream: bool,
+}
+
+impl LatencyNeeds {
+    pub fn for_config(config: &MotdConfig) -> Self {
+        if config.mode != MotdMode::Local {
+            return Self::default();
+        }
+
+        let template = &config.local_json;
+        let needs_total = template.contains("{total_latency}");
+
+        Self {
+            client: needs_total || template.contains("{client_latency}"),
+            upstream: needs_total || template.contains("{upstream_latency}"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SmartDefault)]

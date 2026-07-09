@@ -1,4 +1,4 @@
-use crate::template;
+use crate::template::{self, TemplateLatency};
 use prism::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
 use prism::session::ConnectionSession;
 use prism_minecraft::{
@@ -41,7 +41,10 @@ pub async fn serve(
         None
     };
 
-    let motd_json = context.build_json(online_count, upstream.as_mut()).await?;
+    let latency = super::latency::measure(client, motd_config, handshake).await;
+    let motd_json = context
+        .build_json(online_count, upstream.as_mut(), latency)
+        .await?;
     let mut status_response = status_response_packet(&motd_json).map_err(anyhow::Error::from)?;
 
     let outcome = match motd_config.ping_mode {
@@ -100,12 +103,13 @@ pub async fn render_local_json(
     relay: &RelayConfig,
     handshake: &HandshakeC2s,
     online_count: i32,
+    latency: TemplateLatency,
 ) -> Option<Arc<str>> {
     if config.mode != MotdMode::Local {
         return None;
     }
 
-    let context = template::TemplateContext::for_transport(config, relay, online_count);
+    let context = template::TemplateContext::for_transport(config, relay, online_count, latency);
     let final_text = template::render(&config.local_json, &context).into_owned();
 
     let favicon_data_url = match config.favicon.mode {

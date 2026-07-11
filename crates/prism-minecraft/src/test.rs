@@ -11,15 +11,19 @@ use valence_protocol::{Encode, VarInt};
 
 use super::protocol::LoginHelloInfo;
 use super::{
-    HandshakeInfo, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE, MAX_STATUS_PACKET_SIZE,
-    PacketIo, ProtocolError, RuntimeAddress, decode_handshake, decode_login_hello,
-    decode_ping_request, decode_status_request, encode_handshake, encode_raw_frame,
-    login_disconnect_packet, ping_response_packet, status_response_packet,
+    HandshakeC2s, HandshakeNextState, MAX_HANDSHAKE_PACKET_SIZE, MAX_LOGIN_PACKET_SIZE,
+    MAX_STATUS_PACKET_SIZE, PacketIo, RuntimeAddress, decode_handshake, decode_login_hello,
+    decode_request, encode_handshake, encode_raw_frame, login_disconnect_packet,
+    ping_response_packet, status_response_packet,
 };
 
-fn sample_handshake(server_address: &str, server_port: u16, next_state: i32) -> HandshakeInfo {
-    HandshakeInfo {
-        protocol_version: 760,
+fn sample_handshake(
+    server_address: &str,
+    server_port: u16,
+    next_state: HandshakeNextState,
+) -> HandshakeC2s {
+    HandshakeC2s {
+        protocol_version: VarInt(760),
         server_address: server_address.to_owned(),
         server_port,
         next_state,
@@ -28,7 +32,7 @@ fn sample_handshake(server_address: &str, server_port: u16, next_state: i32) -> 
 
 #[tokio::test]
 async fn handshake_round_trip() {
-    let handshake = sample_handshake("example.com", 25565, 2);
+    let handshake = sample_handshake("example.com", 25565, HandshakeNextState::Login);
     let packet = encode_handshake(&handshake).unwrap();
     let frame = PacketIo::default()
         .read_frame(&mut Cursor::new(packet), MAX_HANDSHAKE_PACKET_SIZE)
@@ -41,7 +45,7 @@ async fn handshake_round_trip() {
 
 #[tokio::test]
 async fn handshake_transfer_round_trip() {
-    let handshake = sample_handshake("example.com", 25565, 3);
+    let handshake = sample_handshake("example.com", 25565, HandshakeNextState::Transfer);
     let packet = encode_handshake(&handshake).unwrap();
     let frame = PacketIo::default()
         .read_frame(&mut Cursor::new(packet), MAX_HANDSHAKE_PACKET_SIZE)
@@ -54,20 +58,12 @@ async fn handshake_transfer_round_trip() {
 
 #[tokio::test]
 async fn rewrite_preserves_fml_suffix() {
-    let mut handshake = sample_handshake("old.example\0FML\0", 25565, 2);
+    let mut handshake = sample_handshake("old.example\0FML\0", 25565, HandshakeNextState::Login);
     let address = RuntimeAddress::parse("mc.hypixel.net:25566").unwrap();
     handshake.rewrite_addr(&address).unwrap();
 
     assert_eq!(handshake.server_address, "mc.hypixel.net\0FML\0");
     assert_eq!(handshake.server_port, 25566);
-}
-
-#[tokio::test]
-async fn reject_invalid_next_state() {
-    let handshake = sample_handshake("example.com", 25565, 42);
-    let error = encode_handshake(&handshake).unwrap_err();
-
-    assert!(matches!(error, ProtocolError::InvalidNextState(42)));
 }
 
 #[tokio::test]
@@ -81,7 +77,7 @@ async fn decode_status_request_packet() {
         .await
         .unwrap();
 
-    decode_status_request(&frame).unwrap();
+    decode_request::<QueryRequestC2s>(&frame).unwrap();
 }
 
 #[tokio::test]
@@ -103,8 +99,6 @@ async fn ping_packet_round_trip() {
         .read_frame(&mut Cursor::new(packet), MAX_STATUS_PACKET_SIZE)
         .await
         .unwrap();
-
-    assert_eq!(decode_ping_request(&frame).unwrap(), 42);
 
     let decoded = frame.frame.decode::<QueryPongS2c>().unwrap();
     assert_eq!(decoded.payload, 42);
@@ -217,7 +211,7 @@ async fn encode_raw_frame_round_trip() {
 
 #[tokio::test]
 async fn framed_packet_reports_wire_len() {
-    let handshake = sample_handshake("example.com", 25565, 2);
+    let handshake = sample_handshake("example.com", 25565, HandshakeNextState::Login);
     let packet = encode_handshake(&handshake).unwrap();
     let frame = PacketIo::default()
         .read_frame(&mut Cursor::new(packet.clone()), MAX_HANDSHAKE_PACKET_SIZE)

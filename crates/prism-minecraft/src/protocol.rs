@@ -11,7 +11,7 @@ use valence_protocol::uuid::Uuid;
 use valence_protocol::{Decode, Encode, Packet, Text, VarInt};
 
 use crate::RuntimeAddress;
-use crate::types::{HandshakeC2s, LoginHelloInfo};
+pub use crate::types::{HandshakeC2s, LoginHelloInfo};
 
 use super::error::ProtocolError;
 use super::packet_io::FramedPacket;

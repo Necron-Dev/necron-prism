@@ -60,7 +60,7 @@ impl fmt::Display for RuntimeAddress {
     }
 }
 
-#[derive(Clone, Debug, Encode, Decode, Packet)]
+#[derive(Clone, Debug, Encode, Decode, Packet, PartialEq)]
 #[packet(id = packet_id::HANDSHAKE_C2S, state = PacketState::Handshaking)]
 pub struct HandshakeC2s {
     pub protocol_version: VarInt,

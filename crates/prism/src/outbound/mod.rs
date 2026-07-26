@@ -23,8 +23,7 @@ pub async fn connect_addr(
     let started = Instant::now();
     trace!(target_addr = %target_addr, "[CONNECT/OUTBOUND] starting upstream connection");
 
-    let connect_timeout =
-        Duration::from_millis(config.network.socket.upstream_connect_timeout_ms);
+    let connect_timeout = Duration::from_millis(config.network.socket.upstream_connect_timeout_ms);
     match timeout(connect_timeout, try_connect(target_addr, config)).await {
         Ok(result) => result,
         Err(_) => {

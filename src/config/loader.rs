@@ -31,9 +31,13 @@ impl ConfigLoader {
     }
 
     fn load_from_str_inner(content: &str, path: &Path) -> Result<NecronPrismConfig> {
-        eprintln!("DEBUG: load_from_str_inner called with content:\n{}", content);
+        eprintln!(
+            "DEBUG: load_from_str_inner called with content:\n{}",
+            content
+        );
         // Parse as generic TOML table first to avoid serde(flatten) issues
-        let table: toml::Table = content.parse()
+        let table: toml::Table = content
+            .parse()
             .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
         eprintln!("DEBUG: parsed table: {:?}", table);
 

@@ -8,16 +8,15 @@ use crate::config::{ApiMode, ConfigLoader, canonicalize_runtime_config};
 #[test]
 fn parse_minimal_config() {
     let mut config = ConfigLoader::load_from_str(
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [network.relay]
+[network.relay]
 
-            [api]
-            mode = "mock"
-            mock_target_addr = "127.0.0.1"
-        "#,
+[api]
+mode = "mock"
+mock_target_addr = "127.0.0.1"
+"#,
     )
     .unwrap();
     canonicalize_runtime_config(&mut config);
@@ -76,15 +75,14 @@ fn loader_writes_default_config_when_missing() {
 #[test]
 fn validate_requires_http_base_url() {
     let result = ConfigLoader::load_from_str(
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [api]
-            mode = "http"
+[api]
+mode = "http"
 
-            [network.relay]
-        "#,
+[network.relay]
+"#,
     );
     assert!(result.is_err());
 }
@@ -92,17 +90,16 @@ fn validate_requires_http_base_url() {
 #[test]
 fn parse_explicit_relay_config() {
     let mut config = ConfigLoader::load_from_str(
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [network.relay]
-            mode = "splice"
+[network.relay]
+mode = "splice"
 
-            [api]
-            mode = "mock"
-            mock_target_addr = "127.0.0.1"
-        "#,
+[api]
+mode = "mock"
+mock_target_addr = "127.0.0.1"
+"#,
     )
     .unwrap();
     canonicalize_runtime_config(&mut config);
@@ -119,17 +116,16 @@ fn parse_explicit_relay_config() {
 #[test]
 fn parse_io_uring_config() {
     let mut config = ConfigLoader::load_from_str(
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [network.relay]
-            mode = "io_uring"
+[network.relay]
+mode = "io_uring"
 
-            [api]
-            mode = "mock"
-            mock_target_addr = "127.0.0.1"
-        "#,
+[api]
+mode = "mock"
+mock_target_addr = "127.0.0.1"
+"#,
     )
     .unwrap();
     canonicalize_runtime_config(&mut config);
@@ -146,16 +142,15 @@ fn parse_io_uring_config() {
 #[test]
 fn parse_empty_relay_section_uses_defaults() {
     let config = ConfigLoader::load_from_str(
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [network.relay]
+[network.relay]
 
-            [api]
-            mode = "mock"
-            mock_target_addr = "127.0.0.1"
-        "#,
+[api]
+mode = "mock"
+mock_target_addr = "127.0.0.1"
+"#,
     )
     .unwrap();
 
@@ -165,17 +160,16 @@ fn parse_empty_relay_section_uses_defaults() {
 #[test]
 fn parse_logging_stats_interval_config() {
     let config = ConfigLoader::load_from_str(
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [logging]
-            stats_log_interval_secs = 42
+[logging]
+stats_log_interval_secs = 42
 
-            [api]
-            mode = "mock"
-            mock_target_addr = "127.0.0.1"
-        "#,
+[api]
+mode = "mock"
+mock_target_addr = "127.0.0.1"
+"#,
     )
     .unwrap();
 
@@ -193,17 +187,16 @@ fn canonicalize_updates_requested_relay_on_non_linux() {
     let config_path = temp_dir.join("config.toml");
     fs::write(
         &config_path,
-        r#"
-            [network.socket]
-            listen_addr = "127.0.0.1:25565"
+        r#"[network.socket]
+listen_addr = "127.0.0.1:25565"
 
-            [network.relay]
-            mode = "io_uring"
+[network.relay]
+mode = "io_uring"
 
-            [api]
-            mode = "mock"
-            mock_target_addr = "127.0.0.1"
-        "#,
+[api]
+mode = "mock"
+mock_target_addr = "127.0.0.1"
+"#,
     )
     .unwrap();
 

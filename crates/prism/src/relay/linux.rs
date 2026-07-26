@@ -12,10 +12,10 @@ mod imp {
     use std::sync::{Arc, OnceLock};
     use std::thread;
 
-    use crossbeam_channel::{self, Sender};
     use rustix::io::Errno;
     use rustix::pipe::{PipeFlags, SpliceFlags, pipe_with, splice};
     use tokio::sync::mpsc::{self, error::TrySendError as TokioTrySendError};
+    use tokio::sync::oneshot;
     use tokio_uring::buf::BoundedBuf;
 
     use crate::session::ConnectionSession;
@@ -46,7 +46,7 @@ mod imp {
         client: TcpStream,
         upstream: TcpStream,
         session: ConnectionSession,
-        response_tx: Sender<io::Result<RelayStats>>,
+        response_tx: oneshot::Sender<io::Result<RelayStats>>,
         buffer_size: usize,
     }
 
@@ -97,7 +97,7 @@ mod imp {
         fn start() -> io::Result<Self> {
             let (submitter, mut receiver) =
                 mpsc::channel::<IoUringRelayJob>(IO_URING_WORKER_QUEUE_CAPACITY);
-            let (ready_tx, ready_rx) = crossbeam_channel::bounded::<io::Result<()>>(1);
+            let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel::<io::Result<()>>(1);
 
             thread::Builder::new()
                 .name("relay-io-uring".to_string())
@@ -130,14 +130,14 @@ mod imp {
             Ok(Self { submitter })
         }
 
-        fn relay(
+        async fn relay(
             &self,
             client: TcpStream,
             upstream: TcpStream,
             session: ConnectionSession,
             buffer_size: usize,
         ) -> Result<RelayStats, IoUringRelayError> {
-            let (response_tx, response_rx) = crossbeam_channel::bounded(1);
+            let (response_tx, response_rx) = oneshot::channel();
             let job = IoUringRelayJob {
                 client,
                 upstream,
@@ -155,7 +155,7 @@ mod imp {
                 )),
             })?;
 
-            match response_rx.recv() {
+            match response_rx.await {
                 Ok(Ok(stats)) => Ok(stats),
                 Ok(Err(error)) => Err(IoUringRelayError::Relay(error)),
                 Err(_) => Err(IoUringRelayError::Unavailable(io::Error::other(
@@ -229,9 +229,6 @@ mod imp {
                 pipe_chunk_size,
             );
 
-            // Always join the upload thread before checking download result,
-            // even if download failed. Dropping a JoinHandle detaches the thread,
-            // causing the thread and its held TCP file descriptors to leak.
             let upload_bytes = upload
                 .join()
                 .map_err(|_| io::Error::other("upload splice thread panicked"))??;
@@ -249,18 +246,6 @@ mod imp {
                 download_bytes,
                 mode: Some(RelayMode::LinuxSplice),
             })
-        }
-
-        #[allow(dead_code)]
-        pub fn relay_with_io_uring(
-            client: TcpStream,
-            upstream: TcpStream,
-            session: ConnectionSession,
-            buffer_size: usize,
-        ) -> Result<RelayStats, IoUringRelayError> {
-            SharedIoUringWorker::shared()
-                .map_err(IoUringRelayError::Unavailable)?
-                .relay(client, upstream, session, buffer_size)
         }
 
         fn splice_copy(
@@ -372,6 +357,8 @@ mod imp {
 
             let mut src = src.try_clone()?;
             let mut dst = dst.try_clone()?;
+            src.set_nonblocking(false)?;
+            dst.set_nonblocking(false)?;
             let copied = io::copy(&mut src, &mut dst)?;
             if upload_direction {
                 session.add_upload(copied);
@@ -465,9 +452,6 @@ mod imp {
             let download_result =
                 Self::io_uring_copy(upstream, client, download_session, false, buffer_size).await;
 
-            // Always await the upload task before checking download result,
-            // even if download failed. Dropping a JoinHandle detaches the task,
-            // causing the task and its held TCP file descriptors to leak.
             let upload_bytes = upload.await.map_err(|error| {
                 io::Error::other(format!("io_uring upload task failed: {error}"))
             })??;
@@ -482,7 +466,7 @@ mod imp {
         }
     }
 
-    pub fn relay_with_io_uring(
+    pub async fn relay_with_io_uring(
         client: TcpStream,
         upstream: TcpStream,
         session: ConnectionSession,
@@ -491,6 +475,7 @@ mod imp {
         SharedIoUringWorker::shared()
             .map_err(IoUringRelayError::Unavailable)?
             .relay(client, upstream, session, buffer_size)
+            .await
     }
 
     pub fn prepare_pipes() -> Option<SplicePipes> {

@@ -2,10 +2,11 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, de::IntoDeserializer};
 
 use prism::config::*;
 
-use crate::config::{ApiMode, NecronPrismConfig};
+use crate::config::{ApiConfig, ApiMode, NecronPrismConfig};
 
 const CONFIG_SCHEMA_DIRECTIVE: &str = "#:schema ./config.schema.json";
 
@@ -30,9 +31,34 @@ impl ConfigLoader {
     }
 
     fn load_from_str_inner(content: &str, path: &Path) -> Result<NecronPrismConfig> {
-        let mut config: NecronPrismConfig = toml::from_str(content)
+        eprintln!("DEBUG: load_from_str_inner called with content:\n{}", content);
+        // Parse as generic TOML table first to avoid serde(flatten) issues
+        let table: toml::Table = content.parse()
             .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
+        eprintln!("DEBUG: parsed table: {:?}", table);
 
+        // Extract api section
+        let api: crate::config::ApiConfig = if let Some(api_val) = table.get("api") {
+            let api_val = toml::Value::Table(api_val.as_table().unwrap().clone());
+            eprintln!("DEBUG: deserializing ApiConfig from {:?}", api_val);
+            ApiConfig::deserialize(api_val.into_deserializer())
+                .with_context(|| format!("failed to parse api config from {}", path.display()))?
+        } else {
+            crate::config::ApiConfig::default()
+        };
+        eprintln!("DEBUG: api parsed");
+
+        // Create a new table without api for prism config
+        let mut prism_table = table.clone();
+        prism_table.remove("api");
+        eprintln!("DEBUG: prism_table: {:?}", prism_table);
+
+        // Parse prism config directly from toml::Value
+        let prism_value = toml::Value::Table(prism_table);
+        let prism: Config = Config::deserialize(prism_value)
+            .with_context(|| format!("failed to parse prism config from {}", path.display()))?;
+
+        let mut config = NecronPrismConfig { prism, api };
         config.prism.source_path = path.to_path_buf();
         validate_config(&config)?;
 

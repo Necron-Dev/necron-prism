@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
 use flurry::HashMap;
-use rayon::prelude::*;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
@@ -15,6 +16,8 @@ use super::background::{
     BackgroundHandle, TrafficRecord, TrafficReporterState, run_loop, spawn_background,
 };
 
+const CLOSED_REPORT_MAX_CONCURRENT: usize = 16;
+
 #[derive(Clone)]
 pub struct TrafficReporter {
     api: Arc<ApiService>,
@@ -22,6 +25,7 @@ pub struct TrafficReporter {
     closers: Arc<HashMap<Arc<str>, std::net::TcpStream>>,
     cancel_token: CancellationToken,
     background_handle: Arc<Mutex<Option<BackgroundHandle>>>,
+    closed_limiter: Arc<Semaphore>,
 }
 
 impl TrafficReporter {
@@ -33,6 +37,7 @@ impl TrafficReporter {
             closers: Arc::new(HashMap::new()),
             cancel_token,
             background_handle: Arc::new(Mutex::new(None)),
+            closed_limiter: Arc::new(Semaphore::new(CLOSED_REPORT_MAX_CONCURRENT)),
         };
         reporter.spawn_loop(Duration::from_millis(config.traffic_interval_ms));
         reporter
@@ -66,7 +71,8 @@ impl TrafficReporter {
                 session,
                 player_name,
                 player_uuid,
-                last_sent: ConnectionTraffic::default(),
+                last_sent_upload: AtomicU64::new(0),
+                last_sent_download: AtomicU64::new(0),
             },
             &guard,
         );
@@ -110,11 +116,15 @@ impl TrafficReporter {
         );
 
         let api = Arc::clone(&self.api);
+        let limiter = Arc::clone(&self.closed_limiter);
         let connection_id = record.connection_id.clone();
         let player_name = record.player_name.clone();
         let player_uuid = record.player_uuid.clone();
 
         spawn_background(async move {
+            let Ok(_permit) = limiter.acquire_owned().await else {
+                return;
+            };
             info!(
                 cid = %connection_id,
                 player_name = player_name.as_deref().unwrap_or("-"),
@@ -139,15 +149,15 @@ impl TrafficReporter {
 
     pub fn active_totals(&self) -> ConnectionTraffic {
         let guard = self.sessions.guard();
-        let entries: Vec<_> = self.sessions.iter(&guard).collect();
-
-        entries
-            .par_iter()
+        self.sessions
+            .iter(&guard)
             .map(|(_, record)| ConnectionTraffic {
                 upload_bytes: record.session.upload(),
                 download_bytes: record.session.download(),
             })
-            .reduce(ConnectionTraffic::default, ConnectionTraffic::combined_with)
+            .fold(ConnectionTraffic::default(), |acc, traffic| {
+                acc.combined_with(traffic)
+            })
     }
 
     fn spawn_loop(&mut self, interval: Duration) {
@@ -157,9 +167,7 @@ impl TrafficReporter {
             closers: self.closers.clone(),
             cancel_token: self.cancel_token.clone(),
         };
-        let handle = spawn_background(async move {
-            run_loop(state, interval);
-        });
+        let handle = spawn_background(run_loop(state, interval));
         if let Ok(mut h) = self.background_handle.lock() {
             *h = handle;
         }

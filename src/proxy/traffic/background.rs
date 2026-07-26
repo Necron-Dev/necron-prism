@@ -1,14 +1,15 @@
+use std::collections::BTreeMap;
 use std::net::Shutdown;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use flurry::HashMap;
-use rayon::prelude::*;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
-use crate::proxy::api::ApiService;
+use crate::proxy::api::{ApiService, TrafficBody};
 use prism::{ConnectionSession, ConnectionTraffic};
 
 pub(super) struct PlayerTraffic {
@@ -17,6 +18,8 @@ pub(super) struct PlayerTraffic {
     pub(super) player_uuid: Option<Arc<str>>,
     pub(super) upload_bytes: u64,
     pub(super) download_bytes: u64,
+    pub(super) delta_upload_bytes: u64,
+    pub(super) delta_download_bytes: u64,
 }
 
 pub(super) enum BackgroundHandle {
@@ -65,45 +68,34 @@ pub(super) fn collect_traffic_snapshot(
     sessions: &Arc<HashMap<String, TrafficRecord>>,
 ) -> (Vec<PlayerTraffic>, ConnectionTraffic, ConnectionTraffic) {
     let guard = sessions.guard();
-    let entries: Vec<_> = sessions.iter(&guard).collect();
-
-    let results: Vec<(PlayerTraffic, ConnectionTraffic, ConnectionTraffic)> = entries
-        .par_iter()
-        .map(|(_, record)| {
-            let upload = record.session.upload();
-            let download = record.session.download();
-            let delta_upload = upload.saturating_sub(record.last_sent.upload_bytes);
-            let delta_download = download.saturating_sub(record.last_sent.download_bytes);
-
-            let player_traffic = PlayerTraffic {
-                cid: record.connection_id.clone(),
-                player_name: record.player_name.clone(),
-                player_uuid: record.player_uuid.clone(),
-                upload_bytes: upload,
-                download_bytes: download,
-            };
-
-            let traffic = ConnectionTraffic {
-                upload_bytes: upload,
-                download_bytes: download,
-            };
-            let delta = ConnectionTraffic {
-                upload_bytes: delta_upload,
-                download_bytes: delta_download,
-            };
-
-            (player_traffic, traffic, delta)
-        })
-        .collect();
-
-    let mut snapshot = Vec::with_capacity(results.len());
+    let mut snapshot = Vec::with_capacity(sessions.len());
     let mut aggregate = ConnectionTraffic::default();
     let mut aggregate_delta = ConnectionTraffic::default();
 
-    for (player_traffic, traffic, delta) in results {
-        snapshot.push(player_traffic);
-        aggregate = aggregate.combined_with(traffic);
-        aggregate_delta = aggregate_delta.combined_with(delta);
+    for (_, record) in sessions.iter(&guard) {
+        let upload = record.session.upload();
+        let download = record.session.download();
+        let delta_upload = upload.saturating_sub(record.last_sent_upload.load(Ordering::Relaxed));
+        let delta_download =
+            download.saturating_sub(record.last_sent_download.load(Ordering::Relaxed));
+
+        snapshot.push(PlayerTraffic {
+            cid: record.connection_id.clone(),
+            player_name: record.player_name.clone(),
+            player_uuid: record.player_uuid.clone(),
+            upload_bytes: upload,
+            download_bytes: download,
+            delta_upload_bytes: delta_upload,
+            delta_download_bytes: delta_download,
+        });
+        aggregate = aggregate.combined_with(ConnectionTraffic {
+            upload_bytes: upload,
+            download_bytes: download,
+        });
+        aggregate_delta = aggregate_delta.combined_with(ConnectionTraffic {
+            upload_bytes: delta_upload,
+            download_bytes: delta_download,
+        });
     }
 
     (snapshot, aggregate, aggregate_delta)
@@ -134,7 +126,8 @@ pub(super) struct TrafficRecord {
     pub(super) session: ConnectionSession,
     pub(super) player_name: Option<Arc<str>>,
     pub(super) player_uuid: Option<Arc<str>>,
-    pub(super) last_sent: ConnectionTraffic,
+    pub(super) last_sent_upload: AtomicU64,
+    pub(super) last_sent_download: AtomicU64,
 }
 
 pub(super) struct TrafficReporterState {
@@ -144,57 +137,101 @@ pub(super) struct TrafficReporterState {
     pub(super) cancel_token: CancellationToken,
 }
 
-pub(super) fn run_loop(state: TrafficReporterState, interval: Duration) {
+pub(super) async fn run_loop(state: TrafficReporterState, interval: Duration) {
     let interval_secs = interval.as_secs_f64();
-    spawn_background(async move {
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep(interval) => {
-                    let (snapshot, aggregate, aggregate_delta) = collect_traffic_snapshot(&state.sessions);
-
-                    if snapshot.is_empty() {
-                        continue;
-                    }
-
-                    {
-                        let players: Vec<String> = snapshot.par_iter().map(|p| {
-                            let name = p.player_name.as_deref().unwrap_or("-");
-                            let uuid = p.player_uuid.as_deref().unwrap_or("-");
-                            format!("{}(uuid={},up={}B,down={}B)", name, uuid, p.upload_bytes, p.download_bytes)
-                        }).collect();
-                        info!(
-                            upload_mbps = bytes_to_mbps(aggregate_delta.upload_bytes, interval_secs),
-                            download_mbps = bytes_to_mbps(aggregate_delta.download_bytes, interval_secs),
-                            total_upload_bytes = aggregate.upload_bytes,
-                            total_download_bytes = aggregate.download_bytes,
-                            active = snapshot.len(),
-                            players = ?players,
-                            "[TRAFFIC] report"
-                        );
-                    }
-
-                    for player in &snapshot {
-                        if player.upload_bytes == 0 && player.download_bytes == 0 {
-                            continue;
-                        }
-                        match state.api.traffic_single(&player.cid, player.upload_bytes, player.download_bytes).await {
-                            Ok(connections_to_close) => {
-                                if !connections_to_close.is_empty() {
-                                    close_connections(&state.closers, &connections_to_close);
-                                    warn!(cid = %player.cid, close_count = connections_to_close.len(), "traffic api requested connection close list");
-                                }
-                            }
-                            Err(error) => {
-                                warn!(error = %error, cid = %player.cid, "failed to report traffic api event")
-                            }
-                        }
-                    }
-                }
-                _ = state.cancel_token.cancelled() => {
-                    trace!("traffic reporter loop received shutdown signal, exiting");
-                    break;
-                }
+    loop {
+        tokio::select! {
+            _ = tokio::time::sleep(interval) => report_once(&state, interval_secs).await,
+            _ = state.cancel_token.cancelled() => {
+                trace!("traffic reporter loop received shutdown signal, exiting");
+                break;
             }
         }
-    });
+    }
+}
+
+async fn report_once(state: &TrafficReporterState, interval_secs: f64) {
+    let (snapshot, aggregate, aggregate_delta) = collect_traffic_snapshot(&state.sessions);
+    if snapshot.is_empty() {
+        return;
+    }
+
+    info!(
+        upload_mbps = bytes_to_mbps(aggregate_delta.upload_bytes, interval_secs),
+        download_mbps = bytes_to_mbps(aggregate_delta.download_bytes, interval_secs),
+        total_upload_bytes = aggregate.upload_bytes,
+        total_download_bytes = aggregate.download_bytes,
+        active = snapshot.len(),
+        "[TRAFFIC] report"
+    );
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        let players: Vec<String> = snapshot
+            .iter()
+            .map(|p| {
+                let name = p.player_name.as_deref().unwrap_or("-");
+                let uuid = p.player_uuid.as_deref().unwrap_or("-");
+                format!(
+                    "{}(uuid={},up={}B,down={}B)",
+                    name, uuid, p.upload_bytes, p.download_bytes
+                )
+            })
+            .collect();
+        debug!(players = ?players, "[TRAFFIC] player detail");
+    }
+
+    // 单次批量请求上报全部连接:逐连接串行会让一轮耗时随在线数 × API 延迟线性放大。
+    // 数值为累计值(服务端覆盖语义),失败时不更新 last_sent,下一轮自动补报。
+    let entries: BTreeMap<String, TrafficBody> = snapshot
+        .iter()
+        .filter(|p| p.delta_upload_bytes > 0 || p.delta_download_bytes > 0)
+        .map(|p| {
+            (
+                p.cid.to_string(),
+                TrafficBody {
+                    send_bytes: p.upload_bytes,
+                    recv_bytes: p.download_bytes,
+                },
+            )
+        })
+        .collect();
+    if entries.is_empty() {
+        return;
+    }
+
+    match state.api.traffic_batch(&entries).await {
+        Ok(connections_to_close) => {
+            mark_reported(&state.sessions, &snapshot, &entries);
+            if !connections_to_close.is_empty() {
+                close_connections(&state.closers, &connections_to_close);
+                warn!(
+                    close_count = connections_to_close.len(),
+                    "traffic api requested connection close list"
+                );
+            }
+        }
+        Err(error) => {
+            warn!(error = %error, report_count = entries.len(), "failed to report traffic api event")
+        }
+    }
+}
+
+fn mark_reported(
+    sessions: &Arc<HashMap<String, TrafficRecord>>,
+    snapshot: &[PlayerTraffic],
+    reported: &BTreeMap<String, TrafficBody>,
+) {
+    let guard = sessions.guard();
+    for player in snapshot {
+        if !reported.contains_key(player.cid.as_ref()) {
+            continue;
+        }
+        if let Some(record) = sessions.get(player.cid.as_ref(), &guard) {
+            record
+                .last_sent_upload
+                .store(player.upload_bytes, Ordering::Relaxed);
+            record
+                .last_sent_download
+                .store(player.download_bytes, Ordering::Relaxed);
+        }
+    }
 }

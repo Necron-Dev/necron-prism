@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 
 use prism::{
     Config, ConnectionReport, ConnectionRoute, ConnectionSession, LoginResult, PrismHooks,
@@ -143,7 +143,14 @@ impl PrismHooks for NecronPrismHooks {
                 );
                 Ok(LoginResult::Deny { kick_reason })
             }
-            Err(error) => Err(error),
+            Err(error) => {
+                warn!(error = %error, "[CONNECT/LOGIN] join api failed, denying login");
+                Ok(LoginResult::Deny {
+                    kick_reason:
+                        "Authentication service is temporarily unavailable, please try again later."
+                            .to_string(),
+                })
+            }
         }
     }
 

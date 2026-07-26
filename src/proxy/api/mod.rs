@@ -2,4 +2,4 @@
 mod client;
 mod service;
 
-pub use service::ApiService;
+pub use service::{ApiService, TrafficBody};

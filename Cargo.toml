@@ -41,7 +41,7 @@ acta = { version = "0.0.1", features = ["compress", "serde", "nerd", "custom-asy
 toml = "1.0.7"
 schemars = { version = "1.0", features = ["derive"], optional = true }
 flurry = "0.5"
-reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls"], optional = true }
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "hickory-dns"], optional = true }
 http = "1.4.0"
 tokio-util = "0.7"
 base64 = "0.22"

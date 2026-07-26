@@ -1,17 +1,14 @@
 #![cfg(feature = "http-api")]
 
+use std::collections::BTreeMap;
+
 use anyhow::{Result, anyhow};
 use reqwest::{StatusCode, Url};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
+use super::service::TrafficBody;
 use crate::config::ApiConfig;
 use crate::proxy::routing::{JoinDecision, JoinTarget};
-
-#[derive(Clone, Debug, Serialize)]
-struct TrafficBody {
-    send_bytes: u64,
-    recv_bytes: u64,
-}
 
 pub struct ApiClient {
     inner: reqwest::Client,
@@ -105,22 +102,11 @@ impl ApiClient {
         }
     }
 
-    pub async fn traffic(
-        &self,
-        connection_id: &str,
-        send_bytes: u64,
-        recv_bytes: u64,
-    ) -> Result<Vec<String>> {
+    pub async fn traffic(&self, entries: &BTreeMap<String, TrafficBody>) -> Result<Vec<String>> {
         let response = self
             .inner
             .post(self.traffic_url.as_str())
-            .json(&std::collections::BTreeMap::from([(
-                connection_id.to_owned(),
-                TrafficBody {
-                    send_bytes,
-                    recv_bytes,
-                },
-            )]))
+            .json(entries)
             .send()
             .await?;
 

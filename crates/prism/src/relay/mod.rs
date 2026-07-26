@@ -70,30 +70,31 @@ pub async fn relay_bidirectional(
         if config.network.relay.is_io_uring() {
             let client = client.into_std()?;
             let upstream = upstream.into_std()?;
-            let session_for_task = session.clone();
-            let relay_span = session.root_span().clone();
             let buffer_size = config.network.buffer.io_uring_buffer_size;
 
-            let stats = tokio::task::spawn_blocking(move || -> io::Result<RelayStats> {
-                let _guard = relay_span.enter();
-                match linux::relay_with_io_uring(
-                    client.try_clone()?,
-                    upstream.try_clone()?,
-                    session_for_task.clone(),
-                    buffer_size,
-                ) {
-                    Ok(stats) => Ok(stats),
-                    Err(error) if error.is_unavailable() => {
-                        tracing::warn!(error = %error, "[CONNECT/RELAY] io_uring relay unavailable, falling back to async relay");
-                        relay_with_copy(client, upstream, session_for_task)
-                    }
-                    Err(error) => Err(error.into_io()),
-                }
-            })
+            match linux::relay_with_io_uring(
+                client.try_clone()?,
+                upstream.try_clone()?,
+                session.clone(),
+                buffer_size,
+            )
             .await
-            .map_err(|error| io::Error::other(format!("io_uring relay task panicked: {error}")))?;
-
-            return stats;
+            {
+                Ok(stats) => return Ok(stats),
+                Err(error) if error.is_unavailable() => {
+                    tracing::warn!(error = %error, "[CONNECT/RELAY] io_uring relay unavailable, falling back to async relay");
+                    let client = tokio::net::TcpStream::from_std(client)?;
+                    let upstream = tokio::net::TcpStream::from_std(upstream)?;
+                    return standard_copy_relay(
+                        client,
+                        upstream,
+                        session,
+                        config.network.buffer.relay_buffer_size,
+                    )
+                    .await;
+                }
+                Err(error) => return Err(error.into_io()),
+            }
         }
 
         if config.network.relay.is_splice() {
@@ -127,13 +128,23 @@ pub async fn relay_bidirectional(
         }
     }
 
-    #[cfg(not(all(target_os = "linux", feature = "linux-accel")))]
-    {
-        let _ = config;
-    }
-    let buffer_size = config.network.buffer.relay_buffer_size;
-    let mut client = client;
-    let mut upstream = upstream;
+    standard_copy_relay(
+        client,
+        upstream,
+        session,
+        config.network.buffer.relay_buffer_size,
+    )
+    .await
+}
+#[cfg(test)]
+mod test;
+
+async fn standard_copy_relay(
+    mut client: tokio::net::TcpStream,
+    mut upstream: tokio::net::TcpStream,
+    session: ConnectionSession,
+    buffer_size: usize,
+) -> io::Result<RelayStats> {
     let (mut client_read, mut client_write) = client.split();
     let (mut upstream_read, mut upstream_write) = upstream.split();
     let upload_session = session.clone();
@@ -162,7 +173,6 @@ pub async fn relay_bidirectional(
         mode: Some(RelayMode::StandardCopy),
     })
 }
-mod test;
 
 async fn custom_async_copy<R, W>(
     reader: &mut R,
@@ -243,6 +253,9 @@ fn relay_with_copy(
 ) -> io::Result<RelayStats> {
     tracing::trace!("[CONNECT/RELAY] falling back to standard-copy relay");
 
+    client.set_nonblocking(false)?;
+    upstream.set_nonblocking(false)?;
+
     let mut client_read = client.try_clone()?;
     let mut client_write = client;
     let mut upstream_read = upstream.try_clone()?;
@@ -268,9 +281,6 @@ fn relay_with_copy(
 
     let download_result = io::copy(&mut upstream_read, &mut client_write);
 
-    // Always join the upload thread before checking download result,
-    // even if download failed. Dropping a JoinHandle detaches the thread,
-    // causing the thread and its held TCP file descriptors to leak.
     let upload_bytes = upload
         .join()
         .map_err(|_| io::Error::other("relay upload thread panicked"))??;

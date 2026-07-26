@@ -13,6 +13,7 @@ pub use acta::{LogFormat, LogLevel, LogRotation};
 // Network defaults
 const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:25565";
 const DEFAULT_FIRST_PACKET_TIMEOUT_MS: u64 = 5_000;
+const DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_KEEPALIVE_SECS: u64 = 30;
 const DEFAULT_KEEPALIVE_INTERVAL_SECS: u64 = 5;
 const DEFAULT_KEEPALIVE_RETRIES: u32 = 3;
@@ -65,6 +66,8 @@ pub struct NetworkSocketConfig {
     pub multipath_tcp: bool,
     #[default(DEFAULT_FIRST_PACKET_TIMEOUT_MS)]
     pub first_packet_timeout_ms: u64,
+    #[default(DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS)]
+    pub upstream_connect_timeout_ms: u64,
     #[default = true]
     pub tcp_nodelay: bool,
     #[default = true]

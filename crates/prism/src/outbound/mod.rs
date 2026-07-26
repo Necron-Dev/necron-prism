@@ -1,10 +1,11 @@
 use std::io;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use socket2::SockRef;
 use tokio::net::TcpStream;
 use tokio::net::lookup_host;
+use tokio::time::timeout;
 use tracing::{trace, warn};
 
 use prism_minecraft::RuntimeAddress;
@@ -22,6 +23,31 @@ pub async fn connect_addr(
     let started = Instant::now();
     trace!(target_addr = %target_addr, "[CONNECT/OUTBOUND] starting upstream connection");
 
+    let connect_timeout =
+        Duration::from_millis(config.network.socket.upstream_connect_timeout_ms);
+    match timeout(connect_timeout, try_connect(target_addr, config)).await {
+        Ok(result) => result,
+        Err(_) => {
+            let connect_ms = started.elapsed().as_millis();
+            warn!(
+                target_addr = %target_addr,
+                connect_ms,
+                "[CONNECT/OUTBOUND] upstream connection timed out"
+            );
+            Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "upstream connect timed out after {}ms",
+                    connect_timeout.as_millis()
+                ),
+            )
+            .into())
+        }
+    }
+}
+
+async fn try_connect(target_addr: &RuntimeAddress, config: &Config) -> Result<TcpStream> {
+    let started = Instant::now();
     let mut last_error = None;
     let mut resolved_any = false;
 

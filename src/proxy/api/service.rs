@@ -1,4 +1,6 @@
 use anyhow::{Result, anyhow};
+use serde::Serialize;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -6,6 +8,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use super::client::ApiClient;
 use crate::config::{ApiConfig, ApiMode};
 use crate::proxy::routing::{JoinDecision, JoinTarget};
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TrafficBody {
+    pub send_bytes: u64,
+    pub recv_bytes: u64,
+}
 
 pub enum ApiService {
     #[cfg(feature = "http-api")]
@@ -78,24 +86,14 @@ impl ApiService {
         }
     }
 
-    pub async fn traffic_single(
+    pub async fn traffic_batch(
         &self,
-        connection_id: &str,
-        send_bytes: u64,
-        recv_bytes: u64,
+        entries: &BTreeMap<String, TrafficBody>,
     ) -> Result<Vec<String>> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => {
-                service
-                    .traffic_single(connection_id, send_bytes, recv_bytes)
-                    .await
-            }
-            Self::Mock(service) => {
-                service
-                    .traffic_single(connection_id, send_bytes, recv_bytes)
-                    .await
-            }
+            Self::Http(service) => service.traffic_batch(entries).await,
+            Self::Mock(service) => service.traffic_batch(entries).await,
         }
     }
 
@@ -140,14 +138,9 @@ impl HttpApiService {
             .map_err(|error| anyhow!("join api request failed: {error}"))
     }
 
-    async fn traffic_single(
-        &self,
-        connection_id: &str,
-        send_bytes: u64,
-        recv_bytes: u64,
-    ) -> Result<Vec<String>> {
+    async fn traffic_batch(&self, entries: &BTreeMap<String, TrafficBody>) -> Result<Vec<String>> {
         self.client
-            .traffic(connection_id, send_bytes, recv_bytes)
+            .traffic(entries)
             .await
             .map_err(|error| anyhow!("traffic api request failed: {error}"))
     }
@@ -192,12 +185,7 @@ impl MockApiService {
         }))
     }
 
-    async fn traffic_single(
-        &self,
-        _connection_id: &str,
-        _send_bytes: u64,
-        _recv_bytes: u64,
-    ) -> Result<Vec<String>> {
+    async fn traffic_batch(&self, _entries: &BTreeMap<String, TrafficBody>) -> Result<Vec<String>> {
         Ok(Vec::new())
     }
 

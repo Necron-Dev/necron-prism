@@ -1817,6 +1817,7 @@ dependencies = [
  "tokio-uring",
  "tracing",
  "valence_protocol",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -11,7 +11,7 @@ fn render_replaces_all_supported_placeholders() {
     // Template tests don't need ConnectionRegistry anymore
     let config = MotdConfig {
         mode: MotdMode::Local,
-        local_json: "{online_player}|{motd_target_addr}|{ping_target_addr}|{favicon_target_addr}|{relay_mode}|{ping_mode}|{favicon_mode}|{upstream_addr}".to_owned(),
+        local_json: "{online_player}|{motd_target_addr}|{ping_target_addr}|{favicon_target_addr}|{relay_mode}|{ping_mode}|{favicon_mode}|{upstream_addr}|{client_latency}|{upstream_latency}|{total_latency}".to_owned(),
         upstream_addr: "motd.example:25565".to_owned(),
         protocol: MotdProtocol::Client,
         ping_mode: StatusPingMode::Passthrough,
@@ -22,18 +22,91 @@ fn render_replaces_all_supported_placeholders() {
             path: None,
             target_addr: Some("icon.example:25565".to_owned()),
         },
+        ..MotdConfig::default()
     };
     let relay = RelayConfig {
         mode: RelayMode::Async,
     };
-    let context = TemplateContext::for_transport(&config, &relay, 1);
+    let context = TemplateContext::for_transport(
+        &config,
+        &relay,
+        1,
+        TemplateLatency {
+            client_rtt_ms: Some(12),
+            upstream_ping_ms: Some(34),
+        },
+    );
 
     let rendered = render(&config.local_json, &context);
 
     assert_eq!(
         rendered,
-        "1|motd.example:25565|ping.example:25565|icon.example:25565|async|passthrough|passthrough|motd.example:25565"
+        "1|motd.example:25565|ping.example:25565|icon.example:25565|async|passthrough|passthrough|motd.example:25565|12ms|34ms|46ms"
     );
+}
+
+#[test]
+fn render_latency_placeholders_default_to_unknown() {
+    let config = MotdConfig {
+        mode: MotdMode::Local,
+        local_json: "{client_latency}|{upstream_latency}|{total_latency}".to_owned(),
+        upstream_addr: "motd.example:25565".to_owned(),
+        protocol: MotdProtocol::Client,
+        ping_mode: StatusPingMode::Local,
+        ping_target_addr: None,
+        upstream_ping_timeout_ms: 1000,
+        favicon: MotdFaviconConfig {
+            mode: MotdFaviconMode::Json,
+            path: None,
+            target_addr: None,
+        },
+        ..MotdConfig::default()
+    };
+    let relay = RelayConfig {
+        mode: RelayMode::Async,
+    };
+
+    let rendered = render(
+        &config.local_json,
+        &TemplateContext::for_transport(&config, &relay, 0, TemplateLatency::default()),
+    );
+
+    assert_eq!(rendered, "unknown|unknown|unknown");
+}
+
+#[test]
+fn render_total_latency_uses_available_upstream_value() {
+    let config = MotdConfig {
+        mode: MotdMode::Local,
+        local_json: "{total_latency}".to_owned(),
+        upstream_addr: "motd.example:25565".to_owned(),
+        protocol: MotdProtocol::Client,
+        ping_mode: StatusPingMode::Local,
+        ping_target_addr: None,
+        upstream_ping_timeout_ms: 1000,
+        favicon: MotdFaviconConfig {
+            mode: MotdFaviconMode::Json,
+            path: None,
+            target_addr: None,
+        },
+        ..MotdConfig::default()
+    };
+    let relay = RelayConfig {
+        mode: RelayMode::Async,
+    };
+    let context = TemplateContext::for_transport(
+        &config,
+        &relay,
+        0,
+        TemplateLatency {
+            client_rtt_ms: None,
+            upstream_ping_ms: Some(34),
+        },
+    );
+
+    let rendered = render(&config.local_json, &context);
+
+    assert_eq!(rendered, "34ms");
 }
 
 #[test]
@@ -52,6 +125,7 @@ fn render_uses_relay_label_and_target_fallbacks() {
             path: None,
             target_addr: None,
         },
+        ..MotdConfig::default()
     };
     let relay = RelayConfig {
         mode: RelayMode::IoUring,
@@ -59,7 +133,7 @@ fn render_uses_relay_label_and_target_fallbacks() {
 
     let rendered = render(
         &config.local_json,
-        &TemplateContext::for_transport(&config, &relay, 0),
+        &TemplateContext::for_transport(&config, &relay, 0, TemplateLatency::default()),
     );
 
     assert_eq!(
@@ -83,6 +157,7 @@ fn render_uses_upstream_fallback_when_ping_and_favicon_targets_are_missing() {
             path: None,
             target_addr: None,
         },
+        ..MotdConfig::default()
     };
     let relay = RelayConfig {
         mode: RelayMode::Async,
@@ -90,7 +165,7 @@ fn render_uses_upstream_fallback_when_ping_and_favicon_targets_are_missing() {
 
     let rendered = render(
         &config.local_json,
-        &TemplateContext::for_transport(&config, &relay, 0),
+        &TemplateContext::for_transport(&config, &relay, 0, TemplateLatency::default()),
     );
 
     assert_eq!(rendered, "motd.example:25565|motd.example:25565");
@@ -111,6 +186,7 @@ fn render_keeps_explicit_favicon_target_even_when_ping_falls_back() {
             path: None,
             target_addr: Some("icon.example:25565".to_owned()),
         },
+        ..MotdConfig::default()
     };
     let relay = RelayConfig {
         mode: RelayMode::Async,
@@ -118,7 +194,7 @@ fn render_keeps_explicit_favicon_target_even_when_ping_falls_back() {
 
     let rendered = render(
         &config.local_json,
-        &TemplateContext::for_transport(&config, &relay, 0),
+        &TemplateContext::for_transport(&config, &relay, 0, TemplateLatency::default()),
     );
 
     assert_eq!(rendered, "motd.example:25565|icon.example:25565");
@@ -133,7 +209,7 @@ fn render_default_local_json_stays_valid_json() {
 
     let rendered = render(
         &config.local_json,
-        &TemplateContext::for_transport(&config, &relay, 1),
+        &TemplateContext::for_transport(&config, &relay, 1, TemplateLatency::default()),
     );
 
     let json: Value = serde_json::from_str(&rendered).expect("rendered MOTD JSON should parse");

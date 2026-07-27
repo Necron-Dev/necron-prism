@@ -1,6 +1,8 @@
 #[cfg(all(target_os = "linux", feature = "linux-accel"))]
 mod linux;
 mod socket;
+#[cfg(target_os = "windows")]
+mod windows;
 
 use crate::config::Config;
 use socket2::{Domain, SockRef, TcpKeepalive};
@@ -138,4 +140,40 @@ pub fn apply_sockref_options(socket: SockRef<'_>, config: &Config) -> io::Result
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_client_rtt_ms(stream: &tokio::net::TcpStream) -> Option<u32> {
+    let mut info: libc::tcp_info = unsafe { std::mem::zeroed() };
+    let mut len = std::mem::size_of::<libc::tcp_info>() as libc::socklen_t;
+    let ret = unsafe {
+        use std::os::fd::AsRawFd;
+
+        libc::getsockopt(
+            stream.as_raw_fd(),
+            libc::IPPROTO_TCP,
+            libc::TCP_INFO,
+            &mut info as *mut _ as *mut libc::c_void,
+            &mut len,
+        )
+    };
+    if ret != 0 || info.tcpi_rtt == 0 {
+        return None;
+    }
+
+    micros_to_millis_ceil(info.tcpi_rtt)
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_client_rtt_ms(stream: &tokio::net::TcpStream) -> Option<u32> {
+    windows::get_client_rtt_ms(stream)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+pub fn get_client_rtt_ms(_stream: &tokio::net::TcpStream) -> Option<u32> {
+    None
+}
+
+fn micros_to_millis_ceil(micros: u32) -> Option<u32> {
+    (micros != 0).then_some(micros.saturating_add(999) / 1000)
 }

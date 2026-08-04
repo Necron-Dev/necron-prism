@@ -44,7 +44,7 @@ flurry = "0.5"
 reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "hickory-dns"], optional = true }
 http = "1.4.0"
 tokio-util = "0.7"
-base64 = "0.22"
+base64 = "0.23"
 mime_guess = { version = "2.0", default-features = false }
 uuid = { version = "1", features = ["v3"] }
 

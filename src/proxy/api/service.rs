@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[cfg(feature = "http-api")]
 use super::client::ApiClient;
 use crate::config::{ApiConfig, ApiMode};
-use crate::proxy::routing::{JoinDecision, JoinTarget};
+use crate::proxy::routing::{JoinDecision, JoinRequest, JoinTarget};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct TrafficBody {
@@ -45,44 +45,11 @@ impl ApiService {
         }
     }
 
-    pub async fn join(
-        &self,
-        name: Option<&str>,
-        uuid: Option<&str>,
-        peer_addr: Option<&str>,
-        connect_host: Option<&str>,
-        entry_node_key: &str,
-        load: i32,
-        protocol_version: i32,
-    ) -> Result<JoinDecision> {
+    pub async fn join(&self, request: &JoinRequest) -> Result<JoinDecision> {
         match self {
             #[cfg(feature = "http-api")]
-            Self::Http(service) => {
-                service
-                    .join(
-                        name,
-                        uuid,
-                        peer_addr,
-                        connect_host,
-                        entry_node_key,
-                        load,
-                        protocol_version,
-                    )
-                    .await
-            }
-            Self::Mock(service) => {
-                service
-                    .join(
-                        name,
-                        uuid,
-                        peer_addr,
-                        connect_host,
-                        entry_node_key,
-                        load,
-                        protocol_version,
-                    )
-                    .await
-            }
+            Self::Http(service) => service.join(request).await,
+            Self::Mock(service) => service.join(request).await,
         }
     }
 
@@ -114,26 +81,9 @@ impl HttpApiService {
         })
     }
 
-    async fn join(
-        &self,
-        name: Option<&str>,
-        uuid: Option<&str>,
-        peer_addr: Option<&str>,
-        connect_host: Option<&str>,
-        entry_node_key: &str,
-        load: i32,
-        protocol_version: i32,
-    ) -> Result<JoinDecision> {
+    async fn join(&self, request: &JoinRequest) -> Result<JoinDecision> {
         self.client
-            .join(
-                name,
-                uuid,
-                peer_addr,
-                connect_host,
-                entry_node_key,
-                load,
-                protocol_version,
-            )
+            .join(request)
             .await
             .map_err(|error| anyhow!("join api request failed: {error}"))
     }
@@ -158,16 +108,7 @@ impl MockApiService {
         Self { counter, config }
     }
 
-    async fn join(
-        &self,
-        _name: Option<&str>,
-        _uuid: Option<&str>,
-        _peer_addr: Option<&str>,
-        _connect_host: Option<&str>,
-        _entry_node_key: &str,
-        _load: i32,
-        _protocol_version: i32,
-    ) -> Result<JoinDecision> {
+    async fn join(&self, _request: &JoinRequest) -> Result<JoinDecision> {
         if let Some(kick_reason) = &self.config.mock_kick_reason {
             return Ok(JoinDecision::Deny {
                 kick_reason: kick_reason.clone(),

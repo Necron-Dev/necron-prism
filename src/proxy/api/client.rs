@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::service::TrafficBody;
 use crate::config::ApiConfig;
-use crate::proxy::routing::{JoinDecision, JoinTarget};
+use crate::proxy::routing::{JoinDecision, JoinRequest, JoinTarget};
 
 pub struct ApiClient {
     inner: reqwest::Client,
@@ -56,27 +56,27 @@ impl ApiClient {
         })
     }
 
-    pub async fn join(
-        &self,
-        name: Option<&str>,
-        uuid: Option<&str>,
-        peer_addr: Option<&str>,
-        connect_host: Option<&str>,
-        entry_node_key: &str,
-        load: i32,
-        protocol_version: i32,
-    ) -> Result<JoinDecision> {
+    pub async fn join(&self, request: &JoinRequest) -> Result<JoinDecision> {
         let response = self
             .inner
             .get(self.join_url.as_str())
             .query(&[
-                ("player_name", name.unwrap_or_default()),
-                ("player_uuid", uuid.unwrap_or_default()),
-                ("client_addr", peer_addr.unwrap_or_default()),
-                ("client_host", connect_host.unwrap_or_default()),
-                ("entry_node_key", entry_node_key),
-                ("prism_online", load.to_string().as_str()),
-                ("protocol_version", protocol_version.to_string().as_str()),
+                ("player_name", request.name.as_deref().unwrap_or_default()),
+                ("player_uuid", request.uuid.as_deref().unwrap_or_default()),
+                (
+                    "client_addr",
+                    request.peer_addr.as_deref().unwrap_or_default(),
+                ),
+                (
+                    "client_host",
+                    request.connect_host.as_deref().unwrap_or_default(),
+                ),
+                ("entry_node_key", request.entry_node_key.as_str()),
+                ("prism_online", request.load.to_string().as_str()),
+                (
+                    "protocol_version",
+                    request.protocol_version.to_string().as_str(),
+                ),
             ])
             .send()
             .await?;

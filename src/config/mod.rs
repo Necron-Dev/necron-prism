@@ -74,11 +74,9 @@ impl Serialize for NecronPrismConfig {
         let mut map = serializer.serialize_map(None)?;
 
         // Serialize prism fields at top level (flatten)
-        if let Ok(value) = toml::Value::try_from(&self.prism) {
-            if let toml::Value::Table(table) = value {
-                for (k, v) in table {
-                    map.serialize_entry(&k, &v)?;
-                }
+        if let Ok(toml::Value::Table(table)) = toml::Value::try_from(&self.prism) {
+            for (k, v) in table {
+                map.serialize_entry(&k, &v)?;
             }
         }
 

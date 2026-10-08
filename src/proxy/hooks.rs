@@ -10,7 +10,7 @@ use prism::{
 use prism_minecraft::{FramedPacket, HandshakeC2s, PacketIo, RuntimeAddress, decode_login_hello};
 
 use super::api::ApiService;
-use super::routing::JoinDecision;
+use super::routing::{JoinDecision, JoinRequest};
 use super::traffic::TrafficReporter;
 
 fn offline_uuid(username: &str) -> uuid::Uuid {
@@ -97,19 +97,16 @@ impl PrismHooks for NecronPrismHooks {
             "[CONNECT/LOGIN] parsed login hello"
         );
 
-        match self
-            .api
-            .join(
-                Some(&login_hello.username),
-                Some(&player_uuid.to_string()),
-                peer_addr.as_ref().map(ToString::to_string).as_deref(),
-                Some(&handshake.server_address),
-                &self.entry_node_key,
-                online_count,
-                handshake.protocol_version.0,
-            )
-            .await
-        {
+        let request = JoinRequest {
+            name: Some(login_hello.username.clone()),
+            uuid: Some(player_uuid.to_string()),
+            peer_addr: peer_addr.map(|addr| addr.to_string()),
+            connect_host: Some(handshake.server_address.clone()),
+            entry_node_key: self.entry_node_key.clone(),
+            load: online_count,
+            protocol_version: handshake.protocol_version.0,
+        };
+        match self.api.join(&request).await {
             Ok(JoinDecision::Allow(target)) => {
                 info!(
                     target_addr = %target.target_addr,

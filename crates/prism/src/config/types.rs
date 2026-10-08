@@ -1,3 +1,4 @@
+use acta::{FileConfig, Format};
 use serde::{Deserialize, Serialize};
 use smart_default::SmartDefault;
 use std::path::PathBuf;
@@ -6,11 +7,8 @@ use strum::Display;
 #[cfg(feature = "schema")]
 use schemars::JsonSchema;
 
-// Logging defaults
 const DEFAULT_STATS_LOG_INTERVAL_SECS: u64 = 10;
-pub use acta::{LogFormat, LogLevel, LogRotation};
 
-// Network defaults
 const DEFAULT_LISTEN_ADDR: &str = "0.0.0.0:25565";
 const DEFAULT_FIRST_PACKET_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_UPSTREAM_CONNECT_TIMEOUT_MS: u64 = 5_000;
@@ -22,13 +20,11 @@ const DEFAULT_LISTEN_BACKLOG: u32 = 1024;
 const DEFAULT_IP_TOS: u8 = 0xB8;
 const DEFAULT_TCP_NOTSENT_LOWAT: u32 = 16384;
 
-// Buffer defaults
 const DEFAULT_RELAY_BUFFER_SIZE: usize = 64 * 1024;
 const DEFAULT_IO_URING_BUFFER_SIZE: usize = 64 * 1024;
 const DEFAULT_SPLICE_PIPE_CHUNK_SIZE: usize = 64 * 1024;
 const DEFAULT_PACKET_READ_BUFFER_SIZE: usize = 16 * 1024;
 
-// MOTD defaults
 const DEFAULT_UPSTREAM_PING_TIMEOUT_MS: u64 = 1_500;
 const DEFAULT_LOCAL_JSON: &str = r#"{"version":{"name":"\u00a7bnecron-prism \u00a77status","protocol":-1},"players":{"max":100,"online":{online_player},"sample":[{"name":"\u00a77mode \u00a78> \u00a7f{relay_mode}","id":"00000000-0000-0000-0000-000000000001"},{"name":"\u00a77ping \u00a78> \u00a7b{ping_mode}","id":"00000000-0000-0000-0000-000000000002"},{"name":"\u00a77target \u00a78> \u00a7f{motd_target_addr}","id":"00000000-0000-0000-0000-000000000003"}]},"description":{"text":"\u00a7bnecron-prism \u00a78\u00bb \u00a7fclean minecraft relay\n\u00a77online \u00a7f{online_player} \u00a78| \u00a77favicon \u00a7f{favicon_mode} \u00a78| \u00a77ping \u00a7b{ping_mode}"}}"#;
 const DEFAULT_UPSTREAM_ADDR: &str = "mc.hypixel.net:25565";
@@ -133,7 +129,6 @@ pub struct BufferConfig {
 pub struct MotdConfig {
     #[default(MotdMode::Local)]
     pub mode: MotdMode,
-    // https://minecraft.wiki/w/Java_Edition_protocol/Server_List_Ping#Status_Response
     #[default(DEFAULT_LOCAL_JSON.to_owned())]
     pub local_json: String,
     #[default(DEFAULT_UPSTREAM_ADDR.to_owned())]
@@ -153,26 +148,17 @@ pub struct MotdConfig {
 #[derive(Clone, Debug, Serialize, Deserialize, SmartDefault)]
 #[serde(default)]
 pub struct LoggingConfig {
-    #[default(LogLevel::Info)]
-    pub level: LogLevel,
-    #[default(LogFormat::Compact)]
-    pub format: LogFormat,
+    #[default("info".to_owned())]
+    pub level: String,
+    #[default(Format::default())]
+    pub format: Format,
     #[default = true]
     pub async_enabled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[default(Some(DEFAULT_STATS_LOG_INTERVAL_SECS))]
     pub stats_log_interval_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub file: Option<LogFileConfig>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, SmartDefault)]
-#[serde(default)]
-pub struct LogFileConfig {
-    #[default(PathBuf::from("data/logs/latest.log"))]
-    pub path: PathBuf,
-    #[default(LogRotation::Compress)]
-    pub mode: LogRotation,
+    pub file: Option<FileConfig>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SmartDefault)]

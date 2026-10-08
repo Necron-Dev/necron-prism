@@ -1,7 +1,6 @@
 mod canonicalize;
 mod loader;
 
-pub use acta::{LogFormat, LogLevel, LogRotation};
 pub use canonicalize::canonicalize_runtime_config;
 pub use loader::ConfigLoader;
 
@@ -9,7 +8,7 @@ pub use loader::ConfigLoader;
 pub use loader::write_schema_file;
 
 // Re-export LoggingConfig from prism (auto-generated config types)
-pub use prism::config::{LogFileConfig, LoggingConfig};
+pub use prism::config::LoggingConfig;
 
 use prism::config::Config;
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
@@ -73,7 +72,7 @@ impl Serialize for NecronPrismConfig {
     {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(None)?;
-        
+
         // Serialize prism fields at top level (flatten)
         if let Ok(value) = toml::Value::try_from(&self.prism) {
             if let toml::Value::Table(table) = value {
@@ -82,10 +81,10 @@ impl Serialize for NecronPrismConfig {
                 }
             }
         }
-        
+
         // Serialize api as a nested table
         map.serialize_entry("api", &self.api)?;
-        
+
         map.end()
     }
 }
@@ -96,23 +95,23 @@ impl<'de> Deserialize<'de> for NecronPrismConfig {
         D: serde::Deserializer<'de>,
     {
         use serde::de::MapAccess;
-        
+
         struct NecronPrismConfigVisitor;
-        
+
         impl<'de> serde::de::Visitor<'de> for NecronPrismConfigVisitor {
             type Value = NecronPrismConfig;
-            
+
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a TOML table")
             }
-            
+
             fn visit_map<M>(self, mut map: M) -> std::result::Result<NecronPrismConfig, M::Error>
             where
                 M: MapAccess<'de>,
             {
                 let mut api: Option<ApiConfig> = None;
                 let mut prism_fields = toml::map::Map::new();
-                
+
                 while let Some(key) = map.next_key::<String>()? {
                     if key == "api" {
                         api = Some(map.next_value()?);
@@ -121,19 +120,19 @@ impl<'de> Deserialize<'de> for NecronPrismConfig {
                         prism_fields.insert(key, value);
                     }
                 }
-                
+
                 // Use toml::Value as a serde deserializer directly
                 let prism_value = toml::Value::Table(prism_fields);
                 let prism = Config::deserialize(prism_value.into_deserializer())
                     .map_err(serde::de::Error::custom)?;
-                
+
                 Ok(NecronPrismConfig {
                     prism,
                     api: api.unwrap_or_default(),
                 })
             }
         }
-        
+
         deserializer.deserialize_map(NecronPrismConfigVisitor)
     }
 }

@@ -31,31 +31,23 @@ impl ConfigLoader {
     }
 
     fn load_from_str_inner(content: &str, path: &Path) -> Result<NecronPrismConfig> {
-        eprintln!(
-            "DEBUG: load_from_str_inner called with content:\n{}",
-            content
-        );
         // Parse as generic TOML table first to avoid serde(flatten) issues
         let table: toml::Table = content
             .parse()
             .with_context(|| format!("failed to parse TOML config {}", path.display()))?;
-        eprintln!("DEBUG: parsed table: {:?}", table);
 
         // Extract api section
         let api: crate::config::ApiConfig = if let Some(api_val) = table.get("api") {
             let api_val = toml::Value::Table(api_val.as_table().unwrap().clone());
-            eprintln!("DEBUG: deserializing ApiConfig from {:?}", api_val);
             ApiConfig::deserialize(api_val.into_deserializer())
                 .with_context(|| format!("failed to parse api config from {}", path.display()))?
         } else {
             crate::config::ApiConfig::default()
         };
-        eprintln!("DEBUG: api parsed");
 
         // Create a new table without api for prism config
         let mut prism_table = table.clone();
         prism_table.remove("api");
-        eprintln!("DEBUG: prism_table: {:?}", prism_table);
 
         // Parse prism config directly from toml::Value
         let prism_value = toml::Value::Table(prism_table);
@@ -78,7 +70,11 @@ fn validate_config(config: &NecronPrismConfig) -> Result<()> {
         anyhow::bail!("motd.local_json cannot be empty");
     }
 
-    serde_json::from_str::<serde_json::Value>(&config.prism.motd.local_json)?;
+    if config.prism.motd.mode == MotdMode::Local && !config.prism.motd.local_json.contains('{') {
+        anyhow::bail!(
+            "motd.local_json must contain template placeholders (e.g. {{online_player}})"
+        );
+    }
 
     if config.prism.motd.upstream_addr.is_empty() {
         anyhow::bail!("motd.upstream_addr cannot be empty");

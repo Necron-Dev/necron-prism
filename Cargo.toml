@@ -7,10 +7,10 @@ prism = { path = "crates/prism" }
 prism-minecraft = { path = "crates/prism-minecraft" }
 anyhow = "1.0"
 tracing = "0.1"
-tokio = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs", "signal"] }
+tokio = { version = "1.53", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync", "macros", "fs", "signal"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rayon = "1.10"
+rayon = "1.12"
 smallvec = { version = "1", features = ["write"] }
 thiserror = "2.0"
 smart-default = "0.7"
@@ -39,13 +39,12 @@ rayon = { workspace = true }
 smart-default = { workspace = true }
 acta = { version = "0.5.3", features = ["compress", "serde", "nerd", "custom-async"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-toml = "1.0.7"
-schemars = { version = "1.0", features = ["derive"], optional = true }
+toml = "1.1.7"
+schemars = { version = "1.2", features = ["derive"], optional = true }
 flurry = "0.5"
-reqwest = { version = "0.13.2", default-features = false, features = ["json", "query", "rustls", "hickory-dns"], optional = true }
-http = "1.4.0"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls", "hickory-dns"], optional = true }
 tokio-util = "0.7"
-base64 = "0.22"
+base64 = "0.23"
 mime_guess = { version = "2.0", default-features = false }
 uuid = { version = "1", features = ["v3"] }
 

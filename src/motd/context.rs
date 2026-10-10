@@ -9,7 +9,7 @@ use prism_minecraft::{
 use super::rewrite::rewrite_json;
 use super::service::{read_favicon_data_url, render_local_json};
 use super::upstream::UpstreamStatusSession;
-use crate::template::{self, TemplateContext};
+use crate::template::{self, TemplateContext, TemplateLatency};
 use prism::config::{MotdConfig, MotdFaviconMode, MotdMode, RelayConfig, StatusPingMode};
 
 pub struct StatusContext<'a> {
@@ -57,16 +57,23 @@ impl<'a> StatusContext<'a> {
         &self,
         online_count: i32,
         mut upstream: Option<&mut UpstreamStatusSession>,
+        latency: TemplateLatency,
     ) -> anyhow::Result<String> {
-        if let Some(json) =
-            render_local_json(self.config, self.relay, self.handshake, online_count).await
+        if let Some(json) = render_local_json(
+            self.config,
+            self.relay,
+            self.handshake,
+            online_count,
+            latency,
+        )
+        .await
         {
             return Ok(json.as_ref().to_owned());
         }
 
         let explicit_favicon = self.load_explicit_favicon_data_url().await?;
         let template_context =
-            TemplateContext::for_transport(self.config, self.relay, online_count);
+            TemplateContext::for_transport(self.config, self.relay, online_count, latency);
 
         let base_json = match self.config.mode {
             MotdMode::Local => {

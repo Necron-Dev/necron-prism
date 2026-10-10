@@ -1,4 +1,5 @@
 mod context;
+mod latency;
 mod legacy;
 mod rewrite;
 mod service;

@@ -1,4 +1,4 @@
-use crate::template::{self, TemplateContext};
+use crate::template::{self, TemplateContext, TemplateLatency};
 use prism::config::{MotdConfig, MotdMode, RelayConfig};
 use prism_minecraft::{HandshakeC2s, HandshakeNextState, VarInt};
 use tokio::io::AsyncWriteExt;
@@ -50,7 +50,12 @@ pub async fn serve_legacy_ping(
     } else {
         template::render(
             &motd_config.local_json,
-            &TemplateContext::for_transport(motd_config, relay, online_count),
+            &TemplateContext::for_transport(
+                motd_config,
+                relay,
+                online_count,
+                TemplateLatency::default(),
+            ),
         )
         .into_owned()
     };
